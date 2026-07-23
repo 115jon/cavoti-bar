@@ -63,7 +63,7 @@ export function App({ bridge }: AppProps) {
   const [state, setState] = useState<BridgeState>("loading");
   const [snapshot, setSnapshot] = useState<SnapshotEnvelope>();
   const [view, setView] = useState<View>("overview");
-  const [topmost, setTopmost] = useState(true);
+  const [topmost, setTopmost] = useState(false);
   const connect = () => bridge.post({ action: "connect" });
   useEffect(() => { const unsubscribe = bridge.subscribe((raw) => { const message = parseHostMessage(raw); if (!message) return; if (message.type === "snapshot") { const next = normalizeSnapshot(message.snapshot); if (next) { setSnapshot(next); setState("live"); if (message.settings) setTopmost(message.settings.topmost); } } else if (message.type === "settings") { setTopmost(message.settings.topmost); } else { setState(message.state); } }); bridge.post({ action: "bootstrap" }); const refresh = () => bridge.post({ action: "refresh" }); window.addEventListener("cavoti-refresh", refresh); return () => { unsubscribe(); window.removeEventListener("cavoti-refresh", refresh); }; }, [bridge]);
   const title = useMemo(() => views.find((item) => item.id === view)?.label ?? "Overview", [view]);
