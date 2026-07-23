@@ -10,6 +10,7 @@
   let snapshot = null;
   let toastTimer;
   let refreshTimer;
+  let refreshIntervalTimer;
   let refreshInProgress = false;
 
   function icon(name) {
@@ -27,7 +28,7 @@
 
   function number(value) {
     const result = Number(value);
-    return Number.isFinite(result) ? result : 0;
+    return Number.isFinite(result) ? Math.max(0, result) : 0;
   }
 
   function formatMoney(value) {
@@ -85,12 +86,26 @@
     }).format(date) + ' UTC';
   }
 
+  function isRecord(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function normalizeNumbers(value, fields) {
+    const safe = { ...value };
+    fields.forEach((field) => { safe[field] = number(value[field]); });
+    return safe;
+  }
+
   function normalizeSnapshot(raw, hostSettings) {
     if (!raw || typeof raw !== 'object') return null;
-    const subscriptions = Array.isArray(raw.subscriptions) ? raw.subscriptions : [];
-    const stats = raw.stats && typeof raw.stats === 'object' ? raw.stats : {};
+    const subscriptions = Array.isArray(raw.subscriptions)
+      ? raw.subscriptions.filter(isRecord).map((plan) => normalizeNumbers(plan, ['daily_usage_usd', 'daily_limit_usd', 'weekly_usage_usd', 'weekly_limit_usd']))
+      : [];
+    const stats = isRecord(raw.stats)
+      ? normalizeNumbers(raw.stats, ['total_requests', 'total_input_tokens', 'total_output_tokens', 'total_cache_tokens', 'total_tokens', 'total_cost', 'total_actual_cost'])
+      : {};
     const active = subscriptions.find((plan) => plan.status === 'active') || subscriptions[0] || {};
-    const me = raw.me && typeof raw.me === 'object' ? raw.me : null;
+    const me = isRecord(raw.me) ? raw.me : null;
     return {
       ...raw,
       mode: 'fixture',
@@ -113,9 +128,9 @@
       settings: hostSettings || raw.settings || {},
       subscriptions,
       stats,
-      models: Array.isArray(raw.models) ? raw.models : [],
-      trend: Array.isArray(raw.trend) ? raw.trend : [],
-      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      models: Array.isArray(raw.models) ? raw.models.filter(isRecord).map((model) => normalizeNumbers(model, ['requests', 'actual_cost'])) : [],
+      trend: Array.isArray(raw.trend) ? raw.trend.filter(isRecord).map((item) => normalizeNumbers(item, ['requests', 'actual_cost'])) : [],
+      tags: Array.isArray(raw.tags) ? raw.tags.filter((tag) => typeof tag === 'string') : [],
     };
   }
 
@@ -214,9 +229,15 @@
     const models = snapshot.models;
     const maxRequests = Math.max(...trend.map((item) => number(item.requests)), 1);
     const tags = snapshot.tags.length ? snapshot.tags : ['All traffic'];
+    const supportedTag = tags[0];
+    const ranges = [
+      { value: '7d', label: '7 days', supported: true },
+      { value: '30d', label: '30 days', supported: false },
+      { value: 'all', label: 'All time', supported: false },
+    ];
     return `<section class="view" data-view-pane="usage" aria-labelledby="usage-title">
       ${renderHeader('Usage ledger', '<span id="usage-title">Consumption</span>', `<button class="refresh-button" data-action="refresh">${icon('refresh')}<span>Refresh</span></button>`)}
-      <div class="filter-bar"><div class="segmented" role="group" aria-label="Usage range"><button class="selected" data-range="7d" aria-pressed="true">7 days</button><button data-range="30d" aria-pressed="false">30 days</button><button data-range="all" aria-pressed="false">All time</button></div><div class="tag-picker" role="group" aria-label="Usage tag">${tags.map((tag, index) => `<button class="tag${index === 0 ? ' selected' : ''}" data-tag="${escapeHtml(tag)}" aria-pressed="${index === 0}">${escapeHtml(tag)}</button>`).join('')}</div></div>
+      <div class="filter-bar"><div class="segmented" role="group" aria-label="Usage range">${ranges.map((range) => `<button class="${range.supported ? 'selected' : ''}" data-range="${range.value}" aria-pressed="${range.supported}" aria-disabled="${!range.supported}" title="${range.supported ? 'Captured fixture range' : 'Unavailable in fixture mode'}">${range.label}</button>`).join('')}</div><div class="tag-picker" role="group" aria-label="Usage tag">${tags.map((tag, index) => { const supported = tag === supportedTag; return `<button class="tag${supported ? ' selected' : ''}" data-tag="${escapeHtml(tag)}" aria-pressed="${supported}" aria-disabled="${!supported}" title="${supported ? 'Captured fixture tag' : 'Unavailable in fixture mode'}">${escapeHtml(tag)}</button>`; }).join('')}</div><p class="filter-note">Fixture mode: 7-day, all-traffic snapshot only.</p></div>
       <div class="usage-summary"><div><span class="summary-label">Actual cost</span><strong>${escapeHtml(data.cost)}</strong><small>Recorded actual cost</small></div><div><span class="summary-label">Requests</span><strong>${formatInteger(data.requests)}</strong><small>${escapeHtml(data.tokens)} tokens</small></div><div><span class="summary-label">Latency</span><strong>Not captured</strong><small>Unavailable in fixture</small></div></div>
       <section class="chart-card" aria-labelledby="throughput-title"><div class="chart-head"><div><p class="eyebrow">Daily throughput</p><h2 id="throughput-title">Requests per day</h2></div><span class="chart-note">Snapshot values</span></div><div class="bar-chart"><div class="y-axis" aria-hidden="true"><span>${formatInteger(maxRequests)}</span><span>${formatInteger(maxRequests / 2)}</span><span>0</span></div><div class="bars">${trend.length ? trend.map((item, index) => `<div class="bar${index === trend.length - 1 ? ' current' : ''}" data-percent="${number(item.requests) / maxRequests * 100}"><b>${formatInteger(item.requests)}</b><span></span><small>${escapeHtml(item.date || '')}</small></div>`).join('') : '<div class="empty-inline">No trend records in this snapshot.</div>'}</div></div></section>
       <section class="table-card" aria-labelledby="model-breakdown-title"><div class="table-head"><h2 id="model-breakdown-title">Model breakdown</h2><span>${escapeHtml(data.cost)} total</span></div><div class="data-table"><div class="table-row table-label" role="row"><span>Model</span><span>Requests</span><span>Cost</span></div>${models.length ? models.map((model) => `<div class="table-row" role="row"><span class="model-name"><i class="model-dot"></i>${escapeHtml(model.model || 'Unknown model')}</span><span>${formatInteger(model.requests)}</span><strong>${escapeHtml(formatMoney(model.actual_cost))}</strong></div>`).join('') : '<div class="empty-inline">No model records in this snapshot.</div>'}</div></section>
@@ -250,20 +271,33 @@
     }
   }
 
+  function scheduleFixtureRefresh(value) {
+    clearInterval(refreshIntervalTimer);
+    const minutes = Math.max(1, number(value) || 15);
+    refreshIntervalTimer = setInterval(() => refreshFixture(), minutes * 60 * 1000);
+  }
+
+  function updateIntervalControl(value) {
+    const menu = document.getElementById('interval-menu');
+    const trigger = document.querySelector('[data-action="interval"]');
+    if (!menu || !trigger) return;
+    trigger.firstChild.textContent = `${value} min `;
+    menu.querySelectorAll('[data-interval]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.interval === String(value))));
+  }
+
   function renderSettings() {
     const topmost = typeof snapshot.settings.topmost === 'boolean' ? snapshot.settings.topmost : readSetting('topmost', true);
-    const launch = readSetting('launch', false);
     const interval = readStorage('interval', '15');
     return `<section class="view" data-view-pane="settings" aria-labelledby="settings-title">
       ${renderHeader('Application', '<span id="settings-title">Settings</span>', '<span class="save-state"><span class="status-dot good"></span>Saved locally</span>')}
-      <section class="settings-group"><p class="eyebrow">Window behavior</p><div class="setting-row"><div><strong>Keep on top</strong><small>Keep this flyout above other windows.</small></div>${renderToggle('topmost', topmost)}</div><div class="setting-row"><div><strong>Launch at sign in</strong><small>Start Cavoti Bar with Windows.</small></div>${renderToggle('launch', launch)}</div><div class="setting-row interval-row"><div><strong>Refresh interval</strong><small>Fixture refresh is local; live sync is unavailable.</small></div><div class="popover-wrap"><button class="select-button" data-action="interval" aria-expanded="false" aria-controls="interval-menu">${escapeHtml(interval)} min ${icon('chevron')}</button><div class="popover" id="interval-menu" hidden role="menu">${['5', '15', '30'].map((value) => `<button data-interval="${value}" role="menuitem" ${value === interval ? 'aria-current="true"' : ''}>${value} minutes</button>`).join('')}</div></div></div></section>
+      <section class="settings-group"><p class="eyebrow">Window behavior</p><div class="setting-row"><div><strong>Keep on top</strong><small>Keep this flyout above other windows.</small></div>${renderToggle(topmost)}</div><div class="setting-row interval-row"><div><strong>Refresh interval</strong><small>Schedule a local reread of the sanitized fixture.</small></div><div class="popover-wrap"><button class="select-button" data-action="interval" aria-expanded="false" aria-haspopup="true" aria-controls="interval-menu">${escapeHtml(interval)} min ${icon('chevron')}</button><div class="popover" id="interval-menu" hidden>${['5', '15', '30'].map((value) => `<button data-interval="${value}" aria-pressed="${value === interval}">${value} minutes</button>`).join('')}</div></div></div></section>
       <section class="settings-group"><p class="eyebrow">Data source</p><div class="connection-row"><span class="source-icon">${icon('layers')}</span><div><strong>Sanitized snapshot</strong><small>${escapeHtml(snapshot.source || 'Fixture data')} | no live connection</small></div><span class="status-dot neutral"></span></div><button class="outline-button" data-action="open-site">Open Cavoti sign-in ${icon('external')}</button></section>
       <section class="settings-group danger-zone"><p class="eyebrow">Local data</p><div class="setting-row"><div><strong>Clear preferences</strong><small>Remove saved window and refresh preferences.</small></div><button class="outline-button danger" data-action="clear">Clear</button></div></section>
     </section>`;
   }
 
-  function renderToggle(name, enabled) {
-    return `<button class="toggle${enabled ? ' on' : ''}" data-setting="${name}" role="switch" aria-checked="${enabled}" aria-label="Toggle ${name === 'topmost' ? 'keep on top' : 'launch at sign in'}"><span></span></button>`;
+  function renderToggle(enabled) {
+    return `<button class="toggle${enabled ? ' on' : ''}" data-setting="topmost" role="switch" aria-checked="${enabled}" aria-label="Toggle keep on top"><span></span></button>`;
   }
 
   function setView(view) {
@@ -295,6 +329,7 @@
     content.innerHTML = [renderOverview(), renderUsage(), renderPlans(), renderStatus(), renderSettings()].join('');
     setDynamicMeters();
     setView(activeView);
+    scheduleFixtureRefresh(readStorage('interval', '15'));
     syncLabel.textContent = `Fixture mode | ${formatCapturedAt(snapshot.capturedAt)}`;
   }
 
@@ -315,6 +350,14 @@
     syncLabel.textContent = 'Refreshing fixture';
     showToast('Refreshing sanitized snapshot');
     clearTimeout(refreshTimer);
+    post('refresh');
+    if (window.chrome?.webview) {
+      refreshTimer = setTimeout(() => {
+        setRefreshState(false);
+        showToast('Fixture refresh did not complete');
+      }, 2500);
+      return;
+    }
     refreshTimer = setTimeout(() => {
       setRefreshState(false);
       if (snapshot) renderSnapshot(snapshot);
@@ -323,15 +366,33 @@
     }, 420);
   }
 
+  function applyHostSettings(settings) {
+    if (!settings || typeof settings.topmost !== 'boolean') return;
+    if (snapshot) snapshot.settings = { ...snapshot.settings, topmost: settings.topmost };
+    const toggle = document.querySelector('[data-setting="topmost"]');
+    if (!toggle) return;
+    toggle.setAttribute('aria-checked', String(settings.topmost));
+    toggle.classList.toggle('on', settings.topmost);
+  }
+
   function handleHostMessage(data) {
     if (!data || typeof data !== 'object') {
       renderBoundary('error', 'Bridge message was invalid.', 'The desktop host sent an unsupported message.');
       return;
     }
     if (data.type === 'snapshot') {
+      const wasRefreshing = refreshInProgress;
+      clearTimeout(refreshTimer);
+      if (wasRefreshing) setRefreshState(false);
       renderSnapshot(data.snapshot, data.settings);
+      if (wasRefreshing) showToast('Fixture snapshot refreshed');
     } else if (data.type === 'host-error') {
+      const wasRefreshing = refreshInProgress;
+      clearTimeout(refreshTimer);
+      if (wasRefreshing) setRefreshState(false);
       renderBoundary('error', 'Desktop host error.', data.message || 'The local content could not be loaded.');
+    } else if (data.type === 'settings') {
+      applyHostSettings(data.settings);
     }
   }
 
@@ -344,6 +405,10 @@
 
     const range = event.target.closest('[data-range]');
     if (range) {
+      if (range.getAttribute('aria-disabled') === 'true') {
+        showToast('That range is unavailable in fixture mode; only the captured 7-day window is available.');
+        return;
+      }
       document.querySelectorAll('[data-range]').forEach((button) => {
         const selected = button === range;
         button.classList.toggle('selected', selected);
@@ -355,6 +420,10 @@
 
     const tag = event.target.closest('[data-tag]');
     if (tag) {
+      if (tag.getAttribute('aria-disabled') === 'true') {
+        showToast('That tag is unavailable in fixture mode; only captured all-traffic data is available.');
+        return;
+      }
       document.querySelectorAll('[data-tag]').forEach((button) => {
         const selected = button === tag;
         button.classList.toggle('selected', selected);
@@ -368,15 +437,14 @@
     if (interval) {
       writeSetting('interval', interval.dataset.interval);
       const menu = document.getElementById('interval-menu');
-      const trigger = document.querySelector('[data-action="interval"]');
-      if (menu && trigger) {
-        menu.hidden = true;
-        trigger.setAttribute('aria-expanded', 'false');
-        trigger.firstChild.textContent = `${interval.dataset.interval} min `;
-        menu.querySelectorAll('[data-interval]').forEach((item) => item.removeAttribute('aria-current'));
-        interval.setAttribute('aria-current', 'true');
-      }
-      showToast(`Refresh interval set to ${interval.dataset.interval} minutes`);
+        const trigger = document.querySelector('[data-action="interval"]');
+        if (menu && trigger) {
+          menu.hidden = true;
+          trigger.setAttribute('aria-expanded', 'false');
+          updateIntervalControl(interval.dataset.interval);
+          scheduleFixtureRefresh(interval.dataset.interval);
+        }
+      showToast(`Local fixture refresh interval set to ${interval.dataset.interval} minutes`);
       return;
     }
 
@@ -388,7 +456,7 @@
       writeSetting(toggle.dataset.setting, enabled);
       if (toggle.dataset.setting === 'topmost' && snapshot?.settings) snapshot.settings.topmost = enabled;
       post('setting', { name: toggle.dataset.setting, enabled });
-      showToast(`${toggle.dataset.setting === 'topmost' ? 'Keep on top' : 'Launch at sign in'} ${enabled ? 'enabled' : 'disabled'}`);
+      showToast(`Keep on top ${enabled ? 'enabled' : 'disabled'}`);
       return;
     }
 
@@ -412,7 +480,12 @@
     }
     if (action === 'clear') {
       try { window.localStorage.clear(); } catch { /* Storage may be unavailable in a local file. */ }
-      showToast('Local preferences cleared');
+      if (snapshot?.settings) snapshot.settings.topmost = true;
+      applyHostSettings({ topmost: true });
+      updateIntervalControl('15');
+      scheduleFixtureRefresh('15');
+      post('clear');
+      showToast('Local preferences cleared; topmost restored');
     }
   });
 
