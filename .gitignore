@@ -3,3 +3,6 @@ obj/
 .vs/
 *.user
 *.suo
+web/node_modules/
+web/.vite/
+web/coverage/
