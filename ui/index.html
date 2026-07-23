@@ -3,119 +3,70 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
   <title>Cavoti Bar</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <symbol id="icon-home" viewBox="0 0 24 24"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M5 19V9m7 10V5m7 14v-7"/><path d="M3 19h18"/></symbol>
+    <symbol id="icon-layers" viewBox="0 0 24 24"><path d="m12 4 8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4"/></symbol>
+    <symbol id="icon-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19 13.5 1.2 1-.2 1.8-1.5 1-1.6-.5-1.2.9-.2 1.7-1.7.6-1.3-1.2h-1.6l-1.3 1.2-1.7-.6-.2-1.7-1.2-.9-1.6.5-1.5-1 .2-1.8 1.2-1v-1.8l-1.2-1L4 8.9l1.5-1 1.6.5 1.2-.9.2-1.7 1.7-.6 1.3 1.2h1.6l1.3-1.2 1.7.6.2 1.7 1.2.9 1.6-.5 1.5 1-.2 1.8-1.2 1z"/></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M19 8a7 7 0 1 0 1 6"/><path d="M19 4v4h-4"/></symbol>
+    <symbol id="icon-external" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+    <symbol id="icon-minimize" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="m12 4 8 15H4z"/><path d="M12 9v4M12 16h.01"/></symbol>
+    <symbol id="icon-pin" viewBox="0 0 24 24"><path d="m8 5 8 0 1 5-2 2v6l-3-2-3 2v-6l-2-2z"/><path d="M12 18v3"/></symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.8-3.1 3.1-5 7-5s6.2 1.9 7 5"/></symbol>
+  </svg>
+
   <div class="app-shell">
-    <header class="topbar">
-      <button class="brand" data-view="overview" aria-label="Open overview">
+    <header class="topbar" data-drag-region>
+      <button class="brand" data-view="overview" aria-label="Open overview" title="Open overview">
         <span class="brand-mark">CV</span>
-        <span>
-          <strong>Cavoti</strong>
-          <small>control surface</small>
-        </span>
+        <span class="brand-copy"><strong>Cavoti</strong><small>usage surface</small></span>
       </button>
-      <div class="topbar-actions">
-        <span class="sync-state"><i></i><span id="sync-label">Fixture synced</span></span>
-        <button class="icon-button" data-action="minimize" aria-label="Minimize window" title="Minimize">_</button>
-        <button class="icon-button close" data-action="close" aria-label="Close window" title="Close">×</button>
+      <div class="topbar-state" aria-label="Data source">
+        <span class="status-dot neutral"></span>
+        <span id="sync-label">Waiting for snapshot</span>
+      </div>
+      <div class="window-actions">
+        <button class="icon-button" data-action="minimize" aria-label="Minimize window" title="Minimize"><svg class="icon"><use href="#icon-minimize"></use></svg></button>
+        <button class="icon-button close" data-action="close" aria-label="Close window" title="Close"><svg class="icon"><use href="#icon-close"></use></svg></button>
       </div>
     </header>
 
     <div class="workspace">
       <nav class="side-nav" aria-label="Primary navigation">
-        <div class="nav-label">Workspace</div>
-        <button class="nav-item active" data-view="overview"><span class="nav-glyph">◈</span><span>Overview</span></button>
-        <button class="nav-item" data-view="usage"><span class="nav-glyph">▥</span><span>Usage</span></button>
-        <button class="nav-item" data-view="plans"><span class="nav-glyph">◫</span><span>Plans</span></button>
-        <div class="nav-label nav-label-spaced">Monitor</div>
-        <button class="nav-item" data-view="status"><span class="nav-glyph">⌁</span><span>Status</span></button>
-        <button class="nav-item" data-view="settings"><span class="nav-glyph">◌</span><span>Settings</span></button>
-        <div class="nav-spacer"></div>
-        <button class="account-chip" data-action="account">
-          <span class="avatar">J</span>
-          <span><strong>j***7</strong><small>Lite plan</small></span>
-          <span class="chevron">›</span>
-        </button>
+        <div class="nav-group">
+          <button class="nav-item active" data-view="overview" aria-current="page" title="Overview" aria-label="Overview"><svg class="nav-icon"><use href="#icon-home"></use></svg><span class="nav-caption">Overview</span></button>
+          <button class="nav-item" data-view="usage" title="Usage" aria-label="Usage"><svg class="nav-icon"><use href="#icon-chart"></use></svg><span class="nav-caption">Usage</span></button>
+          <button class="nav-item" data-view="plans" title="Plans" aria-label="Plans"><svg class="nav-icon"><use href="#icon-layers"></use></svg><span class="nav-caption">Plans</span></button>
+          <button class="nav-item" data-view="status" title="Status" aria-label="Status"><svg class="nav-icon"><use href="#icon-pulse"></use></svg><span class="nav-caption">Status</span></button>
+          <button class="nav-item" data-view="settings" title="Settings" aria-label="Settings"><svg class="nav-icon"><use href="#icon-settings"></use></svg><span class="nav-caption">Settings</span></button>
+        </div>
+        <div class="nav-footer">
+          <button class="account-chip" data-action="account" aria-label="Open account details" title="Account details">
+            <span class="avatar">J</span><span class="account-copy"><strong>j***7</strong><small>Fixture account</small></span>
+          </button>
+        </div>
       </nav>
 
-      <section class="content" aria-live="polite">
-        <section class="view active" data-view-pane="overview">
-          <div class="view-heading">
-            <div><p class="eyebrow">Thursday · 23 July 2026</p><h1>Good afternoon.</h1></div>
-            <button class="refresh-button" data-action="refresh"><span>↻</span> Refresh</button>
-          </div>
-
-          <div class="session-banner">
-            <div class="session-icon">↗</div>
-            <div><strong>Connected to Cavoti</strong><span>Local fixture · session bridge ready</span></div>
-            <button data-action="open-site">Open site <span>↗</span></button>
-          </div>
-
-          <div class="metric-grid">
-            <article class="metric-card featured">
-              <div class="card-kicker"><span>Current plan</span><span class="card-dot"></span></div>
-              <div class="metric-value">Lite <span class="status-pill">active</span></div>
-              <p class="metric-note">Renews in 27 days</p>
-              <div class="micro-line"><span style="width: 68%"></span></div>
-              <div class="micro-meta"><span>Daily window</span><strong>67.9%</strong></div>
-            </article>
-            <article class="metric-card">
-              <div class="card-kicker"><span>Actual cost</span><span class="trend-up">+14%</span></div>
-              <div class="metric-value">$635.54</div>
-              <p class="metric-note">Jul 17 — Jul 23</p>
-              <div class="sparkline" aria-hidden="true"><span style="height: 30%"></span><span style="height: 46%"></span><span style="height: 38%"></span><span style="height: 63%"></span><span style="height: 52%"></span><span style="height: 72%"></span><span style="height: 60%"></span><span style="height: 84%"></span></div>
-            </article>
-            <article class="metric-card">
-              <div class="card-kicker"><span>Requests</span><span class="muted">7 days</span></div>
-              <div class="metric-value">26,326</div>
-              <p class="metric-note">3.91B tokens processed</p>
-              <div class="token-orbit"><span></span><span></span><span></span></div>
-            </article>
-          </div>
-
-          <div class="section-row"><div><p class="eyebrow">Window health</p><h2>Usage at a glance</h2></div><button class="text-button" data-view="usage">View details <span>→</span></button></div>
-          <div class="usage-card">
-            <div class="usage-row"><div class="usage-title"><span class="usage-mark coral"></span><div><strong>Daily</strong><small>Resets in 3h 53m</small></div></div><div class="usage-meter"><div><span style="width: 68%"></span></div><strong>67.9%</strong></div></div>
-            <div class="usage-row"><div class="usage-title"><span class="usage-mark mint"></span><div><strong>Weekly</strong><small>Resets in 3d 20h</small></div></div><div class="usage-meter"><div><span style="width: 12%"></span></div><strong>11.8%</strong></div></div>
-          </div>
-          <div class="bottom-grid">
-            <div><p class="eyebrow">Most active</p><h2>Models</h2><div class="model-list"><div><span class="model-name"><i class="model-dot luna"></i>gpt-5.6-luna</span><strong>$235.33</strong></div><div><span class="model-name"><i class="model-dot sol"></i>gpt-5.6-sol</span><strong>$382.34</strong></div><div><span class="model-name"><i class="model-dot terra"></i>gpt-5.6-terra</span><strong>$10.42</strong></div></div></div>
-            <div class="signal-card"><div class="signal-head"><p class="eyebrow">System signal</p><span class="signal-live">LIVE</span></div><strong>All services operational</strong><small>Last checked 2 minutes ago</small><div class="signal-bars"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-          </div>
+      <main class="content" id="app-content" aria-live="polite">
+        <section class="loading-state" id="loading-state" role="status">
+          <span class="loading-mark" aria-hidden="true"></span>
+          <strong>Loading Cavoti snapshot</strong>
+          <span>Waiting for the local host bridge.</span>
         </section>
-
-        <section class="view" data-view-pane="usage">
-          <div class="view-heading"><div><p class="eyebrow">Usage dashboard</p><h1>Consumption ledger.</h1></div><button class="refresh-button" data-action="refresh"><span>↻</span> Refresh</button></div>
-          <div class="filter-bar"><div class="segmented"><button class="selected" data-range="7d">7 days</button><button data-range="30d">30 days</button><button data-range="all">All time</button></div><div class="tag-picker"><span>Tag</span><button class="tag selected">All traffic</button><button class="tag">Responses</button><button class="tag">Messages</button><button class="tag">Images</button></div></div>
-          <div class="usage-summary"><div><span class="summary-label">Actual cost</span><strong>$635.54</strong><small>-$524.80 vs. list rate</small></div><div><span class="summary-label">Requests</span><strong>26,326</strong><small>3.91B tokens</small></div><div><span class="summary-label">Average latency</span><strong>17.5s</strong><small>First token 2.6s</small></div></div>
-          <div class="chart-card"><div class="chart-head"><div><p class="eyebrow">Daily throughput</p><h2>Requests & actual cost</h2></div><div class="legend"><span><i class="legend-line"></i> Requests</span><span><i class="legend-dot"></i> Cost</span></div></div><div class="bar-chart" id="bar-chart"><div class="y-axis"><span>5k</span><span>4k</span><span>3k</span><span>2k</span><span>1k</span><span>0</span></div><div class="bars"><div class="grid-lines"><i></i><i></i><i></i><i></i><i></i></div><div class="bar" style="height: 47%"><b>2,333</b><span></span><small>17</small></div><div class="bar" style="height: 53%"><b>2,645</b><span></span><small>18</small></div><div class="bar" style="height: 73%"><b>3,648</b><span></span><small>19</small></div><div class="bar" style="height: 81%"><b>4,053</b><span></span><small>20</small></div><div class="bar" style="height: 90%"><b>4,489</b><span></span><small>21</small></div><div class="bar" style="height: 84%"><b>4,201</b><span></span><small>22</small></div><div class="bar current" style="height: 99%"><b>4,957</b><span></span><small>23</small></div></div></div></div>
-          <div class="table-card"><div class="table-head"><h2>Model breakdown</h2><span>Actual cost</span></div><div class="data-table"><div class="table-row table-label"><span>MODEL</span><span>REQUESTS</span><span>TOKENS</span><span>COST</span></div><div class="table-row"><span class="model-name"><i class="model-dot luna"></i>gpt-5.6-luna</span><span>19,580</span><span>3.31B</span><strong>$235.33</strong></div><div class="table-row"><span class="model-name"><i class="model-dot sol"></i>gpt-5.6-sol</span><span>5,232</span><span>509.2M</span><span>$382.34</span></div><div class="table-row"><span class="model-name"><i class="model-dot terra"></i>gpt-5.6-terra</span><span>1,054</span><span>87.6M</span><span>$10.42</span></div></div></div>
-        </section>
-
-        <section class="view" data-view-pane="plans">
-          <div class="view-heading"><div><p class="eyebrow">Entitlements</p><h1>Your plans.</h1></div><button class="text-button" data-action="open-site">Manage on Cavoti <span>↗</span></button></div>
-          <div class="plan-stack"><article class="plan-card primary"><div class="plan-top"><div><span class="plan-badge">ACTIVE</span><h2>Lite</h2><p>Core access with a generous daily window.</p></div><strong>$—</strong></div><div class="plan-rule"></div><div class="plan-meta"><span><small>Daily</small><strong>$441.50 / $650</strong></span><span><small>Weekly</small><strong>$473.50 / $4,000</strong></span><span><small>Renews</small><strong>Aug 19, 2026</strong></span></div></article><article class="plan-card"><div class="plan-top"><div><span class="plan-badge neutral">ACTIVE</span><h2>Test</h2><p>Secondary subscription group.</p></div><strong>$—</strong></div><div class="plan-rule"></div><div class="plan-meta"><span><small>Daily</small><strong>$100 / $100</strong></span><span><small>Weekly</small><strong>$200 / $300</strong></span><span><small>Renews</small><strong>Aug 16, 2026</strong></span></div></article></div>
-          <div class="plan-note"><span>✦</span><div><strong>Quota reset cards</strong><p>No upcoming reset windows were returned by Cavoti.</p></div></div>
-        </section>
-
-        <section class="view" data-view-pane="status">
-          <div class="view-heading"><div><p class="eyebrow">Service monitor</p><h1>Quietly online.</h1></div><span class="overall-status"><i></i> Operational</span></div>
-          <div class="status-hero"><div class="status-orbit"><span></span><span></span><b>OK</b></div><div><p class="eyebrow">Cavoti API</p><h2>Everything is responding.</h2><p>Live health is checked whenever the desktop session refreshes.</p></div></div>
-          <div class="incident-list"><div class="incident-head"><h2>Recent checks</h2><span>Last 24 hours</span></div><div class="incident"><i></i><div><strong>API gateway</strong><small>Operational · 42ms response</small></div><time>2m ago</time></div><div class="incident"><i></i><div><strong>Usage ingestion</strong><small>Operational · latest data 10:52 UTC</small></div><time>2m ago</time></div><div class="incident"><i></i><div><strong>Billing & plans</strong><small>Operational · 3 active records</small></div><time>2m ago</time></div></div>
-          <div class="session-boundary"><div class="boundary-icon">!</div><div><strong>Session bridge is not live yet</strong><p>This prototype is reading a sanitized HAR-derived fixture. The capture did not contain reusable cookies or authorization headers.</p></div><button data-action="open-site">Refresh in browser <span>↗</span></button></div>
-        </section>
-
-        <section class="view" data-view-pane="settings">
-          <div class="view-heading"><div><p class="eyebrow">Application</p><h1>Settings.</h1></div><span class="save-state">Saved locally</span></div>
-          <div class="settings-group"><p class="eyebrow">Window</p><div class="setting-row"><div><strong>Keep on top</strong><small>Float above other windows while open.</small></div><button class="toggle on" data-setting="topmost" aria-label="Toggle keep on top"><span></span></button></div><div class="setting-row"><div><strong>Launch at sign in</strong><small>Start Cavoti Bar when Windows starts.</small></div><button class="toggle" data-setting="launch" aria-label="Toggle launch at sign in"><span></span></button></div><div class="setting-row"><div><strong>Refresh interval</strong><small>How often the data surface should update.</small></div><button class="select-button" data-action="interval">15 min <span>⌄</span></button></div></div>
-          <div class="settings-group"><p class="eyebrow">Data source</p><div class="connection-row"><span class="connection-mark">◈</span><div><strong>Cavoti · fixture mode</strong><small>Connected locally · sanitized capture</small></div><span class="connection-dot"></span></div><button class="outline-button" data-action="open-site">Open Cavoti sign-in <span>↗</span></button></div>
-          <div class="settings-group danger-zone"><p class="eyebrow">Danger zone</p><div class="setting-row"><div><strong>Clear local data</strong><small>Remove saved preferences and cached metrics.</small></div><button class="outline-button danger" data-action="clear">Clear</button></div></div>
-        </section>
-      </section>
+      </main>
     </div>
-    <div class="toast" id="toast" role="status"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </div>
   <script src="demo-data.js"></script>
   <script src="app.js"></script>
