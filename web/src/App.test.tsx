@@ -48,4 +48,11 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
   });
+
+  it("posts a native drag command from the titlebar background", () => {
+    const { bridge, sent } = createBridge();
+    render(<App bridge={bridge} />);
+    fireEvent.mouseDown(screen.getByRole("banner"), { button: 0 });
+    expect(sent).toContainEqual({ action: "drag" });
+  });
 });

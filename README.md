@@ -17,7 +17,7 @@ The supplied HAR maps the API surface but does not include reusable request cook
 
 `data/demo.json` remains a sanitized contract fixture for tests only. It is not packaged or used as the default renderer source.
 
-The host bridge accepts only source-validated `minimize`, `close`, `drag`, `refresh`, `clear`, `bootstrap`, `connect`, and fixed-target `open-site` messages, plus `setting` messages whose value is an object with the boolean `topmost` name. Refresh rereads the authenticated Cavoti profile; clear deletes `settings.json`, restores topmost, and posts a versioned setting state. Local WebView2 navigation is origin-gated, new-window requests are handled and suppressed, malformed messages are ignored, and the topmost preference is persisted under the current user's local application data.
+The host bridge accepts only source-validated `minimize`, `close`, `drag`, `refresh`, `clear`, `bootstrap`, `connect`, and fixed-target `open-site` messages, plus `setting` messages whose value is an object with the boolean `topmost` name. Refresh rereads the authenticated Cavoti profile; clear deletes `settings.json`, restores topmost, and posts a versioned setting state. Local WebView2 navigation is origin-gated, approved Google/X OAuth popups are routed back through the same auth surface, collection runs only after returning to Cavoti, malformed messages are ignored, and the topmost plus geometry preferences are persisted under the current user's local application data.
 
 Live data remains read-only. Plan purchases, API-key changes, profile changes, and payment actions hand off to Cavoti in the authenticated browser window.
 
