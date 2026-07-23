@@ -33,7 +33,7 @@ $dotnet = Join-Path (scoop prefix dotnet-sdk) 'dotnet.exe'
 & $dotnet build .\CavotiBar.csproj
 ```
 
-The native build invokes the Vite build and copies the fresh hashed assets into `ui` and the output directory. The project targets .NET 9 and requires the WebView2 Runtime for execution.
+The native build invokes the Vite build and copies the fresh hashed assets into `ui` and the output directory. The renderer is served through the WebView2 virtual origin `https://app.cavoti.local` so Vite's module assets execute reliably; it is not loaded from `file:`. The project targets .NET 9 and requires the WebView2 Runtime for execution.
 
 Web checks can be run directly with:
 
