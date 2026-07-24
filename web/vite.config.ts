@@ -10,8 +10,15 @@ export default defineConfig({
   resolve: { alias: { "@": resolve(fileURLToPath(new URL("./src", import.meta.url))) } },
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: resolve(fileURLToPath(new URL(".", import.meta.url)), "../ui"),
+    outDir: resolve(fileURLToPath(new URL(".", import.meta.url)), "../obj/GeneratedUi"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: "assets/index.js",
+        chunkFileNames: "assets/chunks/[name]-[hash].js",
+        assetFileNames: (assetInfo) => assetInfo.name?.endsWith(".css") ? "assets/index.css" : "assets/[name]-[hash][extname]",
+      },
+    },
   },
   test: {
     environment: "jsdom",

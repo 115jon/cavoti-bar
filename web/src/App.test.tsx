@@ -36,7 +36,7 @@ describe("App", () => {
   it("renders every destination from a host-delivered live snapshot", () => {
     const { bridge, dispatch } = createBridge();
     render(<App bridge={bridge} />);
-     act(() => dispatch({ type: "snapshot", protocol: 1, snapshot: liveSnapshot, settings: { topmost: true } }));
+     act(() => dispatch({ type: "snapshot", protocol: 1, snapshot: liveSnapshot, settings: { topmost: true, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false } }));
 
     expect(screen.getByText("Lite")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Usage" }));

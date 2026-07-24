@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, MouseEvent, ReactNode } from "react";
-import { ArrowSquareOut, ArrowsClockwise, CaretLeft, CaretRight, ChartBar, CheckCircle, GearSix, House, Info, Key, Lightning, LockKeyOpen, Minus, Pulse, Stack, Timer, UsersThree, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, ArrowsClockwise, CaretLeft, CaretRight, ChartBar, CheckCircle, CornersIn, CornersOut, GearSix, House, Info, Key, Lightning, LockKeyOpen, Minus, Pulse, Stack, Timer, UsersThree, WarningCircle, X } from "@phosphor-icons/react";
 import { normalizeSnapshot, type SnapshotEnvelope, type Subscription, type UsageFilters, type UsageUnit, type UsageWindow, usagePercent } from "./domain/snapshot";
 import type { HostBridge } from "./bridge/host";
 import { parseHostMessage } from "./bridge/protocol";
@@ -10,6 +10,8 @@ import { Progress } from "./components/ui/progress";
 import { Skeleton } from "./components/ui/skeleton";
 import { Switch } from "./components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
+import { isCompactViewport } from "./domain/responsive";
+import { relativeAge } from "./domain/relative-time";
 
 type View = "overview" | "usage" | "plans" | "status" | "settings" | "about";
 type BridgeState = "loading" | "auth-required" | "offline" | "error" | "live";
@@ -36,16 +38,27 @@ const tokens = (value: number) => value >= 1e9 ? `${(value / 1e9).toFixed(2).rep
 const date = (value: string | null) => value ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value)) : "Not provided";
 const usageAmount = (value: number, unit: UsageUnit) => unit === "points" ? `${quantity(value)} pts` : money(value);
 
+function useRelativeAge(value: string | null, showSeconds: boolean): string {
+  const [age, setAge] = useState(() => relativeAge(value, Date.now(), showSeconds));
+  useEffect(() => {
+    const update = () => setAge(relativeAge(value, Date.now(), showSeconds));
+    update();
+    const timer = window.setInterval(update, showSeconds ? 1000 : 30000);
+    return () => window.clearInterval(timer);
+  }, [value, showSeconds]);
+  return age;
+}
+
 function useCompactTiles(): boolean {
-  const matchesCompact = () => typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 500px), (max-height: 700px)").matches : window.innerWidth <= 500 || window.innerHeight <= 700;
+  const matchesCompact = () => isCompactViewport(window.innerWidth, window.innerHeight);
   const [compact, setCompact] = useState(matchesCompact);
   useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const query = window.matchMedia("(max-width: 500px), (max-height: 700px)");
-    const update = () => setCompact(query.matches);
+    const update = () => setCompact(matchesCompact());
     update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    window.addEventListener("resize", update);
+    const query = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 500px), (max-height: 700px)") : null;
+    query?.addEventListener("change", update);
+    return () => { window.removeEventListener("resize", update); query?.removeEventListener("change", update); };
   }, []);
   return compact;
 }
@@ -69,20 +82,23 @@ function resetLabel(value: string | null): string {
   return `Resets in ${Math.max(1, rest)}m`;
 }
 
-function SourceStrip({ capturedAt, onRefresh }: { capturedAt: string | null; onRefresh: () => void }) {
-  return <div className="source-strip live"><span className="source-mark"><CheckCircle weight="fill" /></span><div><strong>Live Cavoti session</strong><span>Updated {date(capturedAt)}</span></div><Button variant="ghost" size="icon" aria-label="Refresh snapshot" onClick={onRefresh}><ArrowsClockwise weight="bold" /></Button></div>;
+function SourceStrip({ capturedAt, showSeconds, onRefresh }: { capturedAt: string | null; showSeconds: boolean; onRefresh: () => void }) {
+  const age = useRelativeAge(capturedAt, showSeconds);
+  return <div className="source-strip live"><span className="freshness-text">{age}</span><Button variant="ghost" size="icon" aria-label="Refresh usage data" onClick={onRefresh}><ArrowsClockwise weight="bold" /></Button></div>;
 }
 
 function PlanTabs({ plans, selected, onSelect }: { plans: Subscription[]; selected: Subscription | undefined; onSelect: (name: string) => void }) {
   if (plans.length < 2) return null;
-  return <div className="plan-tabs" role="tablist" aria-label="Plans">{plans.map((plan) => <button key={plan.name} role="tab" aria-selected={selected?.name === plan.name} className={selected?.name === plan.name ? "active" : ""} onClick={() => onSelect(plan.name)}><Stack weight={selected?.name === plan.name ? "fill" : "regular"} /><span>{plan.name}</span><small>{plan.billingKind}</small></button>)}</div>;
+  return <div className="plan-tabs plan-catalog" role="tablist" aria-label="Plans">{plans.map((plan) => <button key={plan.name} role="tab" aria-selected={selected?.name === plan.name} className={`${selected?.name === plan.name ? "active" : ""} ${plan.quotaState === "limited" ? "limited" : ""}`} onClick={() => onSelect(plan.name)}><Stack className="plan-tab-icon" weight={selected?.name === plan.name ? "fill" : "regular"} /><span>{plan.name}</span><small>{plan.billingKind} | {plan.status}</small></button>)}</div>;
 }
 
 function UsageMeter({ label, window, tone = "accent" }: { label: string; window: UsageWindow; tone?: "accent" | "good" }) {
   const configured = window.configured && window.limit > 0;
   const percent = configured ? usagePercent(window) : 0;
   const displayLabel = label === "Daily" ? "5 hour" : label;
-  return <div className="usage-meter"><div className="meter-label"><span>{displayLabel}</span><strong>{configured ? `${percent.toFixed(1)}% used` : "Not configured"}</strong></div><Progress value={percent} tone={tone} /><div className="meter-meta"><span>{configured ? `${usageAmount(window.used, window.unit)} of ${usageAmount(window.limit, window.unit)}` : "No quota configured"}</span><span>{configured ? resetLabel(window.resetAt) : "No quota configured"}</span></div></div>;
+  const urgency = !configured ? "unconfigured" : percent >= 100 ? "exhausted" : percent >= 90 ? "critical" : percent >= 75 ? "warning" : "healthy";
+  const progressTone: "accent" | "good" | "warning" | "critical" = urgency === "critical" || urgency === "exhausted" ? "critical" : urgency === "warning" ? "warning" : tone;
+  return <div className={`usage-meter urgency-${urgency}`}><div className="meter-label"><span>{displayLabel}</span><strong>{configured ? urgency === "exhausted" ? "Exhausted" : `${percent.toFixed(1)}% used` : "Not configured"}</strong></div><Progress value={percent} tone={progressTone} /><div className="meter-meta"><span>{configured ? `${usageAmount(window.used, window.unit)} of ${usageAmount(window.limit, window.unit)}` : "No quota configured"}</span><span>{configured ? resetLabel(window.resetAt) : "No quota configured"}</span></div></div>;
 }
 
 function CostSummary({ snapshot }: { snapshot: SnapshotEnvelope }) {
@@ -94,19 +110,31 @@ function UtilityAction({ icon, label, onClick }: ActionProps) {
   return <button className="utility-action" onClick={onClick}><span>{icon}</span><strong>{label}</strong><ArrowSquareOut className="utility-action-arrow" /></button>;
 }
 
-function UtilityActions({ onConnect, onNavigate, onOpenStatus, onQuit }: { onConnect: () => void; onNavigate: (view: View) => void; onOpenStatus: () => void; onQuit: () => void }) {
-  return <div className="utility-actions"><UtilityAction icon={<Key />} label="Add account..." onClick={onConnect} /><UtilityAction icon={<ChartBar />} label="Usage dashboard" onClick={() => onNavigate("usage")} /><UtilityAction icon={<Pulse />} label="Status page" onClick={onOpenStatus} /><div className="utility-divider" /><UtilityAction icon={<GearSix />} label="Settings..." onClick={() => onNavigate("settings")} /><UtilityAction icon={<Info />} label="About Cavoti Bar" onClick={() => onNavigate("about")} /><UtilityAction icon={<X />} label="Quit" onClick={onQuit} /></div>;
+function UtilityActions({ onNavigate, onOpenStatus, onQuit }: { onNavigate: (view: View) => void; onOpenStatus: () => void; onQuit: () => void }) {
+  return <div className="utility-actions"><UtilityAction icon={<ChartBar />} label="Usage dashboard" onClick={() => onNavigate("usage")} /><UtilityAction icon={<Pulse />} label="Status page" onClick={onOpenStatus} /><div className="utility-divider" /><UtilityAction icon={<GearSix />} label="Settings..." onClick={() => onNavigate("settings")} /><UtilityAction icon={<Info />} label="About Cavoti Bar" onClick={() => onNavigate("about")} /><UtilityAction icon={<X />} label="Quit" onClick={onQuit} /></div>;
 }
 
-function Overview({ snapshot, onNavigate, onConnect, onOpenStatus, onQuit }: { snapshot: SnapshotEnvelope; onNavigate: (view: View) => void; onConnect: () => void; onOpenStatus: () => void; onQuit: () => void }) {
+type OverviewProps = { snapshot: SnapshotEnvelope; onNavigate: (view: View) => void; onConnect: () => void; onOpenStatus: () => void; onQuit: () => void; showSeconds: boolean };
+
+function DesktopPlanCard({ plan, selected, onSelect }: { plan: Subscription; selected: boolean; onSelect: () => void }) {
+  return <button className={`plan-card ${selected ? "selected" : ""} ${plan.quotaState === "limited" ? "limited" : "available"}`} role="tab" aria-selected={selected} onClick={onSelect}><div className="plan-card-head"><div><span className="eyebrow">{plan.billingKind}</span><h2>{plan.name}</h2></div><Badge variant={plan.quotaState === "limited" ? "warning" : selected ? "success" : "outline"}>{plan.status}</Badge></div><div className="plan-card-meters"><UsageMeter label="Daily" window={plan.usage.fiveHour} /><UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" /><UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" /></div><div className="plan-card-foot"><span>{plan.expiresAt ? `Renews ${date(plan.expiresAt)}` : "No renewal date"}</span><span>View details</span></div></button>;
+}
+
+function DesktopOverview({ snapshot, selectedName, onSelect, onNavigate, onOpenStatus, onQuit, refresh, showSeconds }: OverviewProps & { selectedName: string | undefined; onSelect: (name: string) => void; refresh: () => void }) {
+  return <div className="view-stack wide-overview flex h-full min-h-0 flex-col gap-6 overflow-auto"><div className="desktop-view-heading"><div><span className="eyebrow">Account overview</span><h1>Overview</h1></div><span className="desktop-view-caption">{snapshot.subscriptions.length} plans | usage, limits, and shortcuts</span></div><SourceStrip capturedAt={snapshot.capturedAt} showSeconds={showSeconds} onRefresh={refresh} /><div className="desktop-overview-layout"><section className="desktop-plan-area"><div className="section-top desktop-section-heading"><div><span className="eyebrow">All plans</span><h2>Quota monitor</h2></div><Badge variant="outline">{snapshot.subscriptions.length} total</Badge></div><div className="plan-grid" role="tablist" aria-label="All plans">{snapshot.subscriptions.map((item) => <DesktopPlanCard key={item.name} plan={item} selected={selectedName === item.name} onSelect={() => onSelect(item.name)} />)}</div></section><aside className="desktop-insight-rail"><CostSummary snapshot={snapshot} /><UtilityActions onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} /></aside></div></div>;
+}
+
+function CompactOverview({ snapshot, selectedName, onSelect, onNavigate, onConnect, onOpenStatus, onQuit, refresh, showSeconds }: OverviewProps & { selectedName: string | undefined; onSelect: (name: string) => void; refresh: () => void }) {
+  const plan = snapshot.subscriptions.find((item) => item.name === selectedName) ?? snapshot.subscriptions[0];
+  return <div className="view-stack compact-overview compact-dashboard tile-stack"><SourceStrip capturedAt={snapshot.capturedAt} showSeconds={showSeconds} onRefresh={refresh} /><div className="compact-plan-heading"><div><span className="eyebrow">Selected plan</span><h1>{plan?.name ?? "No active plan"}</h1></div>{plan ? <Badge variant={plan.status === "limited" ? "warning" : "success"}>{plan.status}</Badge> : null}</div><PlanTabs plans={snapshot.subscriptions} selected={plan} onSelect={onSelect} />{snapshot.banner ? <div className="signal-note"><Lightning weight="fill" /><div><strong>{snapshot.banner.title}</strong><span>{snapshot.banner.message}</span></div></div> : null}{plan ? <section className="primary-usage"><div className="section-top"><div><span className="eyebrow">Quota overview</span><h2>{plan.billingKind}</h2></div></div><div className="usage-columns"><UsageMeter label="Daily" window={plan.usage.daily} /><UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" /><UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" /></div></section> : <Empty title="No active plan" message="Cavoti did not return an active subscription for this session." onAction={onConnect} />}<CostSummary snapshot={snapshot} /><UtilityActions onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} /></div>;
+}
+
+function Overview({ snapshot, onNavigate, onConnect, onOpenStatus, onQuit, showSeconds }: OverviewProps) {
   const activePlan = snapshot.subscriptions.find((item) => item.status === "active") ?? snapshot.subscriptions[0];
   const [selectedName, setSelectedName] = useState(activePlan?.name);
-  const [page, setPage] = useState(0);
   const compact = useCompactTiles();
-  const plan = snapshot.subscriptions.find((item) => item.name === selectedName) ?? activePlan;
   const refresh = () => window.dispatchEvent(new CustomEvent("cavoti-refresh"));
-  if (!compact) return <div className="view-stack compact-overview wide-overview"><SourceStrip capturedAt={snapshot.capturedAt} onRefresh={refresh} /><PlanTabs plans={snapshot.subscriptions} selected={plan} onSelect={setSelectedName} />{plan ? <section className="primary-usage"><div className="section-top"><div><h1>{plan.name}</h1><span className="plan-subtitle">{plan.billingKind}</span></div><Badge variant="success">{plan.status}</Badge></div><div className="usage-columns"><UsageMeter label="Daily" window={plan.usage.fiveHour} /><UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" /><UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" /></div></section> : null}<CostSummary snapshot={snapshot} /><UtilityActions onConnect={onConnect} onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} /></div>;
-  return <div className="view-stack compact-overview tile-stack">{page === 0 ? <div className="tile-page"><SourceStrip capturedAt={snapshot.capturedAt} onRefresh={refresh} /><TilePager page={page} count={3} onChange={setPage} label="Overview screen" /><PlanTabs plans={snapshot.subscriptions} selected={plan} onSelect={setSelectedName} />{snapshot.banner ? <div className="signal-note"><Lightning weight="fill" /><div><strong>{snapshot.banner.title}</strong><span>{snapshot.banner.message}</span></div></div> : null}{plan ? <section className="primary-usage"><div className="section-top"><div><h1>{plan.name}</h1><span className="plan-subtitle">{plan.billingKind}</span></div><Badge variant="success">{plan.status}</Badge></div><div className="usage-columns"><UsageMeter label="Daily" window={plan.usage.daily} /><UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" /><UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" /></div></section> : <Empty title="No active plan" message="Cavoti did not return an active subscription for this session." onAction={onConnect} />}</div> : page === 1 ? <div className="tile-page"><div className="tile-heading"><div><span className="eyebrow">Spend and volume</span><h1>Cost</h1></div><TilePager page={page} count={3} onChange={setPage} label="Overview screen" /></div><CostSummary snapshot={snapshot} /></div> : <div className="tile-page"><div className="tile-heading"><div><span className="eyebrow">Cavoti Bar</span><h1>Quick actions</h1></div><TilePager page={page} count={3} onChange={setPage} label="Overview screen" /></div><UtilityActions onConnect={onConnect} onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} /></div>}</div>;
+  return compact ? <CompactOverview snapshot={snapshot} selectedName={selectedName} onSelect={setSelectedName} onNavigate={onNavigate} onConnect={onConnect} onOpenStatus={onOpenStatus} onQuit={onQuit} refresh={refresh} showSeconds={showSeconds} /> : <DesktopOverview snapshot={snapshot} selectedName={selectedName} onSelect={setSelectedName} onNavigate={onNavigate} onConnect={onConnect} onOpenStatus={onOpenStatus} onQuit={onQuit} refresh={refresh} showSeconds={showSeconds} />;
 }
 
 function StatRail({ snapshot }: { snapshot: SnapshotEnvelope }) {
@@ -219,11 +247,24 @@ function CheckRow({ label, value, good }: { label: string; value: string; good: 
   return <div className="check-row"><span className={good ? "check-dot good" : "check-dot"}>{good ? <CheckCircle weight="fill" /> : <Info weight="regular" />}</span><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function Settings({ topmost, onTopmost, onClear, onConnect }: { topmost: boolean; onTopmost: (value: boolean) => void; onClear: () => void; onConnect: () => void }) {
+const refreshOptions = [
+  { value: 0, label: "Manual only" },
+  { value: 15, label: "Every 15 seconds" },
+  { value: 30, label: "Every 30 seconds" },
+  { value: 60, label: "Every minute" },
+  { value: 300, label: "Every 5 minutes" },
+  { value: 900, label: "Every 15 minutes" },
+];
+
+function RefreshSettings({ refreshIntervalSeconds, onRefreshInterval, showFreshnessSeconds, onShowFreshnessSeconds }: { refreshIntervalSeconds: number; onRefreshInterval: (seconds: number) => void; showFreshnessSeconds: boolean; onShowFreshnessSeconds: (value: boolean) => void }) {
+  return <div className="refresh-settings"><div className="setting-row"><div><strong>Refresh interval</strong><small>Choose how often usage refreshes automatically.</small></div><select aria-label="Refresh interval" value={refreshIntervalSeconds} onChange={(event) => onRefreshInterval(Number(event.target.value))}>{refreshOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div><div className="setting-row"><div><strong>Show seconds</strong><small>Show seconds for recent update timing.</small></div><Switch checked={showFreshnessSeconds} onCheckedChange={onShowFreshnessSeconds} aria-label="Show seconds in freshness" /></div></div>;
+}
+
+function Settings({ topmost, onTopmost, onClear, onConnect, refreshIntervalSeconds, onRefreshInterval, showFreshnessSeconds, onShowFreshnessSeconds }: { topmost: boolean; onTopmost: (value: boolean) => void; onClear: () => void; onConnect: () => void; refreshIntervalSeconds: number; onRefreshInterval: (seconds: number) => void; showFreshnessSeconds: boolean; onShowFreshnessSeconds: (value: boolean) => void }) {
   const [page, setPage] = useState(0);
   const compact = useCompactTiles();
-  if (!compact) return <div className="view-stack wide-settings"><div className="view-heading"><div><span className="eyebrow">Application</span><h1>Settings</h1></div><Badge variant="outline">Local</Badge></div><div className="settings-grid"><section className="surface-section settings-section"><span className="eyebrow">Window behavior</span><div className="setting-row"><div><strong>Keep on top</strong><small>Keep the popover above other windows.</small></div><Switch checked={topmost} onCheckedChange={onTopmost} aria-label="Keep on top" /></div><div className="setting-row"><div><strong>Connection profile</strong><small>Session cookies stay inside the WebView2 profile.</small></div><Button variant="outline" size="sm" onClick={onConnect}>Open sign in</Button></div></section><section className="surface-section settings-section"><span className="eyebrow">Privacy boundary</span><div className="privacy-note"><Key /><div><strong>Credentials never reach this UI</strong><small>Only normalized usage, plan, and account status data are forwarded.</small></div></div><Button variant="ghost" size="sm" onClick={onClear}>Clear local preferences</Button></section></div></div>;
-  return <div className="view-stack tile-stack"><div className="tile-page"><div className="view-heading"><div><span className="eyebrow">Application</span><h1>Settings</h1></div><div className="tile-heading-actions"><Badge variant="outline">Local</Badge><TilePager page={page} count={2} onChange={setPage} label="Settings screen" /></div></div>{page === 0 ? <section className="surface-section settings-section"><span className="eyebrow">Window behavior</span><div className="setting-row"><div><strong>Keep on top</strong><small>Keep the popover above other windows.</small></div><Switch checked={topmost} onCheckedChange={onTopmost} aria-label="Keep on top" /></div><div className="setting-row"><div><strong>Connection profile</strong><small>Session cookies stay inside the WebView2 profile.</small></div><Button variant="outline" size="sm" onClick={onConnect}>Open sign in</Button></div></section> : <section className="surface-section settings-section"><span className="eyebrow">Privacy boundary</span><div className="privacy-note"><Key /><div><strong>Credentials never reach this UI</strong><small>Only normalized usage, plan, and account status data are forwarded.</small></div></div><Button variant="ghost" size="sm" onClick={onClear}>Clear local preferences</Button></section>}<TilePager page={page} count={2} onChange={setPage} label="Settings screen" /></div></div>;
+  if (!compact) return <div className="view-stack wide-settings"><div className="view-heading"><div><span className="eyebrow">Application</span><h1>Settings</h1></div><Badge variant="outline">Local</Badge></div><div className="settings-grid"><section className="surface-section settings-section"><span className="eyebrow">Window behavior</span><div className="setting-row"><div><strong>Keep on top</strong><small>Keep the popover above other windows.</small></div><Switch checked={topmost} onCheckedChange={onTopmost} aria-label="Keep on top" /></div><RefreshSettings refreshIntervalSeconds={refreshIntervalSeconds} onRefreshInterval={onRefreshInterval} showFreshnessSeconds={showFreshnessSeconds} onShowFreshnessSeconds={onShowFreshnessSeconds} /><div className="setting-row"><div><strong>Connection profile</strong><small>Session cookies stay inside the WebView2 profile.</small></div><Button variant="outline" size="sm" onClick={onConnect}>Open sign in</Button></div></section><section className="surface-section settings-section"><span className="eyebrow">Privacy boundary</span><div className="privacy-note"><Key /><div><strong>Credentials never reach this UI</strong><small>Only normalized usage, plan, and account status data are forwarded.</small></div></div><Button variant="ghost" size="sm" onClick={onClear}>Clear local preferences</Button></section></div></div>;
+  return <div className="view-stack tile-stack"><div className="tile-page"><div className="view-heading"><div><span className="eyebrow">Application</span><h1>Settings</h1></div><div className="tile-heading-actions"><Badge variant="outline">Local</Badge><TilePager page={page} count={2} onChange={setPage} label="Settings screen" /></div></div>{page === 0 ? <section className="surface-section settings-section"><span className="eyebrow">Window behavior</span><div className="setting-row"><div><strong>Keep on top</strong><small>Keep the popover above other windows.</small></div><Switch checked={topmost} onCheckedChange={onTopmost} aria-label="Keep on top" /></div><RefreshSettings refreshIntervalSeconds={refreshIntervalSeconds} onRefreshInterval={onRefreshInterval} showFreshnessSeconds={showFreshnessSeconds} onShowFreshnessSeconds={onShowFreshnessSeconds} /><div className="setting-row"><div><strong>Connection profile</strong><small>Session cookies stay inside the WebView2 profile.</small></div><Button variant="outline" size="sm" onClick={onConnect}>Open sign in</Button></div></section> : <section className="surface-section settings-section"><span className="eyebrow">Privacy boundary</span><div className="privacy-note"><Key /><div><strong>Credentials never reach this UI</strong><small>Only normalized usage, plan, and account status data are forwarded.</small></div></div><Button variant="ghost" size="sm" onClick={onClear}>Clear local preferences</Button></section>}<TilePager page={page} count={2} onChange={setPage} label="Settings screen" /></div></div>;
 }
 
 function About() {
@@ -239,11 +280,17 @@ export function App({ bridge }: AppProps) {
   const [snapshot, setSnapshot] = useState<SnapshotEnvelope>();
   const [view, setView] = useState<View>("overview");
   const [topmost, setTopmost] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(60);
+  const [showFreshnessSeconds, setShowFreshnessSeconds] = useState(false);
+  const compact = useCompactTiles();
   const hasSnapshot = useRef(false);
   const connect = () => bridge.post({ action: "connect" });
   const refresh = () => bridge.post({ action: "refresh" });
   const openStatus = () => bridge.post({ action: "open-status" });
   const setWindowTopmost = (enabled: boolean) => { setTopmost(enabled); bridge.post({ action: "setting", value: { name: "topmost", enabled } }); };
+  const setRefreshInterval = (seconds: number) => { setRefreshIntervalSeconds(seconds); bridge.post({ action: "setting", value: { name: "refresh-interval", seconds } }); };
+  const setFreshnessSeconds = (enabled: boolean) => { setShowFreshnessSeconds(enabled); bridge.post({ action: "setting", value: { name: "freshness-seconds", enabled } }); };
 
   useEffect(() => {
     const unsubscribe = bridge.subscribe((raw) => {
@@ -251,8 +298,8 @@ export function App({ bridge }: AppProps) {
       if (!message) return;
       if (message.type === "snapshot") {
         const next = normalizeSnapshot(message.snapshot);
-        if (next) { hasSnapshot.current = true; setSnapshot(next); setState("live"); if (message.settings) setTopmost(message.settings.topmost); }
-      } else if (message.type === "settings") setTopmost(message.settings.topmost);
+        if (next) { hasSnapshot.current = true; setSnapshot(next); setState("live"); if (message.settings) { setTopmost(message.settings.topmost); setMaximized(message.settings.maximized); setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds); setShowFreshnessSeconds(message.settings.showFreshnessSeconds); } }
+      } else if (message.type === "settings") { setTopmost(message.settings.topmost); setMaximized(message.settings.maximized); setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds); setShowFreshnessSeconds(message.settings.showFreshnessSeconds); }
       else if (message.state !== "loading" || !hasSnapshot.current) setState(message.state);
     });
     bridge.post({ action: "bootstrap" });
@@ -266,7 +313,7 @@ export function App({ bridge }: AppProps) {
   const title = useMemo(() => view === "about" ? "About" : views.find((item) => item.id === view)?.label ?? "Overview", [view]);
   const beginDrag = (event: MouseEvent<HTMLElement>) => { if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return; bridge.post({ action: "drag" }); };
 
-  return <TooltipProvider delayDuration={300}><div className="app-shell"><header className="titlebar" data-drag-region onMouseDown={beginDrag}><button className="brand-button" onClick={() => setView("overview")}><img src="./favicon.png" alt="Cavoti" /><span><strong>Cavoti</strong><small>{state === "live" ? "live usage" : "session bridge"}</small></span></button><div className="titlebar-status"><span className={`status-dot ${state === "live" ? "good" : "warning"}`} />{state === "live" ? "Connected" : "Not connected"}</div><div className="window-actions"><Button variant="ghost" size="icon" aria-label="Minimize window" onClick={() => bridge.post({ action: "minimize" })}><Minus /></Button><Button variant="ghost" size="icon" aria-label="Close window" onClick={() => bridge.post({ action: "close" })}><X /></Button></div></header><div className="shell-body"><nav className="nav-rail" aria-label="Primary navigation" role="tablist">{views.map(({ id, label, icon: Icon }) => <Tooltip key={id}><TooltipTrigger asChild><button role="tab" className={`nav-button ${view === id ? "active" : ""}`} aria-label={label} aria-selected={view === id} onClick={() => setView(id)}><Icon weight={view === id ? "fill" : "regular"} /></button></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>)}<div className="nav-spacer" /><Tooltip><TooltipTrigger asChild><button className="avatar-button" aria-label="Account settings" onClick={() => setView("settings")}>C</button></TooltipTrigger><TooltipContent>Account settings</TooltipContent></Tooltip></nav><main className="content" aria-live="polite"><div className="mobile-heading"><span>{title}</span><span className="mobile-state">{state}</span></div>{state === "loading" ? <Loading /> : state !== "live" || !snapshot ? <Boundary state={state} onConnect={connect} /> : view === "overview" ? <Overview snapshot={snapshot} onNavigate={setView} onConnect={connect} onOpenStatus={openStatus} onQuit={() => bridge.post({ action: "close" })} /> : view === "usage" ? <Usage snapshot={snapshot} /> : view === "plans" ? <Plans snapshot={snapshot} onConnect={connect} /> : view === "status" ? <Status snapshot={snapshot} state={state} onConnect={connect} /> : view === "about" ? <About /> : <Settings topmost={topmost} onTopmost={setWindowTopmost} onClear={() => bridge.post({ action: "clear" })} onConnect={connect} />}</main></div></div></TooltipProvider>;
+  return <TooltipProvider delayDuration={300}><div className="app-shell" data-layout={compact ? "compact" : "wide"}><header className="titlebar" data-drag-region onMouseDown={beginDrag}><button className="brand-button" onClick={() => setView("overview")}><img src="./favicon.png" alt="Cavoti" /><span><strong>Cavoti</strong></span></button><div className="window-actions"><Button variant="ghost" size="icon" aria-label={maximized ? "Restore window" : "Maximize window"} onClick={() => bridge.post({ action: "maximize" })}>{maximized ? <CornersIn /> : <CornersOut />}</Button><Button variant="ghost" size="icon" aria-label="Minimize window" onClick={() => bridge.post({ action: "minimize" })}><Minus /></Button><Button variant="ghost" size="icon" aria-label="Close window" onClick={() => bridge.post({ action: "close" })}><X /></Button></div></header><div className="shell-body"><nav className="nav-rail" aria-label="Primary navigation" role="tablist">{views.map(({ id, label, icon: Icon }) => <Tooltip key={id}><TooltipTrigger asChild><button role="tab" className={`nav-button ${view === id ? "active" : ""}`} aria-label={label} aria-selected={view === id} onClick={() => setView(id)}><Icon weight={view === id ? "fill" : "regular"} /><span className="nav-label">{label}</span></button></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>)}<div className="nav-spacer" /></nav><main className="content" aria-live="polite"><div className="mobile-heading"><span>{title}</span><span className="mobile-state">{state}</span></div>{state === "loading" ? <Loading /> : state !== "live" || !snapshot ? <Boundary state={state} onConnect={connect} /> : view === "overview" ? <Overview snapshot={snapshot} onNavigate={setView} onConnect={connect} onOpenStatus={openStatus} onQuit={() => bridge.post({ action: "close" })} showSeconds={showFreshnessSeconds} /> : view === "usage" ? <Usage snapshot={snapshot} /> : view === "plans" ? <Plans snapshot={snapshot} onConnect={connect} /> : view === "status" ? <Status snapshot={snapshot} state={state} onConnect={connect} /> : view === "about" ? <About /> : <Settings topmost={topmost} onTopmost={setWindowTopmost} onClear={() => bridge.post({ action: "clear" })} onConnect={connect} refreshIntervalSeconds={refreshIntervalSeconds} onRefreshInterval={setRefreshInterval} showFreshnessSeconds={showFreshnessSeconds} onShowFreshnessSeconds={setFreshnessSeconds} />}</main></div></div></TooltipProvider>;
 }
 
 function Loading() {

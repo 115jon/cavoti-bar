@@ -6,3 +6,4 @@ obj/
 web/node_modules/
 web/.vite/
 web/coverage/
+obj/GeneratedUi/

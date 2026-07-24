@@ -4,10 +4,10 @@ import { liveSnapshot } from "../test/fixtures";
 
 describe("parseHostMessage", () => {
   it("accepts a versioned live snapshot without exposing host internals", () => {
-    expect(parseHostMessage({ type: "snapshot", protocol: 1, snapshot: liveSnapshot, settings: { topmost: true } })).toEqual({
+    expect(parseHostMessage({ type: "snapshot", protocol: 1, snapshot: liveSnapshot, settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false } })).toEqual({
       type: "snapshot",
       snapshot: liveSnapshot,
-      settings: { topmost: true },
+      settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
     });
   });
 
