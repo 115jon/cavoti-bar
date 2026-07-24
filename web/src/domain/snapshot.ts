@@ -1,12 +1,14 @@
 export type UsageUnit = "points" | "usd";
-export type UsageWindow = { used: number; limit: number; unit: UsageUnit; resetAt: string | null };
+export type UsageWindow = { used: number; limit: number; configured: boolean; unit: UsageUnit; resetAt: string | null };
 
 export type Subscription = {
   name: string;
   status: string;
   billingKind: string;
+  quotaState: "available" | "limited";
+  blockedBy: string[];
   expiresAt: string | null;
-  usage: { daily: UsageWindow; weekly: UsageWindow; monthly: UsageWindow };
+  usage: { fiveHour: UsageWindow; daily: UsageWindow; weekly: UsageWindow; monthly: UsageWindow };
 };
 
 export type UsageRow = { name: string; requests: number; tokens: number; actualCost: number };
@@ -58,7 +60,7 @@ function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
 
 function windowValue(value: unknown, fallbackUnit: UsageUnit): UsageWindow {
   const source = record(value);
-  return { used: numberValue(source.used), limit: numberValue(source.limit), unit: usageUnit(source.unit, fallbackUnit), resetAt: typeof source.resetAt === "string" && !Number.isNaN(Date.parse(source.resetAt)) ? source.resetAt : null };
+  return { used: numberValue(source.used), limit: numberValue(source.limit), configured: typeof source.configured === "boolean" ? source.configured : numberValue(source.limit) > 0, unit: usageUnit(source.unit, fallbackUnit), resetAt: typeof source.resetAt === "string" && !Number.isNaN(Date.parse(source.resetAt)) ? source.resetAt : null };
 }
 
 function row(value: unknown): UsageRow {
@@ -72,7 +74,7 @@ function row(value: unknown): UsageRow {
 }
 
 export function usagePercent(value: UsageWindow | undefined): number {
-  if (!value?.limit) return 0;
+  if (!value?.configured || !value.limit) return 0;
   return Math.min(100, Math.max(0, Number(((value.used / value.limit) * 100).toFixed(1))));
 }
 
@@ -85,15 +87,29 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
     const item = record(value);
     const usage = record(item.usage);
     const rawName = stringValue(item.name, "Unnamed plan");
-    const billingKind = stringValue(item.billingKind, "subscription");
-    const pointBased = billingKind.toLowerCase().includes("point");
+    const rawBillingKind = stringValue(item.billingKind, "subscription");
+    const pointBased = rawBillingKind.toLowerCase().includes("point");
+    const billingKind = pointBased ? "Per-request plan" : rawBillingKind.toLowerCase() === "usage_quota" ? "Usage plan" : rawBillingKind;
     const fallbackUnit: UsageUnit = pointBased ? "points" : "usd";
+    const fiveHour = windowValue(usage.fiveHour ?? usage.daily, fallbackUnit);
+    const weekly = windowValue(usage.weekly, fallbackUnit);
+    const monthly = windowValue(usage.monthly, fallbackUnit);
+    const blockedBy = [
+      fiveHour.limit > 0 && fiveHour.used >= fiveHour.limit ? "5 hour" : null,
+      weekly.limit > 0 && weekly.used >= weekly.limit ? "7 day" : null,
+      monthly.limit > 0 && monthly.used >= monthly.limit ? "30 day" : null,
+    ].filter((value): value is string => value !== null);
+    const quotaState: Subscription["quotaState"] = blockedBy.length > 0 ? "limited" : "available";
+    const displayBillingKind = billingKind === "subscription" ? "Subscription" : billingKind;
+    const status = stringValue(item.status, "unknown");
     return {
-      name: rawName.toLowerCase() === "usage_quota" ? "Usage quota" : rawName,
-      status: stringValue(item.status, "unknown"),
-      billingKind: pointBased ? "Point pack" : billingKind === "subscription" ? "Subscription" : billingKind,
+      name: rawName.toLowerCase() === "usage_quota" ? "Usage plan" : rawName,
+      status: quotaState === "limited" && status === "active" ? "Limited" : status,
+      billingKind: displayBillingKind,
+      quotaState,
+      blockedBy,
       expiresAt: typeof item.expiresAt === "string" ? item.expiresAt : null,
-      usage: { daily: windowValue(usage.daily, fallbackUnit), weekly: windowValue(usage.weekly, fallbackUnit), monthly: windowValue(usage.monthly, fallbackUnit) },
+      usage: { fiveHour, daily: fiveHour, weekly, monthly },
     };
   });
   const normalizeRows = (value: unknown) => arrayValue(value).filter((item) => Object.keys(record(item)).length > 0).map(row);
