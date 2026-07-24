@@ -9,7 +9,7 @@ describe("normalizeSnapshot", () => {
       source: "live-webview2",
       account: { displayName: "Connected account", status: "active" },
       subscriptions: [{
-        name: "Lite",
+         name: "usage_quota",
         status: "active",
         billingKind: "point_pack",
         expiresAt: "2026-08-19T15:47:58Z",
@@ -22,13 +22,16 @@ describe("normalizeSnapshot", () => {
       keys: { total: 1, active: 1, expiringSoon: 0 },
       quotaResetCards: [],
       banner: null,
-      announcements: [],
+       announcements: [],
+       channelMonitors: [{ name: "Sol", provider: "openai", model: "gpt-5.6-sol", status: "operational", latencyMs: 6400, availability7d: 97.7, checkedAt: "2026-07-24T00:40:00Z" }],
     });
 
+    expect(snapshot?.subscriptions[0]?.name).toBe("Usage quota");
     expect(snapshot?.subscriptions[0]?.billingKind).toBe("Point pack");
     expect(snapshot?.subscriptions[0]?.usage.daily).toEqual({ used: 441.5, limit: 650, unit: "points", resetAt: null });
     expect(snapshot?.stats.totalTokens).toBe(32);
     expect(usagePercent(snapshot?.subscriptions[0]?.usage.daily)).toBe(67.9);
+    expect(snapshot?.channelMonitors[0]?.status).toBe("operational");
   });
 
   it("removes malformed, negative, and unsafe fields", () => {

@@ -10,6 +10,7 @@ export type Subscription = {
 };
 
 export type UsageRow = { name: string; requests: number; tokens: number; actualCost: number };
+export type ChannelMonitor = { name: string; provider: string; model: string; status: string; latencyMs: number | null; availability7d: number | null; checkedAt: string | null };
 
 export type SnapshotEnvelope = {
   version: 1;
@@ -34,6 +35,7 @@ export type SnapshotEnvelope = {
   quotaResetCards: Array<{ label: string; resetAt: string | null }>;
   banner: { title: string; message: string } | null;
   announcements: Array<{ title: string; message: string }>;
+  channelMonitors: ChannelMonitor[];
 };
 
 export type CavotiPayload = Record<string, unknown>;
@@ -42,6 +44,7 @@ const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const stringValue = (value: unknown, fallback = ""): string => typeof value === "string" ? value : fallback;
 const numberValue = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+const nullableNumber = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null;
 const arrayValue = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 
 function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
@@ -76,11 +79,12 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
   const subscriptions = arrayValue(source.subscriptions).filter((value) => Object.keys(record(value)).length > 0).map((value) => {
     const item = record(value);
     const usage = record(item.usage);
+    const rawName = stringValue(item.name, "Unnamed plan");
     const billingKind = stringValue(item.billingKind, "subscription");
     const pointBased = billingKind.toLowerCase().includes("point");
     const fallbackUnit: UsageUnit = pointBased ? "points" : "usd";
     return {
-      name: stringValue(item.name, "Unnamed plan"),
+      name: rawName.toLowerCase() === "usage_quota" ? "Usage quota" : rawName,
       status: stringValue(item.status, "unknown"),
       billingKind: pointBased ? "Point pack" : billingKind === "subscription" ? "Subscription" : billingKind,
       expiresAt: typeof item.expiresAt === "string" ? item.expiresAt : null,
@@ -93,6 +97,13 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
   const banner = typeof source.banner === "object" && source.banner !== null && typeof bannerSource.title === "string"
     ? { title: bannerSource.title, message: stringValue(bannerSource.message) }
     : null;
+  const channelMonitors = arrayValue(source.channelMonitors).filter((item) => Object.keys(record(item)).length > 0).map((item) => {
+    const monitor = record(item);
+    return {
+      name: stringValue(monitor.name, "Unknown channel"), provider: stringValue(monitor.provider, "unknown"), model: stringValue(monitor.model), status: stringValue(monitor.status, "unknown"),
+      latencyMs: nullableNumber(monitor.latencyMs), availability7d: nullableNumber(monitor.availability7d), checkedAt: typeof monitor.checkedAt === "string" && !Number.isNaN(Date.parse(monitor.checkedAt)) ? monitor.checkedAt : null,
+    };
+  });
   return {
     version: 1,
     capturedAt: typeof source.capturedAt === "string" && !Number.isNaN(Date.parse(source.capturedAt)) ? source.capturedAt : null,
@@ -118,5 +129,6 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
     announcements: arrayValue(source.announcements).filter((item) => Object.keys(record(item)).length > 0).map((item) => {
       const announcement = record(item); return { title: stringValue(announcement.title, "Announcement"), message: stringValue(announcement.message) };
     }),
+    channelMonitors,
   };
 }

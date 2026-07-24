@@ -38,4 +38,5 @@ export const liveSnapshot: SnapshotEnvelope = {
   quotaResetCards: [],
   banner: null,
   announcements: [],
+  channelMonitors: [{ name: "gpt-5.6-sol", provider: "openai", model: "gpt-5.6-sol", status: "operational", latencyMs: 6842, availability7d: 97.7, checkedAt: "2026-07-24T00:40:00Z" }],
 };
