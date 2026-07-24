@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { ArrowSquareOut, ArrowsClockwise, ChartBar, CheckCircle, GearSix, House, Info, Key, Lightning, LockKeyOpen, Minus, Pulse, Stack, Timer, UsersThree, WarningCircle, X } from "@phosphor-icons/react";
-import { normalizeSnapshot, type SnapshotEnvelope, type Subscription, type UsageUnit, type UsageWindow, usagePercent } from "./domain/snapshot";
+import { normalizeSnapshot, type SnapshotEnvelope, type Subscription, type UsageFilters, type UsageUnit, type UsageWindow, usagePercent } from "./domain/snapshot";
 import type { HostBridge } from "./bridge/host";
 import { parseHostMessage } from "./bridge/protocol";
 import { Badge } from "./components/ui/badge";
@@ -91,8 +91,55 @@ function DataRows({ rows, empty }: { rows: Array<{ name: string; requests: numbe
   return rows.length ? <div className="data-rows">{rows.map((row) => <div className="data-row" key={row.name}><span className="row-name">{row.name}</span><span>{integer(row.requests)} req</span><span>{tokens(row.tokens)}</span><strong>{money(row.actualCost)}</strong></div>)}</div> : <Empty title="No rows" message={empty} compact />;
 }
 
+function localDateInput(dateValue: Date): string {
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function defaultUsageFilters(): UsageFilters {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 29);
+  return { startDate: localDateInput(start), endDate: localDateInput(end), apiKeyId: null, model: "", groupId: null, requestType: "", billingType: null, billingMode: "" };
+}
+
+function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+  return <label className="usage-filter-field"><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option value={option.value} key={`${label}-${option.value}`}>{option.label}</option>)}</select></label>;
+}
+
+function UsageFilters({ snapshot, filters, onChange, onRefresh, onReset }: { snapshot: SnapshotEnvelope; filters: UsageFilters; onChange: (filters: UsageFilters) => void; onRefresh: () => void; onReset: () => void }) {
+  const models = snapshot.models.map((model) => model.name).filter((name, index, all) => all.indexOf(name) === index).sort();
+  const update = (patch: Partial<UsageFilters>) => onChange({ ...filters, ...patch });
+  return <section className="usage-filters"><div className="usage-filter-grid"><label className="usage-filter-field"><span>Date range</span><div className="usage-date-pair"><input type="date" value={filters.startDate} onChange={(event) => update({ startDate: event.target.value })} /><input type="date" value={filters.endDate} onChange={(event) => update({ endDate: event.target.value })} /></div></label><FilterSelect label="API key" value={filters.apiKeyId === null ? "" : String(filters.apiKeyId)} options={[{ value: "", label: "All API keys" }, ...snapshot.apiKeys.map((item) => ({ value: String(item.id), label: item.name }))]} onChange={(value) => update({ apiKeyId: value ? Number(value) : null })} /><FilterSelect label="Model" value={filters.model} options={[{ value: "", label: "All models" }, ...models.map((model) => ({ value: model, label: model }))]} onChange={(model) => update({ model })} /><FilterSelect label="Group" value={filters.groupId === null ? "" : String(filters.groupId)} options={[{ value: "", label: "All groups" }, ...snapshot.groupOptions.map((item) => ({ value: String(item.id), label: item.name }))]} onChange={(value) => update({ groupId: value ? Number(value) : null })} /><FilterSelect label="Type" value={filters.requestType} options={[{ value: "", label: "All types" }, { value: "ws_v2", label: "WS" }, { value: "stream", label: "Stream" }, { value: "sync", label: "Sync" }]} onChange={(requestType) => update({ requestType })} /><FilterSelect label="Billing type" value={filters.billingType === null ? "" : String(filters.billingType)} options={[{ value: "", label: "All billing types" }, { value: "0", label: "Balance" }, { value: "1", label: "Subscription" }]} onChange={(value) => update({ billingType: value ? Number(value) : null })} /><FilterSelect label="Billing mode" value={filters.billingMode} options={[{ value: "", label: "All billing modes" }, { value: "token", label: "Token" }, { value: "per_request", label: "Per request" }, { value: "image", label: "Image" }]} onChange={(billingMode) => update({ billingMode })} /></div><div className="usage-filter-actions"><Button size="sm" onClick={onRefresh}><ArrowsClockwise data-icon="inline-start" /> Refresh usage</Button><Button size="sm" variant="ghost" onClick={onReset}><X data-icon="inline-start" /> Reset filters</Button></div></section>;
+}
+
+function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
+  if (!rows.length) return <Empty title="No trend data" message="Try a wider date range or fewer filters." compact />;
+  const width = 640;
+  const height = 190;
+  const pad = 18;
+  const max = Math.max(...rows.map((row) => row.actualCost), 0.01);
+  const points = rows.map((row, index) => `${pad + (index / Math.max(rows.length - 1, 1)) * (width - pad * 2)},${height - pad - (row.actualCost / max) * (height - pad * 2)}`).join(" ");
+  return <div className="trend-chart"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily actual cost trend" preserveAspectRatio="none"><path d={`M ${pad} ${height - pad} H ${width - pad}`} className="chart-axis" /><polyline points={points} className="chart-line" /><circle cx={points.split(" ")[0]?.split(",")[0]} cy={points.split(" ")[0]?.split(",")[1]} r="3" className="chart-point" /></svg><div className="chart-labels"><span>{rows[0]?.date}</span><span>{rows[rows.length - 1]?.date}</span></div></div>;
+}
+
+function DistributionChart({ rows }: { rows: Array<{ name: string; actualCost: number }> }) {
+  const values = rows.filter((row) => row.actualCost > 0).slice(0, 5);
+  const total = values.reduce((sum, row) => sum + row.actualCost, 0);
+  if (!total) return <Empty title="No distribution data" message="No cost distribution returned for these filters." compact />;
+  let cursor = 0;
+  const colors = ["#8f4a22", "#2f6b3f", "#956412", "#7b628e", "#536b7f"];
+  const stops = values.map((row, index) => { const start = cursor; cursor += (row.actualCost / total) * 100; return `${colors[index]} ${start}% ${cursor}%`; }).join(", ");
+  return <div className="distribution-chart"><div className="donut-chart" style={{ background: `conic-gradient(${stops})` }}><span>{money(total)}</span></div><div className="distribution-legend">{values.map((row, index) => <div key={row.name}><i style={{ background: colors[index] }} /><span>{row.name}</span><strong>{money(row.actualCost)}</strong></div>)}</div></div>;
+}
+
 function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
-  return <div className="view-stack"><div className="view-heading"><div><span className="eyebrow">Usage dashboard</span><h1>Usage</h1></div><Badge variant="outline">30 day range</Badge></div><StatRail snapshot={snapshot} /><div className="surface-section"><div className="section-top"><div><span className="eyebrow">By endpoint</span><h2>Cost centers</h2></div><span className="muted-label">actual cost</span></div><DataRows rows={snapshot.stats.endpoints} empty="No endpoint data returned." /></div><div className="surface-section"><div className="section-top"><div><span className="eyebrow">By group</span><h2>Billing groups</h2></div><UsersThree className="section-icon" /></div><DataRows rows={snapshot.groups} empty="No group data returned." /></div><div className="surface-section"><div className="section-top"><div><span className="eyebrow">Top models</span><h2>Model spend</h2></div><ChartBar className="section-icon" /></div><ModelRows rows={snapshot.models.slice(0, 8)} /></div></div>;
+  const [filters, setFilters] = useState(defaultUsageFilters);
+  const apply = () => window.dispatchEvent(new CustomEvent("cavoti-usage-refresh", { detail: filters }));
+  const reset = () => { const next = defaultUsageFilters(); setFilters(next); window.dispatchEvent(new CustomEvent("cavoti-usage-refresh", { detail: next })); };
+  return <div className="view-stack"><div className="view-heading"><div><span className="eyebrow">Usage dashboard</span><h1>Usage</h1></div><Badge variant="outline">Filtered range</Badge></div><UsageFilters snapshot={snapshot} filters={filters} onChange={setFilters} onRefresh={apply} onReset={reset} /><div className="usage-chart-grid"><section className="surface-section chart-section"><div className="section-top"><div><span className="eyebrow">Actual cost</span><h2>Daily trend</h2></div><ChartBar className="section-icon" /></div><TrendChart rows={snapshot.dailyTrend} /></section><section className="surface-section chart-section"><div className="section-top"><div><span className="eyebrow">Share of spend</span><h2>By model</h2></div><Stack className="section-icon" /></div><DistributionChart rows={snapshot.models} /></section></div><StatRail snapshot={snapshot} /><div className="surface-section"><div className="section-top"><div><span className="eyebrow">By endpoint</span><h2>Cost centers</h2></div><span className="muted-label">actual cost</span></div><DataRows rows={snapshot.stats.endpoints} empty="No endpoint data returned." /></div><div className="surface-section"><div className="section-top"><div><span className="eyebrow">By group</span><h2>Billing groups</h2></div><UsersThree className="section-icon" /></div><DataRows rows={snapshot.groups} empty="No group data returned." /></div></div>;
 }
 
 function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onConnect: () => void }) {
@@ -134,6 +181,7 @@ export function App({ bridge }: AppProps) {
   const [snapshot, setSnapshot] = useState<SnapshotEnvelope>();
   const [view, setView] = useState<View>("overview");
   const [topmost, setTopmost] = useState(false);
+  const hasSnapshot = useRef(false);
   const connect = () => bridge.post({ action: "connect" });
   const refresh = () => bridge.post({ action: "refresh" });
   const openStatus = () => bridge.post({ action: "open-status" });
@@ -145,14 +193,16 @@ export function App({ bridge }: AppProps) {
       if (!message) return;
       if (message.type === "snapshot") {
         const next = normalizeSnapshot(message.snapshot);
-        if (next) { setSnapshot(next); setState("live"); if (message.settings) setTopmost(message.settings.topmost); }
+        if (next) { hasSnapshot.current = true; setSnapshot(next); setState("live"); if (message.settings) setTopmost(message.settings.topmost); }
       } else if (message.type === "settings") setTopmost(message.settings.topmost);
-      else setState(message.state);
+      else if (message.state !== "loading" || !hasSnapshot.current) setState(message.state);
     });
     bridge.post({ action: "bootstrap" });
+    const usageRefresh = (event: Event) => bridge.post({ action: "refresh", value: { filters: (event as CustomEvent<UsageFilters>).detail } });
     window.addEventListener("cavoti-refresh", refresh);
     window.addEventListener("cavoti-open-status", openStatus);
-    return () => { unsubscribe(); window.removeEventListener("cavoti-refresh", refresh); window.removeEventListener("cavoti-open-status", openStatus); };
+    window.addEventListener("cavoti-usage-refresh", usageRefresh);
+    return () => { unsubscribe(); window.removeEventListener("cavoti-refresh", refresh); window.removeEventListener("cavoti-open-status", openStatus); window.removeEventListener("cavoti-usage-refresh", usageRefresh); };
   }, [bridge]);
 
   const title = useMemo(() => view === "about" ? "About" : views.find((item) => item.id === view)?.label ?? "Overview", [view]);

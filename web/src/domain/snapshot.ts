@@ -11,6 +11,8 @@ export type Subscription = {
 
 export type UsageRow = { name: string; requests: number; tokens: number; actualCost: number };
 export type ChannelMonitor = { name: string; provider: string; model: string; status: string; latencyMs: number | null; availability7d: number | null; checkedAt: string | null };
+export type OptionItem = { id: number; name: string };
+export type UsageFilters = { startDate: string; endDate: string; apiKeyId: number | null; model: string; groupId: number | null; requestType: string; billingType: number | null; billingMode: string };
 
 export type SnapshotEnvelope = {
   version: 1;
@@ -36,6 +38,8 @@ export type SnapshotEnvelope = {
   banner: { title: string; message: string } | null;
   announcements: Array<{ title: string; message: string }>;
   channelMonitors: ChannelMonitor[];
+  apiKeys: OptionItem[];
+  groupOptions: OptionItem[];
 };
 
 export type CavotiPayload = Record<string, unknown>;
@@ -46,6 +50,7 @@ const stringValue = (value: unknown, fallback = ""): string => typeof value === 
 const numberValue = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
 const nullableNumber = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null;
 const arrayValue = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const optionRows = (value: unknown): OptionItem[] => arrayValue(value).map((item) => { const source = record(item); return { id: numberValue(source.id), name: stringValue(source.name, "Unknown") }; }).filter((item) => item.id > 0);
 
 function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
   return value === "points" || value === "usd" ? value : fallback;
@@ -130,5 +135,7 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
       const announcement = record(item); return { title: stringValue(announcement.title, "Announcement"), message: stringValue(announcement.message) };
     }),
     channelMonitors,
+    apiKeys: optionRows(source.apiKeys),
+    groupOptions: optionRows(source.groupOptions),
   };
 }
