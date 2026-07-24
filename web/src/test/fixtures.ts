@@ -12,12 +12,12 @@ export const liveSnapshot: SnapshotEnvelope = {
     {
       name: "Lite",
       status: "active",
-      billingKind: "subscription",
+      billingKind: "point_pack",
       expiresAt: "2026-08-19T15:47:58.000Z",
       usage: {
-        daily: { used: 441.5, limit: 650 },
-        weekly: { used: 473.5, limit: 4000 },
-        monthly: { used: 473.5, limit: 9000 },
+        daily: { used: 441.5, limit: 650, unit: "points", resetAt: "2026-07-24T10:06:49.000Z" },
+        weekly: { used: 473.5, limit: 4000, unit: "points", resetAt: "2026-07-29T23:05:48.000Z" },
+        monthly: { used: 473.5, limit: 9000, unit: "points", resetAt: "2026-08-22T23:05:48.000Z" },
       },
     },
   ],

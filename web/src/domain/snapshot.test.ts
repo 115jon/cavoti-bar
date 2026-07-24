@@ -11,7 +11,7 @@ describe("normalizeSnapshot", () => {
       subscriptions: [{
         name: "Lite",
         status: "active",
-        billingKind: "subscription",
+        billingKind: "point_pack",
         expiresAt: "2026-08-19T15:47:58Z",
         usage: { daily: { used: 441.5, limit: 650 }, weekly: { used: 473.5, limit: 4000 }, monthly: { used: 473.5, limit: 9000 } },
       }],
@@ -25,7 +25,8 @@ describe("normalizeSnapshot", () => {
       announcements: [],
     });
 
-    expect(snapshot?.subscriptions[0]?.usage.daily).toEqual({ used: 441.5, limit: 650 });
+    expect(snapshot?.subscriptions[0]?.billingKind).toBe("Point pack");
+    expect(snapshot?.subscriptions[0]?.usage.daily).toEqual({ used: 441.5, limit: 650, unit: "points", resetAt: null });
     expect(snapshot?.stats.totalTokens).toBe(32);
     expect(usagePercent(snapshot?.subscriptions[0]?.usage.daily)).toBe(67.9);
   });

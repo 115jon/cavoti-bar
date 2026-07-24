@@ -1,4 +1,5 @@
-export type UsageWindow = { used: number; limit: number };
+export type UsageUnit = "points" | "usd";
+export type UsageWindow = { used: number; limit: number; unit: UsageUnit; resetAt: string | null };
 
 export type Subscription = {
   name: string;
@@ -43,9 +44,13 @@ const stringValue = (value: unknown, fallback = ""): string => typeof value === 
 const numberValue = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
 const arrayValue = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 
-function windowValue(value: unknown): UsageWindow {
+function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
+  return value === "points" || value === "usd" ? value : fallback;
+}
+
+function windowValue(value: unknown, fallbackUnit: UsageUnit): UsageWindow {
   const source = record(value);
-  return { used: numberValue(source.used), limit: numberValue(source.limit) };
+  return { used: numberValue(source.used), limit: numberValue(source.limit), unit: usageUnit(source.unit, fallbackUnit), resetAt: typeof source.resetAt === "string" && !Number.isNaN(Date.parse(source.resetAt)) ? source.resetAt : null };
 }
 
 function row(value: unknown): UsageRow {
@@ -71,12 +76,15 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
   const subscriptions = arrayValue(source.subscriptions).filter((value) => Object.keys(record(value)).length > 0).map((value) => {
     const item = record(value);
     const usage = record(item.usage);
+    const billingKind = stringValue(item.billingKind, "subscription");
+    const pointBased = billingKind.toLowerCase().includes("point");
+    const fallbackUnit: UsageUnit = pointBased ? "points" : "usd";
     return {
       name: stringValue(item.name, "Unnamed plan"),
       status: stringValue(item.status, "unknown"),
-      billingKind: stringValue(item.billingKind, "subscription"),
+      billingKind: pointBased ? "Point pack" : billingKind === "subscription" ? "Subscription" : billingKind,
       expiresAt: typeof item.expiresAt === "string" ? item.expiresAt : null,
-      usage: { daily: windowValue(usage.daily), weekly: windowValue(usage.weekly), monthly: windowValue(usage.monthly) },
+      usage: { daily: windowValue(usage.daily, fallbackUnit), weekly: windowValue(usage.weekly, fallbackUnit), monthly: windowValue(usage.monthly, fallbackUnit) },
     };
   });
   const normalizeRows = (value: unknown) => arrayValue(value).filter((item) => Object.keys(record(item)).length > 0).map(row);
