@@ -16,7 +16,11 @@ function createBridge(): { bridge: HostBridge; sent: unknown[]; dispatch: (messa
       },
     },
     sent,
-    dispatch: (message) => listeners.forEach((listener) => listener(message)),
+    dispatch: (message) => {
+      listeners.forEach((listener) => {
+        listener(message);
+      });
+    },
   };
 }
 
@@ -26,7 +30,7 @@ describe("App", () => {
     render(<App bridge={bridge} />);
 
     expect(screen.getByText("Loading Cavoti snapshot")).toBeInTheDocument();
-     act(() => dispatch({ type: "bridge-state", protocol: 1, state: "auth-required", status: 401, message: "Live session required" }));
+    act(() => dispatch({ type: "bridge-state", protocol: 1, state: "auth-required", status: 401, message: "Live session required" }));
 
     expect(screen.getByText("Live session required")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Connect Cavoti" }));
@@ -36,7 +40,14 @@ describe("App", () => {
   it("renders every destination from a host-delivered live snapshot", () => {
     const { bridge, dispatch } = createBridge();
     render(<App bridge={bridge} />);
-     act(() => dispatch({ type: "snapshot", protocol: 1, snapshot: liveSnapshot, settings: { topmost: true, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false } }));
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        snapshot: liveSnapshot,
+        settings: { topmost: true, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
+      }),
+    );
 
     expect(screen.getByText("Lite")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Usage" }));

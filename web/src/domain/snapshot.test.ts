@@ -8,27 +8,54 @@ describe("normalizeSnapshot", () => {
       capturedAt: "2026-07-23T10:52:12Z",
       source: "live-webview2",
       account: { displayName: "Connected account", status: "active" },
-      subscriptions: [{
-         name: "usage_quota",
-        status: "active",
-        billingKind: "point_pack",
-        expiresAt: "2026-08-19T15:47:58Z",
-        usage: { fiveHour: { used: 441.5, limit: 650 }, weekly: { used: 473.5, limit: 4000 }, monthly: { used: 473.5, limit: 9000 } },
-      }],
-      stats: { requests: 4, inputTokens: 20, outputTokens: 8, cacheTokens: 4, totalTokens: 32, actualCost: 2, averageDurationMs: 40, endpoints: [] },
+      subscriptions: [
+        {
+          name: "usage_quota",
+          status: "active",
+          billingKind: "point_pack",
+          expiresAt: "2026-08-19T15:47:58Z",
+          usage: { fiveHour: { used: 441.5, limit: 650 }, weekly: { used: 473.5, limit: 4000 }, monthly: { used: 473.5, limit: 9000 } },
+        },
+      ],
+      stats: {
+        requests: 4,
+        inputTokens: 20,
+        outputTokens: 8,
+        cacheTokens: 4,
+        totalTokens: 32,
+        actualCost: 2,
+        averageDurationMs: 40,
+        endpoints: [],
+      },
       models: [],
       dailyTrend: [],
       groups: [],
       keys: { total: 1, active: 1, expiringSoon: 0 },
       quotaResetCards: [],
       banner: null,
-       announcements: [],
-       channelMonitors: [{ name: "Sol", provider: "openai", model: "gpt-5.6-sol", status: "operational", latencyMs: 6400, availability7d: 97.7, checkedAt: "2026-07-24T00:40:00Z" }],
+      announcements: [],
+      channelMonitors: [
+        {
+          name: "Sol",
+          provider: "openai",
+          model: "gpt-5.6-sol",
+          status: "operational",
+          latencyMs: 6400,
+          availability7d: 97.7,
+          checkedAt: "2026-07-24T00:40:00Z",
+        },
+      ],
     });
 
     expect(snapshot?.subscriptions[0]?.name).toBe("Usage plan");
     expect(snapshot?.subscriptions[0]?.billingKind).toBe("Per-request plan");
-    expect(snapshot?.subscriptions[0]?.usage.fiveHour).toEqual({ used: 441.5, limit: 650, configured: true, unit: "points", resetAt: null });
+    expect(snapshot?.subscriptions[0]?.usage.fiveHour).toEqual({
+      used: 441.5,
+      limit: 650,
+      configured: true,
+      unit: "points",
+      resetAt: null,
+    });
     expect(snapshot?.stats.totalTokens).toBe(32);
     expect(usagePercent(snapshot?.subscriptions[0]?.usage.fiveHour)).toBe(67.9);
     expect(snapshot?.channelMonitors[0]?.status).toBe("operational");

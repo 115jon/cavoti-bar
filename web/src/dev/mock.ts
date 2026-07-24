@@ -2,7 +2,23 @@ import type { HostBridge } from "../bridge/host";
 import type { SnapshotEnvelope, Subscription, UsageWindow } from "../domain/snapshot";
 import { liveSnapshot } from "../test/fixtures";
 
-const planNames = ["Lite", "Test", "Max+", "Pro", "Team", "Research", "Staging", "Production", "Sandbox", "Analytics", "Media", "Agents", "Images", "Enterprise", "Archive"];
+const planNames = [
+  "Lite",
+  "Test",
+  "Max+",
+  "Pro",
+  "Team",
+  "Research",
+  "Staging",
+  "Production",
+  "Sandbox",
+  "Analytics",
+  "Media",
+  "Agents",
+  "Images",
+  "Enterprise",
+  "Archive",
+];
 
 function quota(used: number, limit: number, resetAt: string): UsageWindow {
   return { used, limit, configured: true, unit: "points", resetAt };
@@ -30,19 +46,32 @@ function mockPlan(name: string, index: number): Subscription {
 }
 
 function mockSnapshot(): SnapshotEnvelope {
-  return { ...liveSnapshot, capturedAt: new Date().toISOString(), account: { displayName: "Design review account", status: "active" }, subscriptions: planNames.map(mockPlan) };
+  return {
+    ...liveSnapshot,
+    capturedAt: new Date().toISOString(),
+    account: { displayName: "Design review account", status: "active" },
+    subscriptions: planNames.map(mockPlan),
+  };
 }
 
 export function createMockBridge(): HostBridge {
   let listener: ((message: unknown) => void) | null = null;
-  const emit = () => listener?.({ protocol: 1, type: "snapshot", snapshot: mockSnapshot(), settings: { topmost: false, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false } });
+  const emit = () =>
+    listener?.({
+      protocol: 1,
+      type: "snapshot",
+      snapshot: mockSnapshot(),
+      settings: { topmost: false, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
+    });
   return {
     post: (message) => {
       if (message.action === "bootstrap" || message.action === "refresh" || message.action === "connect") window.setTimeout(emit, 120);
     },
     subscribe: (next) => {
       listener = next;
-      return () => { listener = null; };
+      return () => {
+        listener = null;
+      };
     },
   };
 }

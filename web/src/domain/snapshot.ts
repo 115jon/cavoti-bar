@@ -12,9 +12,26 @@ export type Subscription = {
 };
 
 export type UsageRow = { name: string; requests: number; tokens: number; actualCost: number };
-export type ChannelMonitor = { name: string; provider: string; model: string; status: string; latencyMs: number | null; availability7d: number | null; checkedAt: string | null };
+export type ChannelMonitor = {
+  name: string;
+  provider: string;
+  model: string;
+  status: string;
+  latencyMs: number | null;
+  availability7d: number | null;
+  checkedAt: string | null;
+};
 export type OptionItem = { id: number; name: string };
-export type UsageFilters = { startDate: string; endDate: string; apiKeyId: number | null; model: string; groupId: number | null; requestType: string; billingType: number | null; billingMode: string };
+export type UsageFilters = {
+  startDate: string;
+  endDate: string;
+  apiKeyId: number | null;
+  model: string;
+  groupId: number | null;
+  requestType: string;
+  billingType: number | null;
+  billingMode: string;
+};
 
 export type SnapshotEnvelope = {
   version: 1;
@@ -47,12 +64,18 @@ export type SnapshotEnvelope = {
 export type CavotiPayload = Record<string, unknown>;
 
 const record = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const stringValue = (value: unknown, fallback = ""): string => typeof value === "string" ? value : fallback;
-const numberValue = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
-const nullableNumber = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null;
-const arrayValue = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
-const optionRows = (value: unknown): OptionItem[] => arrayValue(value).map((item) => { const source = record(item); return { id: numberValue(source.id), name: stringValue(source.name, "Unknown") }; }).filter((item) => item.id > 0);
+  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+const stringValue = (value: unknown, fallback = ""): string => (typeof value === "string" ? value : fallback);
+const numberValue = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
+const nullableNumber = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null);
+const arrayValue = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const optionRows = (value: unknown): OptionItem[] =>
+  arrayValue(value)
+    .map((item) => {
+      const source = record(item);
+      return { id: numberValue(source.id), name: stringValue(source.name, "Unknown") };
+    })
+    .filter((item) => item.id > 0);
 
 function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
   return value === "points" || value === "usd" ? value : fallback;
@@ -60,7 +83,13 @@ function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
 
 function windowValue(value: unknown, fallbackUnit: UsageUnit): UsageWindow {
   const source = record(value);
-  return { used: numberValue(source.used), limit: numberValue(source.limit), configured: typeof source.configured === "boolean" ? source.configured : numberValue(source.limit) > 0, unit: usageUnit(source.unit, fallbackUnit), resetAt: typeof source.resetAt === "string" && !Number.isNaN(Date.parse(source.resetAt)) ? source.resetAt : null };
+  return {
+    used: numberValue(source.used),
+    limit: numberValue(source.limit),
+    configured: typeof source.configured === "boolean" ? source.configured : numberValue(source.limit) > 0,
+    unit: usageUnit(source.unit, fallbackUnit),
+    resetAt: typeof source.resetAt === "string" && !Number.isNaN(Date.parse(source.resetAt)) ? source.resetAt : null,
+  };
 }
 
 function row(value: unknown): UsageRow {
@@ -83,48 +112,61 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
   if (source.version !== 1) return null;
   const account = record(source.account);
   const stats = record(source.stats);
-  const subscriptions = arrayValue(source.subscriptions).filter((value) => Object.keys(record(value)).length > 0).map((value) => {
-    const item = record(value);
-    const usage = record(item.usage);
-    const rawName = stringValue(item.name, "Unnamed plan");
-    const rawBillingKind = stringValue(item.billingKind, "subscription");
-    const pointBased = rawBillingKind.toLowerCase().includes("point");
-    const billingKind = pointBased ? "Per-request plan" : rawBillingKind.toLowerCase() === "usage_quota" ? "Usage plan" : rawBillingKind;
-    const fallbackUnit: UsageUnit = pointBased ? "points" : "usd";
-    const fiveHour = windowValue(usage.fiveHour ?? usage.daily, fallbackUnit);
-    const weekly = windowValue(usage.weekly, fallbackUnit);
-    const monthly = windowValue(usage.monthly, fallbackUnit);
-    const blockedBy = [
-      fiveHour.limit > 0 && fiveHour.used >= fiveHour.limit ? "5 hour" : null,
-      weekly.limit > 0 && weekly.used >= weekly.limit ? "7 day" : null,
-      monthly.limit > 0 && monthly.used >= monthly.limit ? "30 day" : null,
-    ].filter((value): value is string => value !== null);
-    const quotaState: Subscription["quotaState"] = blockedBy.length > 0 ? "limited" : "available";
-    const displayBillingKind = billingKind === "subscription" ? "Subscription" : billingKind;
-    const status = stringValue(item.status, "unknown");
-    return {
-      name: rawName.toLowerCase() === "usage_quota" ? "Usage plan" : rawName,
-      status: quotaState === "limited" && status === "active" ? "Limited" : status,
-      billingKind: displayBillingKind,
-      quotaState,
-      blockedBy,
-      expiresAt: typeof item.expiresAt === "string" ? item.expiresAt : null,
-      usage: { fiveHour, daily: fiveHour, weekly, monthly },
-    };
-  });
-  const normalizeRows = (value: unknown) => arrayValue(value).filter((item) => Object.keys(record(item)).length > 0).map(row);
+  const subscriptions = arrayValue(source.subscriptions)
+    .filter((value) => Object.keys(record(value)).length > 0)
+    .map((value) => {
+      const item = record(value);
+      const usage = record(item.usage);
+      const rawName = stringValue(item.name, "Unnamed plan");
+      const rawBillingKind = stringValue(item.billingKind, "subscription");
+      const pointBased = rawBillingKind.toLowerCase().includes("point");
+      const billingKind = pointBased ? "Per-request plan" : rawBillingKind.toLowerCase() === "usage_quota" ? "Usage plan" : rawBillingKind;
+      const fallbackUnit: UsageUnit = pointBased ? "points" : "usd";
+      const fiveHour = windowValue(usage.fiveHour ?? usage.daily, fallbackUnit);
+      const weekly = windowValue(usage.weekly, fallbackUnit);
+      const monthly = windowValue(usage.monthly, fallbackUnit);
+      const blockedBy = [
+        fiveHour.limit > 0 && fiveHour.used >= fiveHour.limit ? "5 hour" : null,
+        weekly.limit > 0 && weekly.used >= weekly.limit ? "7 day" : null,
+        monthly.limit > 0 && monthly.used >= monthly.limit ? "30 day" : null,
+      ].filter((value): value is string => value !== null);
+      const quotaState: Subscription["quotaState"] = blockedBy.length > 0 ? "limited" : "available";
+      const displayBillingKind = billingKind === "subscription" ? "Subscription" : billingKind;
+      const status = stringValue(item.status, "unknown");
+      return {
+        name: rawName.toLowerCase() === "usage_quota" ? "Usage plan" : rawName,
+        status: quotaState === "limited" && status === "active" ? "Limited" : status,
+        billingKind: displayBillingKind,
+        quotaState,
+        blockedBy,
+        expiresAt: typeof item.expiresAt === "string" ? item.expiresAt : null,
+        usage: { fiveHour, daily: fiveHour, weekly, monthly },
+      };
+    });
+  const normalizeRows = (value: unknown) =>
+    arrayValue(value)
+      .filter((item) => Object.keys(record(item)).length > 0)
+      .map(row);
   const keys = record(source.keys);
   const bannerSource = record(source.banner);
-  const banner = typeof source.banner === "object" && source.banner !== null && typeof bannerSource.title === "string"
-    ? { title: bannerSource.title, message: stringValue(bannerSource.message) }
-    : null;
-  const channelMonitors = arrayValue(source.channelMonitors).filter((item) => Object.keys(record(item)).length > 0).map((item) => {
-    const monitor = record(item);
-    return {
-      name: stringValue(monitor.name, "Unknown channel"), provider: stringValue(monitor.provider, "unknown"), model: stringValue(monitor.model), status: stringValue(monitor.status, "unknown"),
-      latencyMs: nullableNumber(monitor.latencyMs), availability7d: nullableNumber(monitor.availability7d), checkedAt: typeof monitor.checkedAt === "string" && !Number.isNaN(Date.parse(monitor.checkedAt)) ? monitor.checkedAt : null,
-    };
-  });
+  const banner =
+    typeof source.banner === "object" && source.banner !== null && typeof bannerSource.title === "string"
+      ? { title: bannerSource.title, message: stringValue(bannerSource.message) }
+      : null;
+  const channelMonitors = arrayValue(source.channelMonitors)
+    .filter((item) => Object.keys(record(item)).length > 0)
+    .map((item) => {
+      const monitor = record(item);
+      return {
+        name: stringValue(monitor.name, "Unknown channel"),
+        provider: stringValue(monitor.provider, "unknown"),
+        model: stringValue(monitor.model),
+        status: stringValue(monitor.status, "unknown"),
+        latencyMs: nullableNumber(monitor.latencyMs),
+        availability7d: nullableNumber(monitor.availability7d),
+        checkedAt: typeof monitor.checkedAt === "string" && !Number.isNaN(Date.parse(monitor.checkedAt)) ? monitor.checkedAt : null,
+      };
+    });
   return {
     version: 1,
     capturedAt: typeof source.capturedAt === "string" && !Number.isNaN(Date.parse(source.capturedAt)) ? source.capturedAt : null,
@@ -132,24 +174,46 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
     account: { displayName: stringValue(account.displayName, "Connected account"), status: stringValue(account.status, "unknown") },
     subscriptions,
     stats: {
-      requests: numberValue(stats.requests), inputTokens: numberValue(stats.inputTokens), outputTokens: numberValue(stats.outputTokens),
-      cacheTokens: numberValue(stats.cacheTokens), totalTokens: numberValue(stats.totalTokens), actualCost: numberValue(stats.actualCost),
-      averageDurationMs: numberValue(stats.averageDurationMs), endpoints: normalizeRows(stats.endpoints),
+      requests: numberValue(stats.requests),
+      inputTokens: numberValue(stats.inputTokens),
+      outputTokens: numberValue(stats.outputTokens),
+      cacheTokens: numberValue(stats.cacheTokens),
+      totalTokens: numberValue(stats.totalTokens),
+      actualCost: numberValue(stats.actualCost),
+      averageDurationMs: numberValue(stats.averageDurationMs),
+      endpoints: normalizeRows(stats.endpoints),
     },
     models: normalizeRows(source.models),
-    dailyTrend: arrayValue(source.dailyTrend).filter((item) => Object.keys(record(item)).length > 0).map((item) => {
-      const trend = record(item);
-      return { date: stringValue(trend.date), requests: numberValue(trend.requests), tokens: numberValue(trend.tokens), actualCost: numberValue(trend.actualCost) };
-    }),
+    dailyTrend: arrayValue(source.dailyTrend)
+      .filter((item) => Object.keys(record(item)).length > 0)
+      .map((item) => {
+        const trend = record(item);
+        return {
+          date: stringValue(trend.date),
+          requests: numberValue(trend.requests),
+          tokens: numberValue(trend.tokens),
+          actualCost: numberValue(trend.actualCost),
+        };
+      }),
     groups: normalizeRows(source.groups),
-    keys: { total: numberValue(keys.total), active: Math.min(numberValue(keys.total), numberValue(keys.active)), expiringSoon: numberValue(keys.expiringSoon) },
-    quotaResetCards: arrayValue(source.quotaResetCards).filter((item) => Object.keys(record(item)).length > 0).map((item) => {
-      const card = record(item); return { label: stringValue(card.label, "Quota reset"), resetAt: typeof card.resetAt === "string" ? card.resetAt : null };
-    }),
+    keys: {
+      total: numberValue(keys.total),
+      active: Math.min(numberValue(keys.total), numberValue(keys.active)),
+      expiringSoon: numberValue(keys.expiringSoon),
+    },
+    quotaResetCards: arrayValue(source.quotaResetCards)
+      .filter((item) => Object.keys(record(item)).length > 0)
+      .map((item) => {
+        const card = record(item);
+        return { label: stringValue(card.label, "Quota reset"), resetAt: typeof card.resetAt === "string" ? card.resetAt : null };
+      }),
     banner,
-    announcements: arrayValue(source.announcements).filter((item) => Object.keys(record(item)).length > 0).map((item) => {
-      const announcement = record(item); return { title: stringValue(announcement.title, "Announcement"), message: stringValue(announcement.message) };
-    }),
+    announcements: arrayValue(source.announcements)
+      .filter((item) => Object.keys(record(item)).length > 0)
+      .map((item) => {
+        const announcement = record(item);
+        return { title: stringValue(announcement.title, "Announcement"), message: stringValue(announcement.message) };
+      }),
     channelMonitors,
     apiKeys: optionRows(source.apiKeys),
     groupOptions: optionRows(source.groupOptions),

@@ -3,7 +3,14 @@ export type HostBridge = {
   subscribe: (listener: (message: unknown) => void) => () => void;
 };
 
-type WebViewWindow = Window & { chrome?: { webview?: { postMessage: (message: unknown) => void; addEventListener: (type: "message", listener: (event: MessageEvent) => void) => void } } };
+type WebViewWindow = Window & {
+  chrome?: {
+    webview?: {
+      postMessage: (message: unknown) => void;
+      addEventListener: (type: "message", listener: (event: MessageEvent) => void) => void;
+    };
+  };
+};
 
 export function createHostBridge(target: WebViewWindow = window): HostBridge {
   const webview = target.chrome?.webview;
