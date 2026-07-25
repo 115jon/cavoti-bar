@@ -1,7 +1,7 @@
 import type { UsageFilters, UsageUnit } from "../domain/snapshot";
 
 export const money = (value: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value);
 export const integer = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 export const quantity = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 export const tokens = (value: number) =>
@@ -17,6 +17,18 @@ export const date = (value: string | null) =>
     ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value))
     : "Not provided";
 export const usageAmount = (value: number, unit: UsageUnit) => (unit === "points" ? `${quantity(value)} pts` : money(value));
+
+export type DateRangePreset = "today" | "yesterday" | "this-week" | "last-week" | "this-month" | "last-month" | "last-30-days";
+
+export const dateRangeOptions: Array<{ value: DateRangePreset; label: string }> = [
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "this-week", label: "This week" },
+  { value: "last-week", label: "Last week" },
+  { value: "this-month", label: "This month" },
+  { value: "last-month", label: "Last month" },
+  { value: "last-30-days", label: "Last 30 days" },
+];
 
 export function resetLabel(value: string | null): string {
   if (!value) return "Reset time unavailable";
@@ -38,13 +50,42 @@ export function localDateInput(dateValue: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function defaultUsageFilterState(): UsageFilters {
-  const end = new Date();
+export function dateRangeForPreset(preset: DateRangePreset, now = new Date()): Pick<UsageFilters, "startDate" | "endDate"> {
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const start = new Date(end);
-  start.setDate(start.getDate() - 29);
+  const day = end.getDay();
+  switch (preset) {
+    case "yesterday":
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() - 1);
+      break;
+    case "this-week":
+      start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+      break;
+    case "last-week":
+      start.setDate(start.getDate() - (day === 0 ? 13 : day + 6));
+      end.setDate(end.getDate() - (day === 0 ? 7 : day));
+      break;
+    case "this-month":
+      start.setDate(1);
+      break;
+    case "last-month":
+      start.setMonth(start.getMonth() - 1, 1);
+      end.setDate(0);
+      break;
+    case "last-30-days":
+      start.setDate(start.getDate() - 29);
+      break;
+    case "today":
+      break;
+  }
+  return { startDate: localDateInput(start), endDate: localDateInput(end) };
+}
+
+export function defaultUsageFilterState(): UsageFilters {
+  const range = dateRangeForPreset("last-30-days");
   return {
-    startDate: localDateInput(start),
-    endDate: localDateInput(end),
+    ...range,
     apiKeyId: null,
     model: "",
     groupId: null,

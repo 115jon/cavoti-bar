@@ -8,6 +8,7 @@ type WebViewWindow = Window & {
     webview?: {
       postMessage: (message: unknown) => void;
       addEventListener: (type: "message", listener: (event: MessageEvent) => void) => void;
+      removeEventListener: (type: "message", listener: (event: MessageEvent) => void) => void;
     };
   };
 };
@@ -20,7 +21,7 @@ export function createHostBridge(target: WebViewWindow = window): HostBridge {
       if (!webview) return () => undefined;
       const handle = (event: MessageEvent) => listener(event.data);
       webview.addEventListener("message", handle);
-      return () => undefined;
+      return () => webview.removeEventListener("message", handle);
     },
   };
 }

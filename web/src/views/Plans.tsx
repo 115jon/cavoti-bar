@@ -2,8 +2,9 @@ import { useState } from "react";
 import { ArrowSquareOutIcon as ArrowSquareOut, TimerIcon as Timer } from "@phosphor-icons/react";
 import type { SnapshotEnvelope } from "../domain/snapshot";
 import { date, resetLabel } from "../app/formatters";
-import { Badge, Empty, TilePager, UsageMeter, useCompactTiles } from "../components/app/shared";
+import { Badge, Empty, SignalNote, TilePager, UsageMeter, useCompactTiles } from "../components/app/shared";
 import { Button } from "../components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
 
 export function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onConnect: () => void }) {
   const [page, setPage] = useState(0);
@@ -12,45 +13,59 @@ export function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onC
   const plan = snapshot.subscriptions[safePage];
   if (!compact)
     return (
-      <div className="view-stack wide-plans">
-        <div className="view-heading">
+      <div className="flex w-full max-w-[1480px] flex-col gap-6">
+        <div className="flex items-end justify-between gap-6">
           <div>
-            <span className="eyebrow">Entitlements</span>
-            <h1>Plans</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Entitlements</span>
+            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">Plans</h1>
           </div>
           <Button variant="outline" size="sm" onClick={onConnect}>
             Manage on Cavoti <ArrowSquareOut data-icon="inline-end" />
           </Button>
         </div>
-        <div className="wide-plan-list">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {snapshot.subscriptions.map((item) => (
-            <section className="plan-row" key={item.name}>
-              <div className="plan-head">
+            <Card className="min-w-0 gap-0 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm" key={item.name}>
+              <CardHeader className="flex items-start justify-between gap-3 p-0">
                 <div>
                   <Badge variant={item.status === "active" ? "success" : "outline"}>{item.status}</Badge>
-                  <h2>{item.name}</h2>
-                  <span className="plan-subtitle">{item.billingKind}</span>
+                  <CardTitle className="m-0 text-lg font-semibold leading-7">{item.name}</CardTitle>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-[var(--ink-muted)]">{item.billingKind}</span>
                 </div>
-              </div>
-              <div className="plan-meters">
-                <UsageMeter label="5 hour" window={item.usage.fiveHour} />
-                <UsageMeter label="Weekly" window={item.usage.weekly} tone="good" />
-                <UsageMeter label="Monthly" window={item.usage.monthly} tone="good" />
-              </div>
-            </section>
+              </CardHeader>
+              <CardContent className="mt-3 grid grid-cols-3 gap-2 p-0">
+                <UsageMeter
+                  label="5 hour"
+                  window={item.usage.fiveHour}
+                  className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+                />
+                <UsageMeter
+                  label="Weekly"
+                  window={item.usage.weekly}
+                  tone="good"
+                  className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+                />
+                <UsageMeter
+                  label="Monthly"
+                  window={item.usage.monthly}
+                  tone="good"
+                  className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+                />
+              </CardContent>
+            </Card>
           ))}
         </div>
       </div>
     );
   return (
-    <div className="view-stack tile-stack">
-      <div className="tile-page">
-        <div className="view-heading">
+    <div className="flex min-h-full flex-col">
+      <div className="flex min-h-0 flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="eyebrow">Entitlements</span>
-            <h1>Plans</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Entitlements</span>
+            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">Plans</h1>
           </div>
-          <div className="tile-heading-actions">
+          <div className="flex min-w-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={onConnect}>
               Manage on Cavoti <ArrowSquareOut data-icon="inline-end" />
             </Button>
@@ -58,38 +73,36 @@ export function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onC
           </div>
         </div>
         {plan ? (
-          <section className="plan-row featured">
-            <div className="plan-head">
+          <Card className="min-w-0 gap-0 rounded-xl border border-[var(--line)] bg-[var(--accent-soft)] p-3 shadow-sm">
+            <CardHeader className="flex items-start justify-between gap-3 p-0">
               <div>
                 <Badge variant={plan.status === "active" ? "success" : "outline"}>{plan.status}</Badge>
-                <h2>{plan.name}</h2>
-                <span className="plan-subtitle">{plan.billingKind}</span>
+                <CardTitle className="m-0 text-lg font-semibold leading-7">{plan.name}</CardTitle>
+                <span className="mt-0.5 block text-[11px] leading-4 text-[var(--ink-muted)]">{plan.billingKind}</span>
               </div>
-              <span className="plan-index">{String(safePage + 1).padStart(2, "0")}</span>
-            </div>
-            <div className="plan-meters">
+              <span className="text-lg tabular-nums text-[var(--ink-faint)]">{String(safePage + 1).padStart(2, "0")}</span>
+            </CardHeader>
+            <CardContent className="mt-3 grid grid-cols-1 gap-3 p-0">
               <UsageMeter label="Daily" window={plan.usage.daily} />
               <UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" />
               <UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" />
-            </div>
-            <div className="plan-foot">
+            </CardContent>
+            <CardFooter className="mt-3 flex items-center justify-between border-t bg-transparent p-0 pt-3 text-xs text-[var(--ink-muted)]">
               <span>Renews {date(plan.expiresAt)}</span>
               <span>{plan.usage.daily.unit === "points" ? "Points" : "USD"}</span>
-            </div>
-          </section>
+            </CardFooter>
+          </Card>
         ) : (
           <Empty title="No plan records" message="Connect Cavoti to read your current entitlements." onAction={onConnect} />
         )}
         {snapshot.quotaResetCards.length ? (
-          <div className="signal-note">
-            <Timer />
-            <div>
-              <strong>Quota resets</strong>
-              <span>
-                {snapshot.quotaResetCards.map((card) => `${card.label}${card.resetAt ? ` | ${resetLabel(card.resetAt)}` : ""}`).join(" | ")}
-              </span>
-            </div>
-          </div>
+          <SignalNote
+            icon={<Timer />}
+            title="Quota resets"
+            message={snapshot.quotaResetCards
+              .map((card) => `${card.label}${card.resetAt ? ` | ${resetLabel(card.resetAt)}` : ""}`)
+              .join(" | ")}
+          />
         ) : null}
       </div>
     </div>

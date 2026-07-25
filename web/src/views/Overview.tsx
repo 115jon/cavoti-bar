@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
+  ArrowsClockwiseIcon as ArrowsClockwise,
   ChartBarIcon as ChartBar,
+  DownloadSimpleIcon as DownloadSimple,
   GearSixIcon as GearSix,
   InfoIcon as Info,
   LightningIcon as Lightning,
@@ -11,7 +13,10 @@ import {
 import type { SnapshotEnvelope, Subscription } from "../domain/snapshot";
 import { date, money, tokens } from "../app/formatters";
 import type { ActionProps, View } from "../app/types";
-import { Badge, Empty, PlanTabs, SourceStrip, UsageMeter, useCompactTiles } from "../components/app/shared";
+import { Badge, Empty, PlanTabs, SignalNote, SourceStrip, UsageMeter, useCompactTiles } from "../components/app/shared";
+import { Button } from "../components/ui/button";
+import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
+import { Separator } from "../components/ui/separator";
 
 type OverviewProps = {
   snapshot: SnapshotEnvelope;
@@ -19,36 +24,52 @@ type OverviewProps = {
   onConnect: () => void;
   onOpenStatus: () => void;
   onQuit: () => void;
+  onRestart: () => void;
+  updateReady: boolean;
   showSeconds: boolean;
 };
 
-function CostSummary({ snapshot }: { snapshot: SnapshotEnvelope }) {
+function CostSummary({ snapshot, onOpenUsage }: { snapshot: SnapshotEnvelope; onOpenUsage: () => void }) {
   const today = snapshot.dailyTrend[snapshot.dailyTrend.length - 1] ?? { actualCost: 0, tokens: 0 };
   return (
-    <section className="utility-section cost-section">
-      <div className="section-top">
+    <Card className="gap-0 rounded-xl border border-[var(--line)] bg-white/70 px-5 py-4 text-[var(--ink)] shadow-sm">
+      <CardHeader className="mb-2 flex items-start justify-between gap-3 p-0">
         <div>
-          <span className="eyebrow">Spend and volume</span>
-          <h2>Cost</h2>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Spend and volume</span>
+          <CardTitle className="m-0 text-xl font-semibold leading-7">Cost</CardTitle>
         </div>
-        <ArrowSquareOut className="section-icon" />
-      </div>
-      <p>
-        Today: {money(today.actualCost)} | {tokens(today.tokens)} tokens
-      </p>
-      <p>
-        Last 30 days: {money(snapshot.stats.actualCost)} | {tokens(snapshot.stats.totalTokens)} tokens
-      </p>
-    </section>
+        <CardAction className="-mr-1 -mt-1">
+          <Button className="text-[var(--accent)]" variant="ghost" size="icon" aria-label="Open usage dashboard" onClick={onOpenUsage}>
+            <ArrowSquareOut className="size-5" />
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="min-w-0 p-0 text-sm leading-5 text-[var(--ink-muted)] [&_p]:m-0 [&_p+p]:mt-1.5 [&_p:first-of-type]:text-[var(--ink)]">
+        <p>
+          Today: {money(today.actualCost)} | {tokens(today.tokens)} tokens
+        </p>
+        <p>
+          Last 30 days: {money(snapshot.stats.actualCost)} | {tokens(snapshot.stats.totalTokens)} tokens
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
-function UtilityAction({ icon, label, onClick }: ActionProps) {
+function UtilityAction({ icon, label, shortcut, onClick }: ActionProps & { shortcut?: string }) {
   return (
-    <button type="button" className="utility-action" onClick={onClick}>
-      <span>{icon}</span>
-      <strong>{label}</strong>
-      <ArrowSquareOut className="utility-action-arrow" />
+    <button
+      type="button"
+      className="flex min-h-9 w-full items-center justify-start gap-2.5 rounded-md border-0 bg-transparent px-1 py-1.5 text-left text-sm text-[var(--ink)] transition-[background-color,color,box-shadow,transform] duration-200 hover:bg-white/40 hover:text-[var(--accent-ink)] hover:shadow-sm active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+      onClick={onClick}
+    >
+      <span className="grid w-[22px] shrink-0 place-items-center text-[var(--ink-muted)] [&_svg]:size-[17px]">{icon}</span>
+      <strong className="font-medium">{label}</strong>
+      {shortcut ? (
+        <kbd className="ml-auto min-w-11 rounded border border-[var(--line-strong)] bg-white/50 px-1.5 py-0.5 text-center text-[10px] leading-4 text-[var(--ink-muted)] tabular-nums">
+          {shortcut}
+        </kbd>
+      ) : null}
     </button>
   );
 }
@@ -57,49 +78,80 @@ function UtilityActions({
   onNavigate,
   onOpenStatus,
   onQuit,
+  onRestart,
+  updateReady,
 }: {
   onNavigate: (view: View) => void;
   onOpenStatus: () => void;
   onQuit: () => void;
+  onRestart: () => void;
+  updateReady: boolean;
 }) {
   return (
-    <div className="utility-actions">
+    <div className="flex flex-col gap-0 pt-2">
       <UtilityAction icon={<ChartBar />} label="Usage dashboard" onClick={() => onNavigate("usage")} />
       <UtilityAction icon={<Pulse />} label="Status page" onClick={onOpenStatus} />
-      <div className="utility-divider" />
-      <UtilityAction icon={<GearSix />} label="Settings..." onClick={() => onNavigate("settings")} />
+      <Separator className="my-2 h-px w-full bg-[var(--line)]" />
+      {updateReady ? <UtilityAction icon={<DownloadSimple />} label="Update ready, restart now?" onClick={onRestart} /> : null}
+      <UtilityAction
+        icon={<ArrowsClockwise />}
+        label="Refresh"
+        shortcut="Ctrl+R"
+        onClick={() => window.dispatchEvent(new CustomEvent("cavoti-refresh"))}
+      />
+      <UtilityAction icon={<GearSix />} label="Settings..." shortcut="Ctrl+," onClick={() => onNavigate("settings")} />
       <UtilityAction icon={<Info />} label="About Cavoti Bar" onClick={() => onNavigate("about")} />
-      <UtilityAction icon={<X />} label="Quit" onClick={onQuit} />
+      <UtilityAction icon={<X />} label="Quit" shortcut="Ctrl+Q" onClick={onQuit} />
     </div>
   );
 }
 
 function DesktopPlanCard({ plan, selected, onSelect }: { plan: Subscription; selected: boolean; onSelect: () => void }) {
   return (
-    <button
-      type="button"
-      className={`plan-card ${selected ? "selected" : ""} ${plan.quotaState === "limited" ? "limited" : "available"}`}
+    <Card
+      className={`min-w-0 gap-0 cursor-pointer rounded-xl border border-[var(--line)] bg-white/75 p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--accent-soft-strong)] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${
+        selected ? "border-[var(--accent)] bg-white" : ""
+      } ${plan.quotaState === "limited" ? "border-[var(--warning)] bg-[var(--warning-soft)]" : ""}`}
       role="tab"
       aria-selected={selected}
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
     >
-      <div className="plan-card-head">
+      <CardHeader className="flex items-start justify-between gap-3 p-0">
         <div>
-          <span className="eyebrow">{plan.billingKind}</span>
-          <h2>{plan.name}</h2>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">{plan.billingKind}</span>
+          <CardTitle className="m-0 text-lg font-semibold leading-7">{plan.name}</CardTitle>
         </div>
-        <Badge variant={plan.quotaState === "limited" ? "warning" : selected ? "success" : "outline"}>{plan.status}</Badge>
-      </div>
-      <div className="plan-card-meters">
-        <UsageMeter label="Daily" window={plan.usage.fiveHour} />
-        <UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" />
-        <UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" />
-      </div>
-      <div className="plan-card-foot">
+        <CardAction className="self-start">
+          <Badge variant={plan.quotaState === "limited" ? "warning" : selected ? "success" : "outline"}>{plan.status}</Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="mt-5 flex flex-col gap-4 p-0">
+        <UsageMeter label="Daily" window={plan.usage.fiveHour} className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4" />
+        <UsageMeter
+          label="Weekly"
+          window={plan.usage.weekly}
+          tone="good"
+          className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+        />
+        <UsageMeter
+          label="Monthly"
+          window={plan.usage.monthly}
+          tone="good"
+          className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+        />
+      </CardContent>
+      <CardFooter className="mt-5 flex items-center justify-between gap-3 border-t bg-transparent p-0 pt-3 text-xs text-[var(--ink-muted)]">
         <span>{plan.expiresAt ? `Renews ${date(plan.expiresAt)}` : "No renewal date"}</span>
-        <span>View details</span>
-      </div>
-    </button>
+        <span className="font-medium text-[var(--accent-ink)]">View details</span>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -110,37 +162,49 @@ function DesktopOverview({
   onNavigate,
   onOpenStatus,
   onQuit,
+  onRestart,
+  updateReady,
   refresh,
   showSeconds,
 }: OverviewProps & { selectedName: string | undefined; onSelect: (name: string) => void; refresh: () => void }) {
   return (
-    <div className="view-stack wide-overview flex h-full min-h-0 flex-col gap-6 overflow-auto">
-      <div className="desktop-view-heading">
+    <div className="flex h-full min-h-0 w-full max-w-[1480px] flex-col gap-6 overflow-auto">
+      <div className="flex items-end justify-between gap-6">
         <div>
-          <span className="eyebrow">Account overview</span>
-          <h1>Overview</h1>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Account overview</span>
+          <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">Overview</h1>
         </div>
-        <span className="desktop-view-caption">{snapshot.subscriptions.length} plans | usage, limits, and shortcuts</span>
+        <span className="pb-1 text-sm text-[var(--ink-muted)]">{snapshot.subscriptions.length} plans | usage, limits, and shortcuts</span>
       </div>
       <SourceStrip capturedAt={snapshot.capturedAt} showSeconds={showSeconds} onRefresh={refresh} />
-      <div className="desktop-overview-layout">
-        <section className="desktop-plan-area">
-          <div className="section-top desktop-section-heading">
+      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_18rem] items-start gap-6">
+        <section className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <span className="eyebrow">All plans</span>
-              <h2>Quota monitor</h2>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">All plans</span>
+              <h2 className="m-0 text-xl font-semibold leading-7">Quota monitor</h2>
             </div>
             <Badge variant="outline">{snapshot.subscriptions.length} total</Badge>
           </div>
-          <div className="plan-grid" role="tablist" aria-label="All plans">
+          <div
+            className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))]"
+            role="tablist"
+            aria-label="All plans"
+          >
             {snapshot.subscriptions.map((item) => (
               <DesktopPlanCard key={item.name} plan={item} selected={selectedName === item.name} onSelect={() => onSelect(item.name)} />
             ))}
           </div>
         </section>
-        <aside className="desktop-insight-rail">
-          <CostSummary snapshot={snapshot} />
-          <UtilityActions onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} />
+        <aside className="sticky top-0 flex min-w-0 flex-col gap-4">
+          <CostSummary snapshot={snapshot} onOpenUsage={() => onNavigate("usage")} />
+          <UtilityActions
+            onNavigate={onNavigate}
+            onOpenStatus={onOpenStatus}
+            onQuit={onQuit}
+            onRestart={onRestart}
+            updateReady={updateReady}
+          />
         </aside>
       </div>
     </div>
@@ -155,39 +219,35 @@ function CompactOverview({
   onConnect,
   onOpenStatus,
   onQuit,
+  onRestart,
+  updateReady,
   refresh,
   showSeconds,
 }: OverviewProps & { selectedName: string | undefined; onSelect: (name: string) => void; refresh: () => void }) {
   const plan = snapshot.subscriptions.find((item) => item.name === selectedName) ?? snapshot.subscriptions[0];
   return (
-    <div className="view-stack compact-overview compact-dashboard tile-stack">
+    <div className="flex min-h-full flex-col gap-4 overflow-visible">
       <SourceStrip capturedAt={snapshot.capturedAt} showSeconds={showSeconds} onRefresh={refresh} />
-      <div className="compact-plan-heading">
+      <div className="flex items-center justify-between gap-3 px-1">
         <div>
-          <span className="eyebrow">Selected plan</span>
-          <h1>{plan?.name ?? "No active plan"}</h1>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Selected plan</span>
+          <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">{plan?.name ?? "No active plan"}</h1>
         </div>
         {plan ? <Badge variant={plan.status === "limited" ? "warning" : "success"}>{plan.status}</Badge> : null}
       </div>
       <PlanTabs plans={snapshot.subscriptions} selected={plan} onSelect={onSelect} />
       {snapshot.banner ? (
-        <div className="signal-note">
-          <Lightning weight="fill" />
-          <div>
-            <strong>{snapshot.banner.title}</strong>
-            <span>{snapshot.banner.message}</span>
-          </div>
-        </div>
+        <SignalNote icon={<Lightning weight="fill" />} title={snapshot.banner.title} message={snapshot.banner.message} />
       ) : null}
       {plan ? (
-        <section className="primary-usage">
-          <div className="section-top">
+        <section className="rounded-lg border border-[var(--line)] bg-white/70 px-3 py-4 shadow-sm">
+          <div className="mb-3">
             <div>
-              <span className="eyebrow">Quota overview</span>
-              <h2>{plan.billingKind}</h2>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Quota overview</span>
+              <h2 className="m-0 text-base font-semibold leading-6">{plan.billingKind}</h2>
             </div>
           </div>
-          <div className="usage-columns">
+          <div className="grid grid-cols-1 gap-4">
             <UsageMeter label="Daily" window={plan.usage.daily} />
             <UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" />
             <UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" />
@@ -196,13 +256,13 @@ function CompactOverview({
       ) : (
         <Empty title="No active plan" message="Cavoti did not return an active subscription for this session." onAction={onConnect} />
       )}
-      <CostSummary snapshot={snapshot} />
-      <UtilityActions onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} />
+      <CostSummary snapshot={snapshot} onOpenUsage={() => onNavigate("usage")} />
+      <UtilityActions onNavigate={onNavigate} onOpenStatus={onOpenStatus} onQuit={onQuit} onRestart={onRestart} updateReady={updateReady} />
     </div>
   );
 }
 
-export function Overview({ snapshot, onNavigate, onConnect, onOpenStatus, onQuit, showSeconds }: OverviewProps) {
+export function Overview({ snapshot, onNavigate, onConnect, onOpenStatus, onQuit, onRestart, updateReady, showSeconds }: OverviewProps) {
   const activePlan = snapshot.subscriptions.find((item) => item.status === "active") ?? snapshot.subscriptions[0];
   const [selectedName, setSelectedName] = useState(activePlan?.name);
   const compact = useCompactTiles();
@@ -216,6 +276,8 @@ export function Overview({ snapshot, onNavigate, onConnect, onOpenStatus, onQuit
       onConnect={onConnect}
       onOpenStatus={onOpenStatus}
       onQuit={onQuit}
+      onRestart={onRestart}
+      updateReady={updateReady}
       refresh={refresh}
       showSeconds={showSeconds}
     />
@@ -228,6 +290,8 @@ export function Overview({ snapshot, onNavigate, onConnect, onOpenStatus, onQuit
       onConnect={onConnect}
       onOpenStatus={onOpenStatus}
       onQuit={onQuit}
+      onRestart={onRestart}
+      updateReady={updateReady}
       refresh={refresh}
       showSeconds={showSeconds}
     />

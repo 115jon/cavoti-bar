@@ -9,12 +9,12 @@ describe("parseHostMessage", () => {
         type: "snapshot",
         protocol: 1,
         snapshot: liveSnapshot,
-        settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
+        settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
       }),
     ).toEqual({
       type: "snapshot",
       snapshot: liveSnapshot,
-      settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
+      settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
     });
   });
 

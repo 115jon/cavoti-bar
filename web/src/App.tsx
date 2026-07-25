@@ -18,6 +18,7 @@ export function App({ bridge }: AppProps) {
   const [view, setView] = useState<View>("overview");
   const [topmost, setTopmost] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
   const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(60);
   const [showFreshnessSeconds, setShowFreshnessSeconds] = useState(false);
   const compact = useCompactTiles();
@@ -51,6 +52,7 @@ export function App({ bridge }: AppProps) {
           if (message.settings) {
             setTopmost(message.settings.topmost);
             setMaximized(message.settings.maximized);
+            setUpdateReady(message.settings.updateReady ?? false);
             setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds);
             setShowFreshnessSeconds(message.settings.showFreshnessSeconds);
           }
@@ -58,23 +60,52 @@ export function App({ bridge }: AppProps) {
       } else if (message.type === "settings") {
         setTopmost(message.settings.topmost);
         setMaximized(message.settings.maximized);
+        setUpdateReady(message.settings.updateReady ?? false);
         setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds);
         setShowFreshnessSeconds(message.settings.showFreshnessSeconds);
       } else if (message.state !== "loading" || !hasSnapshot.current) setState(message.state);
     });
     bridge.post({ action: "bootstrap" });
-    const usageRefresh = (event: Event) =>
-      bridge.post({ action: "refresh", value: { filters: (event as CustomEvent<UsageFilterState>).detail } });
+    const usageRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<UsageFilterState | { filters: UsageFilterState; usagePage?: number; errorPage?: number }>)
+        .detail;
+      const value = "filters" in detail ? detail : { filters: detail };
+      bridge.post({ action: "refresh", value });
+    };
+    const openIp = (event: Event) => {
+      const ip = (event as CustomEvent<string>).detail;
+      if (ip) bridge.post({ action: "open-ip", value: { ip } });
+    };
     window.addEventListener("cavoti-refresh", refresh);
     window.addEventListener("cavoti-open-status", openStatus);
     window.addEventListener("cavoti-usage-refresh", usageRefresh);
+    window.addEventListener("cavoti-open-ip", openIp);
     return () => {
       unsubscribe();
       window.removeEventListener("cavoti-refresh", refresh);
       window.removeEventListener("cavoti-open-status", openStatus);
       window.removeEventListener("cavoti-usage-refresh", usageRefresh);
+      window.removeEventListener("cavoti-open-ip", openIp);
     };
   }, [bridge, openStatus, refresh]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        refresh();
+      } else if (event.key === ",") {
+        event.preventDefault();
+        setView("settings");
+      } else if (event.key.toLowerCase() === "q") {
+        event.preventDefault();
+        bridge.post({ action: "close" });
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [bridge, refresh]);
 
   const title = useMemo(() => (view === "about" ? "About" : (views.find((item) => item.id === view)?.label ?? "Overview")), [view]);
   const beginDrag = (event: MouseEvent<HTMLElement>) => {
@@ -95,7 +126,18 @@ export function App({ bridge }: AppProps) {
       onMinimize={() => bridge.post({ action: "minimize" })}
       onClose={() => bridge.post({ action: "close" })}
     >
-      {state === "loading" ? (
+      {view === "settings" && state === "loading" ? (
+        <Settings
+          topmost={topmost}
+          onTopmost={setWindowTopmost}
+          onClear={() => bridge.post({ action: "clear" })}
+          onConnect={connect}
+          refreshIntervalSeconds={refreshIntervalSeconds}
+          onRefreshInterval={setRefreshInterval}
+          showFreshnessSeconds={showFreshnessSeconds}
+          onShowFreshnessSeconds={setFreshnessSeconds}
+        />
+      ) : state === "loading" ? (
         <Loading />
       ) : state !== "live" || !snapshot ? (
         <Boundary state={state} onConnect={connect} />
@@ -106,6 +148,8 @@ export function App({ bridge }: AppProps) {
           onConnect={connect}
           onOpenStatus={openStatus}
           onQuit={() => bridge.post({ action: "close" })}
+          onRestart={() => bridge.post({ action: "restart" })}
+          updateReady={updateReady}
           showSeconds={showFreshnessSeconds}
         />
       ) : view === "usage" ? (

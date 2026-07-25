@@ -11,7 +11,53 @@ export type Subscription = {
   usage: { fiveHour: UsageWindow; daily: UsageWindow; weekly: UsageWindow; monthly: UsageWindow };
 };
 
-export type UsageRow = { name: string; requests: number; tokens: number; actualCost: number };
+export type UsageRow = {
+  name: string;
+  requests: number;
+  tokens: number;
+  actualCost: number;
+  standardCost?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+};
+export type IpLocation = { city: string; region: string; country: string; countryCode: string; organization: string; timezone: string };
+export type UsageLog = {
+  id: number;
+  requestId: string;
+  apiKeyName: string;
+  model: string;
+  reasoningEffort: string;
+  endpoint: string;
+  groupName: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  actualCost: number;
+  standardCost: number;
+  timeToFirstTokenMs: number;
+  durationMs: number;
+  ipAddress: string;
+  location: IpLocation | null;
+  userAgent: string;
+  createdAt: string;
+};
+export type UsageError = {
+  id: number;
+  createdAt: string;
+  model: string;
+  endpoint: string;
+  statusCode: number;
+  category: string;
+  platform: string;
+  message: string;
+  keyName: string;
+  keyDeleted: boolean;
+};
+export type PageInfo = { page: number; pageSize: number; total: number; pages: number };
 export type ChannelMonitor = {
   name: string;
   provider: string;
@@ -45,13 +91,30 @@ export type SnapshotEnvelope = {
     outputTokens: number;
     cacheTokens: number;
     totalTokens: number;
+    cacheCreationTokens: number;
+    cacheReadTokens: number;
     actualCost: number;
+    standardCost: number;
     averageDurationMs: number;
     endpoints: UsageRow[];
   };
   models: UsageRow[];
-  dailyTrend: Array<{ date: string; requests: number; tokens: number; actualCost: number }>;
+  dailyTrend: Array<{
+    date: string;
+    requests: number;
+    tokens: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
+    actualCost: number;
+    standardCost?: number;
+  }>;
   groups: UsageRow[];
+  usageLogs: UsageLog[];
+  usagePageInfo: PageInfo;
+  errors: UsageError[];
+  errorPageInfo: PageInfo;
   keys: { total: number; active: number; expiringSoon: number };
   quotaResetCards: Array<{ label: string; resetAt: string | null }>;
   banner: { title: string; message: string } | null;
@@ -77,6 +140,19 @@ const optionRows = (value: unknown): OptionItem[] =>
     })
     .filter((item) => item.id > 0);
 
+function pageInfo(value: unknown): PageInfo {
+  const source = record(value);
+  const pageSize = Math.max(1, numberValue(source.pageSize ?? source.page_size) || 100);
+  const total = numberValue(source.total);
+  const pages = Math.max(1, numberValue(source.pages) || Math.ceil(total / pageSize) || 1);
+  return {
+    page: Math.min(pages, Math.max(1, numberValue(source.page) || 1)),
+    pageSize,
+    total,
+    pages,
+  };
+}
+
 function usageUnit(value: unknown, fallback: UsageUnit): UsageUnit {
   return value === "points" || value === "usd" ? value : fallback;
 }
@@ -94,11 +170,78 @@ function windowValue(value: unknown, fallbackUnit: UsageUnit): UsageWindow {
 
 function row(value: unknown): UsageRow {
   const source = record(value);
-  return {
+  const normalized: UsageRow = {
     name: stringValue(source.name, "Unknown"),
     requests: numberValue(source.requests),
     tokens: numberValue(source.tokens),
     actualCost: numberValue(source.actualCost),
+  };
+  const optionalFields: Array<[keyof UsageRow, unknown]> = [
+    ["standardCost", source.standardCost],
+    ["inputTokens", source.inputTokens],
+    ["outputTokens", source.outputTokens],
+    ["cacheCreationTokens", source.cacheCreationTokens],
+    ["cacheReadTokens", source.cacheReadTokens],
+  ];
+  for (const [key, value] of optionalFields)
+    if (typeof value === "number" && Number.isFinite(value)) Object.assign(normalized, { [key]: Math.max(0, value) });
+  return normalized;
+}
+
+function location(value: unknown): IpLocation | null {
+  const source = record(value);
+  if (!Object.keys(source).length) return null;
+  return {
+    city: stringValue(source.city),
+    region: stringValue(source.region),
+    country: stringValue(source.country),
+    countryCode: stringValue(source.countryCode, stringValue(source.country_code)),
+    organization: stringValue(source.organization, stringValue(source.organization_name)),
+    timezone: stringValue(source.timezone),
+  };
+}
+
+function usageLog(value: unknown): UsageLog {
+  const source = record(value);
+  const createdAt = stringValue(source.createdAt, stringValue(source.created_at));
+  return {
+    id: numberValue(source.id),
+    requestId: stringValue(source.requestId, stringValue(source.request_id)),
+    apiKeyName: stringValue(source.apiKeyName, stringValue(source.api_key_name, "Unknown key")),
+    model: stringValue(source.model, "Unknown model"),
+    reasoningEffort: stringValue(source.reasoningEffort, stringValue(source.reasoning_effort, "default")),
+    endpoint: stringValue(source.endpoint, stringValue(source.inbound_endpoint, "Unknown endpoint")),
+    groupName: stringValue(source.groupName, stringValue(source.group_name, "Unknown group")),
+    inputTokens: numberValue(source.inputTokens ?? source.input_tokens),
+    outputTokens: numberValue(source.outputTokens ?? source.output_tokens),
+    cacheCreationTokens: numberValue(source.cacheCreationTokens ?? source.cache_creation_tokens),
+    cacheReadTokens: numberValue(source.cacheReadTokens ?? source.cache_read_tokens),
+    totalTokens: numberValue(source.totalTokens ?? source.total_tokens),
+    actualCost: numberValue(source.actualCost ?? source.actual_cost),
+    standardCost: numberValue(source.standardCost ?? source.cost ?? source.total_cost),
+    timeToFirstTokenMs: numberValue(source.timeToFirstTokenMs ?? source.first_token_ms),
+    durationMs: numberValue(source.durationMs ?? source.duration_ms),
+    ipAddress: stringValue(source.ipAddress, stringValue(source.ip_address, "Unknown IP")),
+    location: location(source.location),
+    userAgent: stringValue(source.userAgent, stringValue(source.user_agent, "Unknown client")),
+    createdAt: !Number.isNaN(Date.parse(createdAt)) ? createdAt : "",
+  };
+}
+
+function usageError(value: unknown): UsageError {
+  const source = record(value);
+  const createdAt = stringValue(source.createdAt, stringValue(source.created_at));
+  return {
+    id: numberValue(source.id),
+    createdAt: !Number.isNaN(Date.parse(createdAt)) ? createdAt : "",
+    model: stringValue(source.model, "Unknown model"),
+    endpoint: stringValue(source.endpoint, stringValue(source.inbound_endpoint, "Unknown endpoint")),
+    statusCode: numberValue(source.statusCode ?? source.status_code),
+    category: stringValue(source.category, "Unknown"),
+    platform: stringValue(source.platform, "Unknown"),
+    message: stringValue(source.message, "No error message"),
+    keyName: stringValue(source.keyName, stringValue(source.key_name, "Unknown key")),
+    keyDeleted: source.keyDeleted === true || source.key_deleted === true,
   };
 }
 
@@ -179,7 +322,10 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
       outputTokens: numberValue(stats.outputTokens),
       cacheTokens: numberValue(stats.cacheTokens),
       totalTokens: numberValue(stats.totalTokens),
+      cacheCreationTokens: numberValue(stats.cacheCreationTokens),
+      cacheReadTokens: numberValue(stats.cacheReadTokens),
       actualCost: numberValue(stats.actualCost),
+      standardCost: numberValue(stats.standardCost),
       averageDurationMs: numberValue(stats.averageDurationMs),
       endpoints: normalizeRows(stats.endpoints),
     },
@@ -193,9 +339,18 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
           requests: numberValue(trend.requests),
           tokens: numberValue(trend.tokens),
           actualCost: numberValue(trend.actualCost),
+          ...(typeof trend.standardCost === "number" ? { standardCost: numberValue(trend.standardCost) } : {}),
+          ...(typeof trend.inputTokens === "number" ? { inputTokens: numberValue(trend.inputTokens) } : {}),
+          ...(typeof trend.outputTokens === "number" ? { outputTokens: numberValue(trend.outputTokens) } : {}),
+          ...(typeof trend.cacheCreationTokens === "number" ? { cacheCreationTokens: numberValue(trend.cacheCreationTokens) } : {}),
+          ...(typeof trend.cacheReadTokens === "number" ? { cacheReadTokens: numberValue(trend.cacheReadTokens) } : {}),
         };
       }),
     groups: normalizeRows(source.groups),
+    usageLogs: arrayValue(source.usageLogs).map(usageLog),
+    usagePageInfo: pageInfo(source.usagePageInfo),
+    errors: arrayValue(source.errors).map(usageError),
+    errorPageInfo: pageInfo(source.errorPageInfo),
     keys: {
       total: numberValue(keys.total),
       active: Math.min(numberValue(keys.total), numberValue(keys.active)),

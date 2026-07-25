@@ -84,4 +84,74 @@ describe("normalizeSnapshot", () => {
     expect(snapshot?.models[0]).toEqual({ name: "gpt", requests: 0, tokens: 0, actualCost: 0 });
     expect(snapshot?.keys).toEqual({ total: 1, active: 1, expiringSoon: 0 });
   });
+
+  it("normalizes rich usage rows and keeps sensitive nested data out of the UI contract", () => {
+    const snapshot = normalizeSnapshot({
+      version: 1,
+      stats: { endpoints: [] },
+      models: [],
+      dailyTrend: [],
+      groups: [],
+      usageLogs: [
+        {
+          id: 7,
+          request_id: "req-7",
+          api_key_name: "Primary",
+          model: "gpt-5.6-luna",
+          reasoning_effort: "high",
+          inbound_endpoint: "/v1/chat/completions",
+          group_name: "Core",
+          input_tokens: 12,
+          output_tokens: 8,
+          cache_creation_tokens: 2,
+          cache_read_tokens: 4,
+          total_tokens: 26,
+          actual_cost: 0.12,
+          cost: 0.2,
+          first_token_ms: 90,
+          duration_ms: 640,
+          ip_address: "192.0.2.10",
+          location: { city: "Example City", country: "Exampleland", country_code: "EX" },
+          user_agent: "Cavoti test",
+          created_at: "2026-07-24T10:00:00Z",
+          api_key: { secret: "must not surface" },
+          user: { email: "must not surface" },
+        },
+      ],
+      errors: [
+        {
+          id: 8,
+          model: "gpt-5.6-luna",
+          status_code: 429,
+          message: "Rate limited",
+          key_name: "Primary",
+          created_at: "2026-07-24T10:01:00Z",
+        },
+      ],
+    });
+
+    expect(snapshot?.usageLogs[0]).toEqual({
+      id: 7,
+      requestId: "req-7",
+      apiKeyName: "Primary",
+      model: "gpt-5.6-luna",
+      reasoningEffort: "high",
+      endpoint: "/v1/chat/completions",
+      groupName: "Core",
+      inputTokens: 12,
+      outputTokens: 8,
+      cacheCreationTokens: 2,
+      cacheReadTokens: 4,
+      totalTokens: 26,
+      actualCost: 0.12,
+      standardCost: 0.2,
+      timeToFirstTokenMs: 90,
+      durationMs: 640,
+      ipAddress: "192.0.2.10",
+      location: { city: "Example City", region: "", country: "Exampleland", countryCode: "EX", organization: "", timezone: "" },
+      userAgent: "Cavoti test",
+      createdAt: "2026-07-24T10:00:00Z",
+    });
+    expect(snapshot?.errors[0]?.message).toBe("Rate limited");
+  });
 });

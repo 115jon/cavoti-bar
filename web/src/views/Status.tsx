@@ -9,29 +9,43 @@ import {
 import type { SnapshotEnvelope } from "../domain/snapshot";
 import { date, monitorVariant } from "../app/formatters";
 import type { BridgeState } from "../app/types";
-import { Badge, Empty, TilePager, useCompactTiles } from "../components/app/shared";
+import { Badge, Empty, SignalNote, TilePager, useCompactTiles } from "../components/app/shared";
 import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 
 function MonitorRows({ monitors }: { monitors: SnapshotEnvelope["channelMonitors"] }) {
   return monitors.length ? (
-    <div className="monitor-list">
-      {monitors.map((monitor) => (
-        <div className="monitor-row" key={`${monitor.provider}-${monitor.name}`}>
-          <div>
-            <strong>{monitor.name}</strong>
-            <small>
-              {monitor.provider}
-              {monitor.model ? ` | ${monitor.model}` : ""}
-            </small>
-          </div>
-          <div className="monitor-metrics">
-            <Badge variant={monitorVariant(monitor.status)}>{monitor.status}</Badge>
-            <span>{monitor.latencyMs === null ? "No latency" : `${Math.round(monitor.latencyMs)} ms`}</span>
-            <span>{monitor.availability7d === null ? "-" : `${monitor.availability7d.toFixed(1)}% / 7d`}</span>
-          </div>
-        </div>
-      ))}
-    </div>
+    <Table className="w-full border-t border-[var(--line)] text-[10px]">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Channel</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Latency</TableHead>
+          <TableHead className="text-right">Availability</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {monitors.map((monitor) => (
+          <TableRow key={`${monitor.provider}-${monitor.name}`}>
+            <TableCell>
+              <strong className="block font-semibold">{monitor.name}</strong>
+              <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">
+                {monitor.provider}
+                {monitor.model ? ` | ${monitor.model}` : ""}
+              </small>
+            </TableCell>
+            <TableCell>
+              <Badge variant={monitorVariant(monitor.status)}>{monitor.status}</Badge>
+            </TableCell>
+            <TableCell>{monitor.latencyMs === null ? "No latency" : `${Math.round(monitor.latencyMs)} ms`}</TableCell>
+            <TableCell className="text-right">
+              {monitor.availability7d === null ? "-" : `${monitor.availability7d.toFixed(1)}% / 7d`}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   ) : (
     <Empty title="No channel monitors" message="Cavoti did not return channel health data." compact />
   );
@@ -39,10 +53,12 @@ function MonitorRows({ monitors }: { monitors: SnapshotEnvelope["channelMonitors
 
 function CheckRow({ label, value, good }: { label: string; value: string; good: boolean }) {
   return (
-    <div className="check-row">
-      <span className={good ? "check-dot good" : "check-dot"}>{good ? <CheckCircle weight="fill" /> : <Info weight="regular" />}</span>
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className="flex min-h-9 items-center justify-between gap-2 border-b border-[var(--line)] text-[10px] last:border-b-0">
+      <span className={good ? "text-[var(--good)]" : "text-[var(--warning)]"}>
+        {good ? <CheckCircle weight="fill" /> : <Info weight="regular" />}
+      </span>
+      <span className="min-w-0 flex-1">{label}</span>
+      <strong className="font-medium text-[var(--ink-muted)]">{value}</strong>
     </div>
   );
 }
@@ -66,38 +82,42 @@ export function Status({
   const safePage = Math.min(page, pageCount - 1);
   if (!compact)
     return (
-      <div className="view-stack wide-status">
-        <div className="view-heading">
+      <div className="flex w-full max-w-[1480px] flex-col gap-6">
+        <div className="flex items-end justify-between gap-6">
           <div>
-            <span className="eyebrow">Connection monitor</span>
-            <h1>Status</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Connection monitor</span>
+            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">Status</h1>
           </div>
           <Button variant="outline" size="sm" onClick={onOpenStatus}>
             Open monitor <ArrowSquareOut data-icon="inline-end" />
           </Button>
         </div>
-        <div className="status-summary">
-          <div className="status-orb">{state === "live" && healthy ? <CheckCircle weight="fill" /> : <WarningCircle weight="fill" />}</div>
+        <Card className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <div className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[var(--good-soft)] text-[22px] text-[var(--good)]">
+            {state === "live" && healthy ? <CheckCircle weight="fill" /> : <WarningCircle weight="fill" />}
+          </div>
           <div>
-            <span className="eyebrow">Cavoti channels</span>
-            <h2>{healthy ? "All channels operational" : "Channel attention needed"}</h2>
-            <p>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Cavoti channels</span>
+            <CardTitle className="m-0 text-sm font-bold leading-[18px]">
+              {healthy ? "All channels operational" : "Channel attention needed"}
+            </CardTitle>
+            <p className="mt-1 max-w-60 text-[10px] leading-[14px] text-[var(--ink-muted)]">
               {monitors.length} channels reported. Last received {date(snapshot?.capturedAt ?? null)}.
             </p>
           </div>
-        </div>
+        </Card>
         <MonitorRows monitors={monitors} />
       </div>
     );
   return (
-    <div className="view-stack tile-stack">
-      <div className="tile-page">
-        <div className="view-heading">
+    <div className="flex min-h-full flex-col">
+      <div className="flex min-h-0 flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="eyebrow">Connection monitor</span>
-            <h1>Status</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Connection monitor</span>
+            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">Status</h1>
           </div>
-          <div className="tile-heading-actions">
+          <div className="flex min-w-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={onOpenStatus}>
               Open monitor <ArrowSquareOut data-icon="inline-end" />
             </Button>
@@ -106,22 +126,24 @@ export function Status({
         </div>
         {safePage === 0 ? (
           <>
-            <div className="status-summary">
-              <div className="status-orb">
+            <Card className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+              <div className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[var(--good-soft)] text-[22px] text-[var(--good)]">
                 {state === "live" && healthy ? <CheckCircle weight="fill" /> : <WarningCircle weight="fill" />}
               </div>
               <div>
-                <span className="eyebrow">Cavoti channels</span>
-                <h2>{state === "live" ? (healthy ? "All channels operational" : "Channel attention needed") : "No live snapshot yet"}</h2>
-                <p>
+                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Cavoti channels</span>
+                <CardTitle className="m-0 text-sm font-bold leading-[18px]">
+                  {state === "live" ? (healthy ? "All channels operational" : "Channel attention needed") : "No live snapshot yet"}
+                </CardTitle>
+                <p className="mt-1 text-[10px] leading-[14px] text-[var(--ink-muted)]">
                   {state === "live"
                     ? `${monitors.length} channels reported. Last received ${date(snapshot?.capturedAt ?? null)}.`
                     : "The overlay only receives sanitized aggregate JSON from the authenticated browser profile."}
                 </p>
               </div>
-            </div>
+            </Card>
             {snapshot ? (
-              <div className="check-list">
+              <Card className="gap-0 rounded-xl border border-[var(--line)] bg-white/75 px-3 py-1 shadow-sm">
                 <CheckRow label="Account record" value={snapshot.account.status} good />
                 <CheckRow
                   label="Plan records"
@@ -133,7 +155,7 @@ export function Status({
                   value={`${snapshot.models.length} models | ${snapshot.stats.endpoints.length} endpoints`}
                   good={snapshot.models.length > 0}
                 />
-              </div>
+              </Card>
             ) : (
               <Empty
                 title="Live session required"
@@ -143,26 +165,21 @@ export function Status({
             )}
           </>
         ) : (
-          <section className="surface-section monitor-tile">
-            <div className="section-top">
+          <Card className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+            <CardHeader className="mb-0 flex items-start justify-between gap-3 p-0">
               <div>
-                <span className="eyebrow">Channel {safePage}</span>
-                <h2>{monitors[safePage - 1]?.name ?? "Unknown channel"}</h2>
+                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Channel {safePage}</span>
+                <CardTitle className="text-lg font-semibold leading-7">{monitors[safePage - 1]?.name ?? "Unknown channel"}</CardTitle>
               </div>
-              <Pulse className="section-icon" />
-            </div>
-            <MonitorRows monitors={monitors.slice(safePage - 1, safePage)} />
-          </section>
+              <Pulse className="size-5 text-[var(--accent)]" />
+            </CardHeader>
+            <CardContent className="min-w-0 flex-1 p-0">
+              <MonitorRows monitors={monitors.slice(safePage - 1, safePage)} />
+            </CardContent>
+          </Card>
         )}
-        <TilePager page={safePage} count={pageCount} onChange={setPage} label="Status screen" />
         {snapshot?.announcements.length ? (
-          <div className="signal-note">
-            <Info />
-            <div>
-              <strong>{snapshot.announcements[0].title}</strong>
-              <span>{snapshot.announcements[0].message}</span>
-            </div>
-          </div>
+          <SignalNote icon={<Info />} title={snapshot.announcements[0].title} message={snapshot.announcements[0].message} />
         ) : null}
       </div>
     </div>

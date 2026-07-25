@@ -66,4 +66,35 @@ describe("App", () => {
     fireEvent.mouseDown(screen.getByRole("banner"), { button: 0 });
     expect(sent).toContainEqual({ action: "drag" });
   });
+
+  it("handles Windows shortcuts for refresh, settings, and quit", () => {
+    const { bridge, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    fireEvent.keyDown(window, { key: "r", ctrlKey: true });
+    fireEvent.keyDown(window, { key: ",", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "q", ctrlKey: true });
+
+    expect(sent).toContainEqual({ action: "refresh" });
+    expect(sent).toContainEqual({ action: "close" });
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("shows the update restart command only when the host reports an update", () => {
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        snapshot: liveSnapshot,
+        settings: { topmost: false, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
+      }),
+    );
+
+    const restart = screen.getByRole("button", { name: "Update ready, restart now?" });
+    expect(restart).toBeInTheDocument();
+    fireEvent.click(restart);
+    expect(sent).toContainEqual({ action: "restart" });
+  });
 });
