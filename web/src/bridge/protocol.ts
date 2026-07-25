@@ -11,6 +11,7 @@ export type HostSettings = {
 export type HostMessage =
   | {
       type: "snapshot";
+      complete?: boolean;
       snapshot: SnapshotEnvelope;
       settings?: HostSettings;
     }
@@ -41,6 +42,7 @@ export function parseHostMessage(value: unknown): HostMessage | null {
         : undefined;
     return {
       type: "snapshot",
+      complete: value.complete !== false,
       snapshot: value.snapshot as unknown as SnapshotEnvelope,
       settings,
     };

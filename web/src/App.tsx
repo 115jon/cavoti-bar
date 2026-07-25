@@ -21,6 +21,7 @@ export function App({ bridge }: AppProps) {
   const [updateReady, setUpdateReady] = useState(false);
   const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(60);
   const [showFreshnessSeconds, setShowFreshnessSeconds] = useState(false);
+  const [freshnessCapturedAt, setFreshnessCapturedAt] = useState<string | null>(null);
   const compact = useCompactTiles();
   const hasSnapshot = useRef(false);
   const connect = () => bridge.post({ action: "connect" });
@@ -48,6 +49,7 @@ export function App({ bridge }: AppProps) {
         if (next) {
           hasSnapshot.current = true;
           setSnapshot(next);
+          if (message.complete !== false) setFreshnessCapturedAt(next.capturedAt);
           setState("live");
           if (message.settings) {
             setTopmost(message.settings.topmost);
@@ -108,6 +110,7 @@ export function App({ bridge }: AppProps) {
   }, [bridge, refresh]);
 
   const title = useMemo(() => (view === "about" ? "About" : (views.find((item) => item.id === view)?.label ?? "Overview")), [view]);
+  const displayedSnapshot = snapshot ? { ...snapshot, capturedAt: freshnessCapturedAt } : snapshot;
   const beginDrag = (event: MouseEvent<HTMLElement>) => {
     if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
     bridge.post({ action: "drag" });
@@ -139,11 +142,11 @@ export function App({ bridge }: AppProps) {
         />
       ) : state === "loading" ? (
         <Loading />
-      ) : state !== "live" || !snapshot ? (
+      ) : state !== "live" || !displayedSnapshot ? (
         <Boundary state={state} onConnect={connect} />
       ) : view === "overview" ? (
         <Overview
-          snapshot={snapshot}
+          snapshot={displayedSnapshot}
           onNavigate={setView}
           onConnect={connect}
           onOpenStatus={openStatus}
@@ -153,11 +156,11 @@ export function App({ bridge }: AppProps) {
           showSeconds={showFreshnessSeconds}
         />
       ) : view === "usage" ? (
-        <Usage snapshot={snapshot} />
+        <Usage snapshot={displayedSnapshot} />
       ) : view === "plans" ? (
-        <Plans snapshot={snapshot} onConnect={connect} />
+        <Plans snapshot={displayedSnapshot} onConnect={connect} />
       ) : view === "status" ? (
-        <Status snapshot={snapshot} state={state} onConnect={connect} />
+        <Status snapshot={displayedSnapshot} state={state} onConnect={connect} />
       ) : view === "about" ? (
         <About />
       ) : (

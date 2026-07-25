@@ -97,4 +97,38 @@ describe("App", () => {
     fireEvent.click(restart);
     expect(sent).toContainEqual({ action: "restart" });
   });
+
+  it("updates freshness only after the terminal enrichment snapshot", () => {
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: false,
+        snapshot: { ...liveSnapshot, capturedAt: "2026-07-25T12:00:00.000Z" },
+      }),
+    );
+    expect(screen.getByText("Waiting for first sync")).toBeInTheDocument();
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: true,
+        snapshot: { ...liveSnapshot, capturedAt: "2026-07-25T12:00:04.000Z" },
+      }),
+    );
+    expect(screen.getByText("Updated just now")).toBeInTheDocument();
+  });
+
+  it("treats snapshots without a completion flag as terminal", () => {
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() => dispatch({ type: "snapshot", protocol: 1, snapshot: { ...liveSnapshot, capturedAt: new Date().toISOString() } }));
+
+    expect(screen.getByText("Updated just now")).toBeInTheDocument();
+  });
 });

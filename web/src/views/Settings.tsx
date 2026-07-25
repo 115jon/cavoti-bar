@@ -93,7 +93,7 @@ export function Settings({
         </div>
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 p-0">
+            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
               <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Application</span>
               <CardTitle className="text-lg font-semibold leading-7">Window behavior</CardTitle>
             </CardHeader>
@@ -125,7 +125,7 @@ export function Settings({
             </CardContent>
           </Card>
           <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 p-0">
+            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
               <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Privacy boundary</span>
               <CardTitle className="text-lg font-semibold leading-7">Local session</CardTitle>
             </CardHeader>
@@ -162,7 +162,7 @@ export function Settings({
         </div>
         {page === 0 ? (
           <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 p-0">
+            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
               <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Application</span>
               <CardTitle className="text-lg font-semibold leading-7">Window behavior</CardTitle>
             </CardHeader>
@@ -195,7 +195,7 @@ export function Settings({
           </Card>
         ) : (
           <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 p-0">
+            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
               <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Privacy boundary</span>
               <CardTitle className="text-lg font-semibold leading-7">Local session</CardTitle>
             </CardHeader>

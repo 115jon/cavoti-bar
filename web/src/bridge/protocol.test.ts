@@ -8,11 +8,13 @@ describe("parseHostMessage", () => {
       parseHostMessage({
         type: "snapshot",
         protocol: 1,
+        complete: true,
         snapshot: liveSnapshot,
         settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
       }),
     ).toEqual({
       type: "snapshot",
+      complete: true,
       snapshot: liveSnapshot,
       settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
     });
