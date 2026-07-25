@@ -8,8 +8,24 @@ import {
   UsersThreeIcon as UsersThree,
   XIcon as X,
 } from "@phosphor-icons/react";
-import { CartesianGrid, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { PageInfo, SnapshotEnvelope, UsageFilters as UsageFilterState, UsageLog, UsageRow } from "../domain/snapshot";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type {
+  PageInfo,
+  SnapshotEnvelope,
+  UsageFilters as UsageFilterState,
+  UsageLog,
+  UsageRow,
+} from "../domain/snapshot";
 import {
   dateRangeForPreset,
   dateRangeOptions,
@@ -19,48 +35,96 @@ import {
   tokens,
   type DateRangePreset,
 } from "../app/formatters";
-import { Badge, Empty, TilePager, useCompactTiles } from "../components/app/shared";
+import {
+  Badge,
+  Empty,
+  TilePager,
+  useCompactTiles,
+} from "../components/app/shared";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 
 type DistributionMetric = "cost" | "tokens";
-type DistributionPoint = UsageRow & { value: number; fill: string; percentage: number };
-const chartColors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
+type DistributionPoint = UsageRow & {
+  value: number;
+  fill: string;
+  percentage: number;
+};
+const chartColors = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
 function StatRail({ snapshot }: { snapshot: SnapshotEnvelope }) {
   return (
-    <Card className="grid grid-cols-2 gap-0 overflow-hidden rounded-xl border border-[var(--line)] bg-white/75 p-0 shadow-sm sm:grid-cols-3 xl:grid-cols-5">
+    <Card className="grid grid-cols-2 gap-0 overflow-hidden rounded-xl border border-(--line) bg-white/75 p-0 shadow-sm sm:grid-cols-3 xl:grid-cols-5">
       <div>
-        <span className="block p-2 text-[10px] text-[var(--ink-muted)]">Requests</span>
-        <strong className="block px-2 pb-2 text-base font-semibold tabular-nums">{integer(snapshot.stats.requests)}</strong>
+        <span className="block p-2 text-[10px] text-(--ink-muted)">
+          Requests
+        </span>
+        <strong className="block px-2 pb-2 text-base font-semibold tabular-nums">
+          {integer(snapshot.stats.requests)}
+        </strong>
       </div>
       <div>
-        <span className="block border-l border-[var(--line)] p-2 text-[10px] text-[var(--ink-muted)]">Total tokens</span>
-        <strong className="block border-l border-[var(--line)] px-2 pb-2 text-base font-semibold tabular-nums">
+        <span className="block border-l border-(--line) p-2 text-[10px] text-(--ink-muted)">
+          Total tokens
+        </span>
+        <strong className="block border-l border-(--line) px-2 pb-2 text-base font-semibold tabular-nums">
           {tokens(snapshot.stats.totalTokens)}
         </strong>
       </div>
       <div>
-        <span className="block border-l border-[var(--line)] p-2 text-[10px] text-[var(--ink-muted)]">Actual cost</span>
-        <strong className="block border-l border-[var(--line)] px-2 pb-2 text-base font-semibold tabular-nums">
+        <span className="block border-l border-(--line) p-2 text-[10px] text-(--ink-muted)">
+          Actual cost
+        </span>
+        <strong className="block border-l border-(--line) px-2 pb-2 text-base font-semibold tabular-nums">
           {money(snapshot.stats.actualCost)}
         </strong>
       </div>
       <div>
-        <span className="block border-l border-[var(--line)] p-2 text-[10px] text-[var(--ink-muted)]">Standard cost</span>
-        <strong className="block border-l border-[var(--line)] px-2 pb-2 text-base font-semibold tabular-nums">
+        <span className="block border-l border-(--line) p-2 text-[10px] text-(--ink-muted)">
+          Standard cost
+        </span>
+        <strong className="block border-l border-(--line) px-2 pb-2 text-base font-semibold tabular-nums">
           {money(snapshot.stats.standardCost)}
         </strong>
       </div>
       <div>
-        <span className="block border-l border-[var(--line)] p-2 text-[10px] text-[var(--ink-muted)]">Avg duration</span>
-        <strong className="block border-l border-[var(--line)] px-2 pb-2 text-base font-semibold tabular-nums">
-          {snapshot.stats.averageDurationMs ? `${(snapshot.stats.averageDurationMs / 1000).toFixed(1)} s` : "-"}
+        <span className="block border-l border-(--line) p-2 text-[10px] text-(--ink-muted)">
+          Avg duration
+        </span>
+        <strong className="block border-l border-(--line) px-2 pb-2 text-base font-semibold tabular-nums">
+          {snapshot.stats.averageDurationMs
+            ? `${(snapshot.stats.averageDurationMs / 1000).toFixed(1)} s`
+            : "-"}
         </strong>
       </div>
     </Card>
@@ -82,14 +146,20 @@ function FilterSelect({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <Label htmlFor={fieldId}>{label}</Label>
-      <Select value={value || "__all__"} onValueChange={(next) => onChange(next === "__all__" ? "" : next)}>
+      <Select
+        value={value || "__all__"}
+        onValueChange={(next) => onChange(next === "__all__" ? "" : next)}
+      >
         <SelectTrigger id={fieldId} size="sm" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
             {options.map((option) => (
-              <SelectItem value={option.value || "__all__"} key={`${label}-${option.value}`}>
+              <SelectItem
+                value={option.value || "__all__"}
+                key={`${label}-${option.value}`}
+              >
                 {option.label}
               </SelectItem>
             ))}
@@ -109,7 +179,9 @@ function DateRangeSelect({
 }) {
   const preset = dateRangeOptions.find(({ value }) => {
     const range = dateRangeForPreset(value);
-    return range.startDate === filters.startDate && range.endDate === filters.endDate;
+    return (
+      range.startDate === filters.startDate && range.endDate === filters.endDate
+    );
   })?.value;
   const value = preset ?? "custom";
   return (
@@ -117,7 +189,8 @@ function DateRangeSelect({
       <Select
         value={value}
         onValueChange={(next) => {
-          if (next !== "custom") onChange(dateRangeForPreset(next as DateRangePreset));
+          if (next !== "custom")
+            onChange(dateRangeForPreset(next as DateRangePreset));
         }}
       >
         <SelectTrigger id="usage-date-range" size="sm" aria-label="Date range">
@@ -141,14 +214,24 @@ function DateRangeSelect({
             type="date"
             aria-label="Start date"
             value={filters.startDate}
-            onChange={(event) => onChange({ startDate: event.target.value, endDate: filters.endDate })}
+            onChange={(event) =>
+              onChange({
+                startDate: event.target.value,
+                endDate: filters.endDate,
+              })
+            }
           />
           <Input
             id="usage-end-date"
             type="date"
             aria-label="End date"
             value={filters.endDate}
-            onChange={(event) => onChange({ startDate: filters.startDate, endDate: event.target.value })}
+            onChange={(event) =>
+              onChange({
+                startDate: filters.startDate,
+                endDate: event.target.value,
+              })
+            }
           />
         </div>
       ) : null}
@@ -173,11 +256,12 @@ function UsageFilters({
     .map((model) => model.name)
     .filter((name, index, all) => all.indexOf(name) === index)
     .sort();
-  const update = (patch: Partial<UsageFilterState>) => onChange({ ...filters, ...patch });
+  const update = (patch: Partial<UsageFilterState>) =>
+    onChange({ ...filters, ...patch });
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-[var(--line)] bg-white/60 p-3">
+    <section className="flex flex-col gap-3 rounded-xl border border-(--line) bg-white/60 p-3">
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-[minmax(180px,1.25fr)_repeat(3,minmax(130px,1fr))]">
-        <div className="flex min-w-0 flex-col gap-1 [grid-column:1/-1] xl:[grid-column:auto]">
+        <div className="flex min-w-0 flex-col gap-1 col-span-full xl:col-auto">
           <Label htmlFor="usage-start-date">Date range</Label>
           <DateRangeSelect filters={filters} onChange={update} />
         </div>
@@ -186,14 +270,22 @@ function UsageFilters({
           value={filters.apiKeyId === null ? "" : String(filters.apiKeyId)}
           options={[
             { value: "", label: "All API keys" },
-            ...snapshot.apiKeys.map((item) => ({ value: String(item.id), label: item.name })),
+            ...snapshot.apiKeys.map((item) => ({
+              value: String(item.id),
+              label: item.name,
+            })),
           ]}
-          onChange={(value) => update({ apiKeyId: value ? Number(value) : null })}
+          onChange={(value) =>
+            update({ apiKeyId: value ? Number(value) : null })
+          }
         />
         <FilterSelect
           label="Model"
           value={filters.model}
-          options={[{ value: "", label: "All models" }, ...models.map((model) => ({ value: model, label: model }))]}
+          options={[
+            { value: "", label: "All models" },
+            ...models.map((model) => ({ value: model, label: model })),
+          ]}
           onChange={(model) => update({ model })}
         />
         <FilterSelect
@@ -201,9 +293,14 @@ function UsageFilters({
           value={filters.groupId === null ? "" : String(filters.groupId)}
           options={[
             { value: "", label: "All groups" },
-            ...snapshot.groupOptions.map((item) => ({ value: String(item.id), label: item.name })),
+            ...snapshot.groupOptions.map((item) => ({
+              value: String(item.id),
+              label: item.name,
+            })),
           ]}
-          onChange={(value) => update({ groupId: value ? Number(value) : null })}
+          onChange={(value) =>
+            update({ groupId: value ? Number(value) : null })
+          }
         />
         <FilterSelect
           label="Type"
@@ -218,13 +315,17 @@ function UsageFilters({
         />
         <FilterSelect
           label="Billing type"
-          value={filters.billingType === null ? "" : String(filters.billingType)}
+          value={
+            filters.billingType === null ? "" : String(filters.billingType)
+          }
           options={[
             { value: "", label: "All billing types" },
             { value: "0", label: "Balance" },
             { value: "1", label: "Subscription" },
           ]}
-          onChange={(value) => update({ billingType: value ? Number(value) : null })}
+          onChange={(value) =>
+            update({ billingType: value ? Number(value) : null })
+          }
         />
         <FilterSelect
           label="Billing mode"
@@ -262,54 +363,100 @@ function DistributionTooltip({
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
   return (
-    <div className="relative z-50 min-w-44 rounded-lg border border-[var(--line-strong)] bg-[var(--canvas)] p-2 text-[10px] shadow-lg">
-      <strong className="mb-1 block max-w-56 truncate text-[var(--ink)]">{point.name}</strong>
+    <div className="relative z-50 min-w-44 rounded-lg border border-(--line-strong) bg-(--canvas) p-2 text-[10px] shadow-lg">
+      <strong className="mb-1 block max-w-56 truncate text-(--ink)">
+        {point.name}
+      </strong>
       <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
-        <span className="text-[var(--ink-muted)]">Selected value</span>
-        <strong>{metric === "cost" ? money(point.actualCost) : tokens(point.tokens)}</strong>
-        <span className="text-[var(--ink-muted)]">Tokens</span>
+        <span className="text-(--ink-muted)">Selected value</span>
+        <strong>
+          {metric === "cost" ? money(point.actualCost) : tokens(point.tokens)}
+        </strong>
+        <span className="text-(--ink-muted)">Tokens</span>
         <strong>{tokens(point.tokens)}</strong>
-        <span className="text-[var(--ink-muted)]">Actual cost</span>
+        <span className="text-(--ink-muted)">Actual cost</span>
         <strong>{money(point.actualCost)}</strong>
-        <span className="text-[var(--ink-muted)]">Share</span>
+        <span className="text-(--ink-muted)">Share</span>
         <strong>{point.percentage.toFixed(1)}%</strong>
-        <span className="text-[var(--ink-muted)]">Standard cost</span>
+        <span className="text-(--ink-muted)">Standard cost</span>
         <strong>{money(point.standardCost ?? point.actualCost)}</strong>
       </div>
     </div>
   );
 }
 
-function DistributionChart({ rows, metric, label }: { rows: UsageRow[]; metric: DistributionMetric; label: string }) {
+function DistributionChart({
+  rows,
+  metric,
+  label,
+}: {
+  rows: UsageRow[];
+  metric: DistributionMetric;
+  label: string;
+}) {
   const values = rows
     .filter((row) => (metric === "cost" ? row.actualCost : row.tokens) > 0)
-    .sort((a, b) => (metric === "cost" ? b.actualCost - a.actualCost : b.tokens - a.tokens))
+    .sort((a, b) =>
+      metric === "cost" ? b.actualCost - a.actualCost : b.tokens - a.tokens,
+    )
     .slice(0, 5);
-  const total = values.reduce((sum, row) => sum + (metric === "cost" ? row.actualCost : row.tokens), 0);
+  const total = values.reduce(
+    (sum, row) => sum + (metric === "cost" ? row.actualCost : row.tokens),
+    0,
+  );
   const points = values.map((row, index) => ({
     ...row,
     value: metric === "cost" ? row.actualCost : row.tokens,
     fill: chartColors[index],
-    percentage: total ? ((metric === "cost" ? row.actualCost : row.tokens) / total) * 100 : 0,
+    percentage: total
+      ? ((metric === "cost" ? row.actualCost : row.tokens) / total) * 100
+      : 0,
   }));
-  if (!total) return <Empty title="No distribution data" message={`No ${label.toLowerCase()} returned for these filters.`} compact />;
+  if (!total)
+    return (
+      <Empty
+        title="No distribution data"
+        message={`No ${label.toLowerCase()} returned for these filters.`}
+        compact
+      />
+    );
   return (
     <div className="grid min-h-48 grid-cols-[132px_minmax(0,1fr)] items-center gap-4 max-[460px]:grid-cols-1 max-[460px]:justify-items-center">
-      <div className="relative z-0 h-36 w-full" role="img" aria-label={`${label} distribution`}>
+      <div
+        className="relative z-0 h-36 w-full"
+        role="img"
+        aria-label={`${label} distribution`}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Tooltip
               position={{ x: 0, y: 0 }}
-              wrapperStyle={{ zIndex: 50, transform: "translate(136px, -4px)", pointerEvents: "none" }}
+              wrapperStyle={{
+                zIndex: 50,
+                transform: "translate(136px, -4px)",
+                pointerEvents: "none",
+              }}
               content={(props) => (
                 <DistributionTooltip
                   active={props.active}
-                  payload={props.payload as unknown as ReadonlyArray<{ payload?: DistributionPoint }>}
+                  payload={
+                    props.payload as unknown as ReadonlyArray<{
+                      payload?: DistributionPoint;
+                    }>
+                  }
                   metric={metric}
                 />
               )}
             />
-            <Pie data={points} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2} stroke="none" />
+            <Pie
+              data={points}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={42}
+              outerRadius={62}
+              paddingAngle={2}
+              stroke="none"
+            />
           </PieChart>
         </ResponsiveContainer>
         <span className="pointer-events-none absolute inset-0 z-0 grid place-items-center text-center text-[10px] font-semibold tabular-nums">
@@ -318,11 +465,18 @@ function DistributionChart({ rows, metric, label }: { rows: UsageRow[]; metric: 
       </div>
       <div className="flex min-w-0 flex-col gap-2 max-[460px]:w-full">
         {points.map((row) => (
-          <div className="grid min-w-0 grid-cols-[8px_minmax(0,1fr)_auto] items-center gap-2 text-[10px]" key={row.name}>
+          <div
+            className="grid min-w-0 grid-cols-[8px_minmax(0,1fr)_auto] items-center gap-2 text-[10px]"
+            key={row.name}
+          >
             <i className="size-2 rounded-sm" style={{ background: row.fill }} />
-            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[var(--ink-muted)]">{row.name}</span>
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-(--ink-muted)">
+              {row.name}
+            </span>
             <strong className="font-semibold tabular-nums">
-              {metric === "cost" ? money(row.actualCost) : `${tokens(row.tokens)} · ${row.percentage.toFixed(1)}%`}
+              {metric === "cost"
+                ? money(row.actualCost)
+                : `${tokens(row.tokens)} · ${row.percentage.toFixed(1)}%`}
             </strong>
           </div>
         ))}
@@ -335,13 +489,20 @@ function ModelDistribution({ rows }: { rows: UsageRow[] }) {
   const [metric, setMetric] = useState<DistributionMetric>("cost");
   return (
     <div>
-      <Tabs value={metric} onValueChange={(value) => setMetric(value as DistributionMetric)}>
+      <Tabs
+        value={metric}
+        onValueChange={(value) => setMetric(value as DistributionMetric)}
+      >
         <TabsList className="mb-2" aria-label="Model distribution metric">
           <TabsTrigger value="cost">Actual cost</TabsTrigger>
           <TabsTrigger value="tokens">Tokens</TabsTrigger>
         </TabsList>
       </Tabs>
-      <DistributionChart rows={rows} metric={metric} label="Model distribution" />
+      <DistributionChart
+        rows={rows}
+        metric={metric}
+        label="Model distribution"
+      />
     </div>
   );
 }
@@ -357,7 +518,8 @@ function TrendTooltip({
 }) {
   if (!active || !payload?.length) return null;
   const point = payload.reduce<Record<string, number>>((result, item) => {
-    if (item.name && typeof item.value === "number") result[item.name] = item.value;
+    if (item.name && typeof item.value === "number")
+      result[item.name] = item.value;
     return result;
   }, {});
   const names: Array<[string, string]> = [
@@ -367,27 +529,29 @@ function TrendTooltip({
     ["cacheReadTokens", "Cache read"],
   ];
   const cacheRequests = (point.cacheReadTokens ?? 0) + (point.inputTokens ?? 0);
-  const cacheHitRate = cacheRequests ? ((point.cacheReadTokens ?? 0) / cacheRequests) * 100 : 0;
+  const cacheHitRate = cacheRequests
+    ? ((point.cacheReadTokens ?? 0) / cacheRequests) * 100
+    : 0;
   return (
-    <div className="relative z-50 min-w-48 rounded-lg border border-[var(--line-strong)] bg-[var(--canvas)] p-2 text-[10px] shadow-lg">
+    <div className="relative z-50 min-w-48 rounded-lg border border-(--line-strong) bg-(--canvas) p-2 text-[10px] shadow-lg">
       <strong className="mb-1 block">{label}</strong>
       {names.map(([key, name]) => (
         <div className="flex justify-between gap-4" key={key}>
-          <span className="text-[var(--ink-muted)]">{name}</span>
+          <span className="text-(--ink-muted)">{name}</span>
           <strong>{tokens(point[key] ?? 0)}</strong>
         </div>
       ))}
       <div className="flex justify-between gap-4">
-        <span className="text-[var(--ink-muted)]">Cache hit rate</span>
+        <span className="text-(--ink-muted)">Cache hit rate</span>
         <strong>{cacheHitRate.toFixed(1)}%</strong>
       </div>
-      <div className="mt-1 border-t border-[var(--line)] pt-1">
+      <div className="mt-1 border-t border-(--line) pt-1">
         <div className="flex justify-between gap-4">
-          <span className="text-[var(--ink-muted)]">Actual cost</span>
+          <span className="text-(--ink-muted)">Actual cost</span>
           <strong>{money(point.actualCost ?? 0)}</strong>
         </div>
         <div className="flex justify-between gap-4">
-          <span className="text-[var(--ink-muted)]">Standard cost</span>
+          <span className="text-(--ink-muted)">Standard cost</span>
           <strong>{money(point.standardCost ?? 0)}</strong>
         </div>
       </div>
@@ -396,7 +560,14 @@ function TrendTooltip({
 }
 
 function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
-  if (!rows.length) return <Empty title="No trend data" message="Try a wider date range or fewer filters." compact />;
+  if (!rows.length)
+    return (
+      <Empty
+        title="No trend data"
+        message="Try a wider date range or fewer filters."
+        compact
+      />
+    );
   const data = rows.map((row) => ({
     ...row,
     inputTokens: row.inputTokens ?? 0,
@@ -405,11 +576,28 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
     cacheReadTokens: row.cacheReadTokens ?? 0,
   }));
   return (
-    <div className="h-56 min-w-0" role="img" aria-label="Daily token usage trend">
+    <div
+      className="h-56 min-w-0"
+      role="img"
+      aria-label="Daily token usage trend"
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill: "var(--ink-faint)", fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={24} />
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
+          <CartesianGrid
+            stroke="var(--line)"
+            strokeDasharray="3 3"
+            vertical={false}
+          />
+          <XAxis
+            dataKey="date"
+            tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            minTickGap={24}
+          />
           <YAxis
             width={44}
             tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
@@ -422,7 +610,13 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
             content={(props) => (
               <TrendTooltip
                 active={props.active}
-                payload={props.payload as unknown as ReadonlyArray<{ name?: string; value?: number; color?: string }>}
+                payload={
+                  props.payload as unknown as ReadonlyArray<{
+                    name?: string;
+                    value?: number;
+                    color?: string;
+                  }>
+                }
                 label={String(props.label ?? "")}
               />
             )}
@@ -471,7 +665,9 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
 
 function formatLocation(log: UsageLog) {
   return log.location && (log.location.city || log.location.country)
-    ? [log.location.city, log.location.region, log.location.countryCode].filter(Boolean).join(", ")
+    ? [log.location.city, log.location.region, log.location.countryCode]
+        .filter(Boolean)
+        .join(", ")
     : log.ipAddress;
 }
 
@@ -481,16 +677,28 @@ function openIpLocation(ip: string) {
 
 function timestamp(value: string) {
   if (!value || Number.isNaN(Date.parse(value))) return "Unknown time";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(new Date(value));
 }
 
-function UsageLogTable({ logs, pageInfo, onPageChange }: { logs: UsageLog[]; pageInfo: PageInfo; onPageChange: (page: number) => void }) {
+function UsageLogTable({
+  logs,
+  pageInfo,
+  onPageChange,
+}: {
+  logs: UsageLog[];
+  pageInfo: PageInfo;
+  onPageChange: (page: number) => void;
+}) {
   return logs.length ? (
     <div className="flex flex-col gap-2">
       <div className="overflow-x-auto">
-        <Table className="min-w-[1180px] text-[10px]">
+        <Table className="min-w-295 text-[10px]">
           <TableHeader>
             <TableRow>
               <TableHead>Time</TableHead>
@@ -508,14 +716,18 @@ function UsageLogTable({ logs, pageInfo, onPageChange }: { logs: UsageLog[]; pag
           <TableBody>
             {logs.map((log) => (
               <TableRow key={log.id}>
-                <TableCell className="whitespace-nowrap">{timestamp(log.createdAt)}</TableCell>
-                <TableCell className="max-w-40 truncate font-medium">{log.model}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {timestamp(log.createdAt)}
+                </TableCell>
+                <TableCell className="max-w-40 truncate font-medium">
+                  {log.model}
+                </TableCell>
                 <TableCell>{log.apiKeyName}</TableCell>
                 <TableCell>{log.reasoningEffort}</TableCell>
                 <TableCell>
                   <button
                     type="button"
-                    className="max-w-44 truncate text-left text-[var(--accent)] underline decoration-[var(--accent)]/40 underline-offset-2 hover:decoration-[var(--accent)]"
+                    className="max-w-44 truncate text-left text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
                     title={`Look up ${log.ipAddress}`}
                     onClick={() => openIpLocation(log.ipAddress)}
                   >
@@ -524,17 +736,28 @@ function UsageLogTable({ logs, pageInfo, onPageChange }: { logs: UsageLog[]; pag
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   {tokens(log.totalTokens)}{" "}
-                  <span className="text-[var(--ink-faint)]">
-                    ({tokens(log.inputTokens)} in / {tokens(log.outputTokens)} out / {tokens(log.cacheCreationTokens)} created /{" "}
+                  <span className="text-(--ink-faint)">
+                    ({tokens(log.inputTokens)} in / {tokens(log.outputTokens)}{" "}
+                    out / {tokens(log.cacheCreationTokens)} created /{" "}
                     {tokens(log.cacheReadTokens)} read)
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   <strong>{money(log.actualCost)}</strong>
-                  <span className="block text-[var(--ink-faint)]">std {money(log.standardCost)}</span>
+                  <span className="block text-(--ink-faint)">
+                    std {money(log.standardCost)}
+                  </span>
                 </TableCell>
-                <TableCell>{log.timeToFirstTokenMs ? `${integer(log.timeToFirstTokenMs)} ms` : "-"}</TableCell>
-                <TableCell>{log.durationMs ? `${(log.durationMs / 1000).toFixed(1)} s` : "-"}</TableCell>
+                <TableCell>
+                  {log.timeToFirstTokenMs
+                    ? `${integer(log.timeToFirstTokenMs)} ms`
+                    : "-"}
+                </TableCell>
+                <TableCell>
+                  {log.durationMs
+                    ? `${(log.durationMs / 1000).toFixed(1)} s`
+                    : "-"}
+                </TableCell>
                 <TableCell className="max-w-52 truncate" title={log.userAgent}>
                   {log.userAgent}
                 </TableCell>
@@ -543,9 +766,10 @@ function UsageLogTable({ logs, pageInfo, onPageChange }: { logs: UsageLog[]; pag
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-[var(--line)] pt-2 text-[10px] text-[var(--ink-muted)]">
+      <div className="flex items-center justify-between gap-2 border-t border-(--line) pt-2 text-[10px] text-(--ink-muted)">
         <span>
-          Showing {(pageInfo.page - 1) * pageInfo.pageSize + 1}-{Math.min(pageInfo.total, pageInfo.page * pageInfo.pageSize)} of{" "}
+          Showing {(pageInfo.page - 1) * pageInfo.pageSize + 1}-
+          {Math.min(pageInfo.total, pageInfo.page * pageInfo.pageSize)} of{" "}
           {integer(pageInfo.total)}
         </span>
         <div className="flex items-center gap-1">
@@ -574,32 +798,57 @@ function UsageLogTable({ logs, pageInfo, onPageChange }: { logs: UsageLog[]; pag
       </div>
     </div>
   ) : (
-    <Empty title="No usage logs" message="Recent request details will appear here after the next refresh." compact />
+    <Empty
+      title="No usage logs"
+      message="Recent request details will appear here after the next refresh."
+      compact
+    />
   );
 }
 
-function ActivityPanel({ snapshot, onPageChange }: { snapshot: SnapshotEnvelope; onPageChange: (page: number) => void }) {
+function ActivityPanel({
+  snapshot,
+  onPageChange,
+}: {
+  snapshot: SnapshotEnvelope;
+  onPageChange: (page: number) => void;
+}) {
   const [tab, setTab] = useState<"usage" | "errors">("usage");
   return (
-    <Card className="rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+    <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
       <CardHeader className="mb-3 flex items-center justify-between gap-3 p-0">
         <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Recent requests</span>
-          <CardTitle className="text-lg font-semibold leading-7">Usage activity</CardTitle>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+            Recent requests
+          </span>
+          <CardTitle className="text-lg font-semibold leading-7">
+            Usage activity
+          </CardTitle>
         </div>
-        <Tabs value={tab} onValueChange={(value) => setTab(value as "usage" | "errors")}>
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as "usage" | "errors")}
+        >
           <TabsList aria-label="Usage activity type">
-            <TabsTrigger value="usage">Usage ({snapshot.usageLogs.length})</TabsTrigger>
-            <TabsTrigger value="errors">Errors ({snapshot.errors.length})</TabsTrigger>
+            <TabsTrigger value="usage">
+              Usage ({snapshot.usageLogs.length})
+            </TabsTrigger>
+            <TabsTrigger value="errors">
+              Errors ({snapshot.errors.length})
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </CardHeader>
       <CardContent className="min-w-0 p-0">
         {tab === "usage" ? (
-          <UsageLogTable logs={snapshot.usageLogs} pageInfo={snapshot.usagePageInfo} onPageChange={onPageChange} />
+          <UsageLogTable
+            logs={snapshot.usageLogs}
+            pageInfo={snapshot.usagePageInfo}
+            onPageChange={onPageChange}
+          />
         ) : snapshot.errors.length ? (
           <div className="overflow-x-auto">
-            <Table className="min-w-[820px] text-[10px]">
+            <Table className="min-w-205 text-[10px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Time</TableHead>
@@ -614,15 +863,22 @@ function ActivityPanel({ snapshot, onPageChange }: { snapshot: SnapshotEnvelope;
               <TableBody>
                 {snapshot.errors.map((error) => (
                   <TableRow key={error.id}>
-                    <TableCell className="whitespace-nowrap">{timestamp(error.createdAt)}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {timestamp(error.createdAt)}
+                    </TableCell>
                     <TableCell>
-                      <Badge variant="warning">{integer(error.statusCode)}</Badge>
+                      <Badge variant="warning">
+                        {integer(error.statusCode)}
+                      </Badge>
                     </TableCell>
                     <TableCell>{error.model}</TableCell>
                     <TableCell>{error.endpoint}</TableCell>
                     <TableCell>{error.category}</TableCell>
                     <TableCell>{error.keyName}</TableCell>
-                    <TableCell className="max-w-80 truncate" title={error.message}>
+                    <TableCell
+                      className="max-w-80 truncate"
+                      title={error.message}
+                    >
                       {error.message}
                     </TableCell>
                   </TableRow>
@@ -631,20 +887,38 @@ function ActivityPanel({ snapshot, onPageChange }: { snapshot: SnapshotEnvelope;
             </Table>
           </div>
         ) : (
-          <Empty title="No usage errors" message="No errors were returned for this range." compact />
+          <Empty
+            title="No usage errors"
+            message="No errors were returned for this range."
+            compact
+          />
         )}
       </CardContent>
     </Card>
   );
 }
 
-function DistributionCard({ title, eyebrow, icon, rows }: { title: string; eyebrow: string; icon: ReactNode; rows: UsageRow[] }) {
+function DistributionCard({
+  title,
+  eyebrow,
+  icon,
+  rows,
+}: {
+  title: string;
+  eyebrow: string;
+  icon: ReactNode;
+  rows: UsageRow[];
+}) {
   return (
-    <Card className="min-w-0 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+    <Card className="min-w-0 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
       <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
         <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">{eyebrow}</span>
-          <CardTitle className="text-lg font-semibold leading-7">{title}</CardTitle>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+            {eyebrow}
+          </span>
+          <CardTitle className="text-lg font-semibold leading-7">
+            {title}
+          </CardTitle>
         </div>
         {icon}
       </CardHeader>
@@ -671,37 +945,55 @@ function UsageWide({
   onPageChange: (page: number) => void;
 }) {
   return (
-    <div className="flex w-full max-w-[1480px] flex-col gap-6">
+    <div className="flex w-full max-w-370 flex-col gap-6">
       <div className="flex items-end justify-between gap-6">
         <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Usage dashboard</span>
-          <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">Usage</h1>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+            Usage dashboard
+          </span>
+          <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
+            Usage
+          </h1>
         </div>
         <Badge variant="outline">
           {filters.startDate} to {filters.endDate}
         </Badge>
       </div>
-      <UsageFilters snapshot={snapshot} filters={filters} onChange={onChange} onRefresh={onRefresh} onReset={onReset} />
+      <UsageFilters
+        snapshot={snapshot}
+        filters={filters}
+        onChange={onChange}
+        onRefresh={onRefresh}
+        onReset={onReset}
+      />
       <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(240px,.85fr)]">
-        <Card className="min-w-0 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+        <Card className="min-w-0 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
           <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
             <div>
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Token volume</span>
-              <CardTitle className="text-lg font-semibold leading-7">Daily trend</CardTitle>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                Token volume
+              </span>
+              <CardTitle className="text-lg font-semibold leading-7">
+                Daily trend
+              </CardTitle>
             </div>
-            <ChartBar className="size-5 text-[var(--accent)]" />
+            <ChartBar className="size-5 text-accent" />
           </CardHeader>
           <CardContent className="min-w-0 p-0">
             <TrendChart rows={snapshot.dailyTrend} />
           </CardContent>
         </Card>
-        <Card className="min-w-0 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+        <Card className="min-w-0 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
           <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
             <div>
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Model share</span>
-              <CardTitle className="text-lg font-semibold leading-7">By model</CardTitle>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                Model share
+              </span>
+              <CardTitle className="text-lg font-semibold leading-7">
+                By model
+              </CardTitle>
             </div>
-            <Stack className="size-5 text-[var(--accent)]" />
+            <Stack className="size-5 text-accent" />
           </CardHeader>
           <CardContent className="min-w-0 p-0">
             <ModelDistribution rows={snapshot.models} />
@@ -713,13 +1005,13 @@ function UsageWide({
         <DistributionCard
           title="Endpoints"
           eyebrow="Cost centers"
-          icon={<ChartBar className="size-5 text-[var(--accent)]" />}
+          icon={<ChartBar className="size-5 text-accent" />}
           rows={snapshot.stats.endpoints}
         />
         <DistributionCard
           title="Groups"
           eyebrow="Billing groups"
-          icon={<UsersThree className="size-5 text-[var(--accent)]" />}
+          icon={<UsersThree className="size-5 text-accent" />}
           rows={snapshot.groups}
         />
       </div>
@@ -736,7 +1028,11 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
   const refresh = (next: UsageFilterState, page = 1) => {
     setFilters(next);
     setUsagePage(page);
-    window.dispatchEvent(new CustomEvent("cavoti-usage-refresh", { detail: { filters: next, usagePage: page } }));
+    window.dispatchEvent(
+      new CustomEvent("cavoti-usage-refresh", {
+        detail: { filters: next, usagePage: page },
+      }),
+    );
   };
   const apply = () => refresh(filters, usagePage);
   const changeFilters = (next: UsageFilterState) => refresh(next);
@@ -757,44 +1053,71 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
       />
     );
   const pageCount = 6;
-  const pageLabel = ["Filters", "Daily trend", "Model distribution", "Groups", "Endpoints", "Usage activity"][page] ?? "Usage";
+  const pageLabel =
+    [
+      "Filters",
+      "Daily trend",
+      "Model distribution",
+      "Groups",
+      "Endpoints",
+      "Usage activity",
+    ][page] ?? "Usage";
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex min-h-0 flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">{pageLabel}</span>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+              {pageLabel}
+            </span>
             <h1>Usage</h1>
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <Badge variant="outline">
               {filters.startDate} to {filters.endDate}
             </Badge>
-            <TilePager page={page} count={pageCount} onChange={setPage} label="Usage screen" />
+            <TilePager
+              page={page}
+              count={pageCount}
+              onChange={setPage}
+              label="Usage screen"
+            />
           </div>
         </div>
         {page === 0 ? (
           <>
-            <UsageFilters snapshot={snapshot} filters={filters} onChange={changeFilters} onRefresh={apply} onReset={reset} />
+            <UsageFilters
+              snapshot={snapshot}
+              filters={filters}
+              onChange={changeFilters}
+              onRefresh={apply}
+              onReset={reset}
+            />
             <StatRail snapshot={snapshot} />
           </>
         ) : page === 1 ? (
-          <Card className="rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
             <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Token volume</span>
-                <CardTitle className="text-lg font-semibold leading-7">Daily trend</CardTitle>
+                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                  Token volume
+                </span>
+                <CardTitle className="text-lg font-semibold leading-7">
+                  Daily trend
+                </CardTitle>
               </div>
-              <ChartBar className="size-5 text-[var(--accent)]" />
+              <ChartBar className="size-5 text-accent" />
             </CardHeader>
             <CardContent className="min-w-0 p-0">
               <TrendChart rows={snapshot.dailyTrend} />
             </CardContent>
           </Card>
         ) : page === 2 ? (
-          <Card className="rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
             <CardHeader className="mb-3 p-0">
-              <CardTitle className="text-lg font-semibold leading-7">Model distribution</CardTitle>
+              <CardTitle className="text-lg font-semibold leading-7">
+                Model distribution
+              </CardTitle>
             </CardHeader>
             <CardContent className="min-w-0 p-0">
               <ModelDistribution rows={snapshot.models} />
@@ -804,14 +1127,14 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
           <DistributionCard
             title="Groups"
             eyebrow="Billing groups"
-            icon={<UsersThree className="size-5 text-[var(--accent)]" />}
+            icon={<UsersThree className="size-5 text-accent" />}
             rows={snapshot.groups}
           />
         ) : page === 4 ? (
           <DistributionCard
             title="Endpoints"
             eyebrow="Cost centers"
-            icon={<ChartBar className="size-5 text-[var(--accent)]" />}
+            icon={<ChartBar className="size-5 text-accent" />}
             rows={snapshot.stats.endpoints}
           />
         ) : (

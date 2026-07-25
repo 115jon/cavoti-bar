@@ -9,13 +9,24 @@ import {
   StackIcon as Stack,
   WarningCircleIcon as WarningCircle,
 } from "@phosphor-icons/react";
-import { usagePercent, type Subscription, type UsageWindow } from "../../domain/snapshot";
+import {
+  usagePercent,
+  type Subscription,
+  type UsageWindow,
+} from "../../domain/snapshot";
 import { isCompactViewport } from "../../domain/responsive";
 import { relativeAge } from "../../domain/relative-time";
 import { Badge as BadgePrimitive } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
-import { Empty as EmptyPrimitive, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
+import {
+  Empty as EmptyPrimitive,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "../ui/empty";
 import { Progress } from "../ui/progress";
 import { Skeleton } from "../ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
@@ -23,12 +34,21 @@ import { usageAmount, resetLabel } from "../../app/formatters";
 import type { BridgeState } from "../../app/types";
 
 export function Badge(props: ComponentProps<typeof BadgePrimitive>) {
-  const limited = typeof props.children === "string" && props.children.toLowerCase() === "limited";
-  return <BadgePrimitive {...props} variant={limited ? "warning" : props.variant} />;
+  const limited =
+    typeof props.children === "string" &&
+    props.children.toLowerCase() === "limited";
+  return (
+    <BadgePrimitive {...props} variant={limited ? "warning" : props.variant} />
+  );
 }
 
-export function useRelativeAge(value: string | null, showSeconds: boolean): string {
-  const [age, setAge] = useState(() => relativeAge(value, Date.now(), showSeconds));
+export function useRelativeAge(
+  value: string | null,
+  showSeconds: boolean,
+): string {
+  const [age, setAge] = useState(() =>
+    relativeAge(value, Date.now(), showSeconds),
+  );
   useEffect(() => {
     const update = () => setAge(relativeAge(value, Date.now(), showSeconds));
     update();
@@ -39,12 +59,18 @@ export function useRelativeAge(value: string | null, showSeconds: boolean): stri
 }
 
 export function useCompactTiles(): boolean {
-  const [compact, setCompact] = useState(() => isCompactViewport(window.innerWidth, window.innerHeight));
+  const [compact, setCompact] = useState(() =>
+    isCompactViewport(window.innerWidth, window.innerHeight),
+  );
   useEffect(() => {
-    const update = () => setCompact(isCompactViewport(window.innerWidth, window.innerHeight));
+    const update = () =>
+      setCompact(isCompactViewport(window.innerWidth, window.innerHeight));
     update();
     window.addEventListener("resize", update);
-    const query = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 720px)") : null;
+    const query =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 720px)")
+        : null;
     query?.addEventListener("change", update);
     return () => {
       window.removeEventListener("resize", update);
@@ -68,9 +94,12 @@ export function TilePager({
   const compact = useCompactTiles();
   if (count <= 1 || !compact) return null;
   return (
-    <fieldset className="flex shrink-0 items-center gap-1" aria-label={`${label} ${page + 1} of ${count}`}>
+    <fieldset
+      className="flex shrink-0 items-center gap-1"
+      aria-label={`${label} ${page + 1} of ${count}`}
+    >
       <Button
-        className="size-7 text-[var(--ink-muted)] [&_svg]:size-4"
+        className="size-7 text-(--ink-muted) [&_svg]:size-4"
         variant="ghost"
         size="icon"
         aria-label={`Previous ${label.toLowerCase()}`}
@@ -83,7 +112,7 @@ export function TilePager({
         {page + 1} / {count}
       </span>
       <Button
-        className="size-7 text-[var(--ink-muted)] [&_svg]:size-4"
+        className="size-7 text-(--ink-muted) [&_svg]:size-4"
         variant="ghost"
         size="icon"
         aria-label={`Next ${label.toLowerCase()}`}
@@ -107,10 +136,12 @@ export function SourceStrip({
 }) {
   const age = useRelativeAge(capturedAt, showSeconds);
   return (
-    <div className="flex min-h-12 items-center gap-2 border-b border-[var(--line)] px-1 py-2 text-[var(--ink-muted)] group-data-[layout=wide]/app:min-h-16 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:border group-data-[layout=wide]/app:bg-white/70 group-data-[layout=wide]/app:px-5 group-data-[layout=wide]/app:py-4">
-      <span className="text-[11px] font-medium group-data-[layout=wide]/app:text-sm">{age}</span>
+    <div className="flex min-h-12 items-center gap-2 border-b border-(--line) px-1 py-2 text-(--ink-muted) group-data-[layout=wide]/app:min-h-16 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:border group-data-[layout=wide]/app:bg-white/70 group-data-[layout=wide]/app:px-5 group-data-[layout=wide]/app:py-4">
+      <span className="text-[11px] font-medium group-data-[layout=wide]/app:text-sm">
+        {age}
+      </span>
       <Button
-        className="ml-auto text-[var(--ink-muted)] group-data-[layout=wide]/app:size-10"
+        className="ml-auto text-(--ink-muted) group-data-[layout=wide]/app:size-10"
         variant="ghost"
         size="icon"
         aria-label="Refresh usage data"
@@ -136,12 +167,16 @@ export function PlanTabs({
     <Tabs
       value={selected?.name ?? ""}
       onValueChange={onSelect}
-      className="flex h-auto w-full min-w-0 rounded-lg border border-[var(--line)] bg-white/45 p-1"
+      className="flex h-auto w-full min-w-0 rounded-lg border border-(--line) bg-white/45 p-1"
       aria-label="Plans"
     >
       <TabsList className="grid h-auto w-full min-w-0 grid-cols-3 gap-1 bg-transparent p-0">
         {plans.map((plan) => {
-          const compactType = plan.billingKind.toLowerCase().includes("per-request") ? "Request" : "Usage";
+          const compactType = plan.billingKind
+            .toLowerCase()
+            .includes("per-request")
+            ? "Request"
+            : "Usage";
           const windows = [
             { label: "5 hour", value: plan.usage.fiveHour },
             { label: "Weekly", value: plan.usage.weekly },
@@ -153,32 +188,50 @@ export function PlanTabs({
               value={plan.name}
               key={plan.name}
               className={`min-w-0 w-full flex-none grid min-h-14 grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-1.5 gap-y-0 overflow-hidden rounded-md px-1.5 py-1.5 text-left text-[10px] leading-3.5 ${
-                plan.quotaState === "limited" ? "border-[color-mix(in_srgb,var(--warning)_36%,transparent)] bg-[var(--warning-soft)]" : ""
+                plan.quotaState === "limited"
+                  ? "border-[color-mix(in_srgb,var(--warning)_36%,transparent)] bg-(--warning-soft)"
+                  : ""
               }`}
               title={`${plan.name}: ${compactType} plan, ${plan.status}`}
             >
-              <Stack className="row-span-2 mb-0 size-3.5 text-[var(--accent)]" weight={selected?.name === plan.name ? "fill" : "regular"} />
+              <Stack
+                className="row-span-2 mb-0 size-3.5 text-accent"
+                weight={selected?.name === plan.name ? "fill" : "regular"}
+              />
               <div className="flex min-w-0 max-w-full items-center gap-1">
-                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium">{plan.name}</span>
+                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
+                  {plan.name}
+                </span>
                 <span
-                  className={`size-1.5 shrink-0 rounded-full ${plan.quotaState === "limited" ? "bg-[var(--bad)]" : plan.status === "active" ? "bg-[var(--good)]" : "bg-[var(--line-strong)]"}`}
+                  className={`size-1.5 shrink-0 rounded-full ${plan.quotaState === "limited" ? "bg-(--bad)" : plan.status === "active" ? "bg-(--good)" : "bg-(--line-strong)"}`}
                   aria-hidden="true"
                 />
               </div>
-              <small className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[8px] leading-3 text-[var(--ink-faint)]">
+              <small className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[8px] leading-3 text-(--ink-faint)">
                 {compactType} · {plan.status}
               </small>
-              <div className="col-start-2 flex w-full min-w-0 gap-0.5 pt-0.5" title={`${plan.name} quota usage`}>
+              <div
+                className="col-start-2 flex w-full min-w-0 gap-0.5 pt-0.5"
+                title={`${plan.name} quota usage`}
+              >
                 {windows.map(({ label, value }) => {
                   const percent = value.configured ? usagePercent(value) : 0;
-                  const tone = percent >= 100 ? "bg-[var(--bad)]" : percent >= 75 ? "bg-[var(--warning)]" : "bg-[var(--good)]";
+                  const tone =
+                    percent >= 100
+                      ? "bg-[var(--bad)]"
+                      : percent >= 75
+                        ? "bg-[var(--warning)]"
+                        : "bg-[var(--good)]";
                   return (
                     <span
                       className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-black/10"
                       key={label}
                       title={`${label}: ${value.configured ? `${percent}% used` : "not configured"}`}
                     >
-                      <span className={`block h-full rounded-full ${tone}`} style={{ width: `${percent}%` }} />
+                      <span
+                        className={`block h-full rounded-full ${tone}`}
+                        style={{ width: `${percent}%` }}
+                      />
                     </span>
                   );
                 })}
@@ -215,9 +268,15 @@ export function UsageMeter({
           ? "warning"
           : "healthy";
   const progressTone: "accent" | "good" | "warning" | "critical" =
-    urgency === "critical" || urgency === "exhausted" ? "critical" : urgency === "warning" ? "warning" : tone;
+    urgency === "critical" || urgency === "exhausted"
+      ? "critical"
+      : urgency === "warning"
+        ? "warning"
+        : tone;
   const urgencyClass =
-    urgency === "exhausted" ? "rounded-md border border-[color-mix(in_srgb,var(--bad)_28%,transparent)] bg-[var(--bad-soft)] p-2" : "";
+    urgency === "exhausted"
+      ? "rounded-md border border-[color-mix(in_srgb,var(--bad)_28%,transparent)] bg-[var(--bad-soft)] p-2"
+      : "";
   const valueClass =
     urgency === "warning"
       ? "text-[var(--warning)]"
@@ -229,15 +288,23 @@ export function UsageMeter({
       <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px]">
         <span>{displayLabel}</span>
         <strong className={`font-semibold tabular-nums ${valueClass}`}>
-          {configured ? (urgency === "exhausted" ? "Exhausted" : `${percent.toFixed(1)}% used`) : "Not configured"}
+          {configured
+            ? urgency === "exhausted"
+              ? "Exhausted"
+              : `${percent.toFixed(1)}% used`
+            : "Not configured"}
         </strong>
       </div>
       <Progress value={percent} tone={progressTone} />
-      <div className="mt-1 grid grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)] items-start gap-2 text-[10px] leading-3.5 text-[var(--ink-muted)] [&_span]:min-w-0 [&_span]:[overflow-wrap:anywhere] [&_span:last-child]:text-right">
+      <div className="mt-1 grid grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)] items-start gap-2 text-[10px] leading-3.5 text-(--ink-muted) [&_span]:min-w-0 [&_span]:wrap-anywhere [&_span:last-child]:text-right">
         <span>
-          {configured ? `${usageAmount(window.used, window.unit)} of ${usageAmount(window.limit, window.unit)}` : "No quota configured"}
+          {configured
+            ? `${usageAmount(window.used, window.unit)} of ${usageAmount(window.limit, window.unit)}`
+            : "No quota configured"}
         </span>
-        <span>{configured ? resetLabel(window.resetAt) : "No quota configured"}</span>
+        <span>
+          {configured ? resetLabel(window.resetAt) : "No quota configured"}
+        </span>
       </div>
     </div>
   );
@@ -256,14 +323,25 @@ export function Empty({
 }) {
   return (
     <EmptyPrimitive
-      className={`flex min-h-36 w-full flex-col items-center justify-center gap-2 p-3 text-center ${compact ? "min-h-[88px]" : ""}`}
+      className={`flex min-h-36 w-full flex-col items-center justify-center gap-2 p-3 text-center ${compact ? "min-h-22" : ""}`}
     >
       <EmptyHeader className="flex max-w-sm flex-col items-center gap-1">
-        <EmptyMedia className="mb-1 size-8 bg-transparent opacity-50" variant="default">
-          <img className="size-8 object-contain" src="./cavoti-logo.png" alt="" />
+        <EmptyMedia
+          className="mb-1 size-8 bg-transparent opacity-50"
+          variant="default"
+        >
+          <img
+            className="size-8 object-contain"
+            src="./cavoti-logo.png"
+            alt=""
+          />
         </EmptyMedia>
-        <EmptyTitle className="text-[11px] font-medium tracking-normal">{title}</EmptyTitle>
-        <EmptyDescription className="max-w-[230px] text-[10px] leading-3.5 text-[var(--ink-muted)]">{message}</EmptyDescription>
+        <EmptyTitle className="text-[11px] font-medium tracking-normal">
+          {title}
+        </EmptyTitle>
+        <EmptyDescription className="max-w-57.5 text-[10px] leading-3.5 text-(--ink-muted)">
+          {message}
+        </EmptyDescription>
       </EmptyHeader>
       {onAction ? (
         <EmptyContent className="flex w-full max-w-sm flex-col items-center gap-2">
@@ -276,13 +354,23 @@ export function Empty({
   );
 }
 
-export function SignalNote({ icon, title, message }: { icon: ReactNode; title: string; message: string }) {
+export function SignalNote({
+  icon,
+  title,
+  message,
+}: {
+  icon: ReactNode;
+  title: string;
+  message: string;
+}) {
   return (
-    <Alert className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] border-l-[3px] border-l-[var(--accent)] bg-[var(--accent-soft)] px-2.5 py-2 text-left text-[var(--accent-ink)] [&>svg]:size-[17px]">
+    <Alert className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] border-l-[3px] border-l-accent bg-(--accent-soft) px-2.5 py-2 text-left text-(--accent-ink) [&>svg]:size-4.25">
       {icon}
       <div>
         <AlertTitle className="text-[10px] font-semibold">{title}</AlertTitle>
-        <AlertDescription className="mt-0.5 text-[9px] text-[var(--ink-muted)]">{message}</AlertDescription>
+        <AlertDescription className="mt-0.5 text-[9px] text-(--ink-muted)">
+          {message}
+        </AlertDescription>
       </div>
     </Alert>
   );
@@ -290,7 +378,12 @@ export function SignalNote({ icon, title, message }: { icon: ReactNode; title: s
 
 export function Loading() {
   return (
-    <div className="flex min-h-full flex-col gap-3" aria-busy="true" role="status" aria-label="Loading Cavoti snapshot">
+    <div
+      className="flex min-h-full flex-col gap-3"
+      aria-busy="true"
+      role="status"
+      aria-label="Loading Cavoti snapshot"
+    >
       <span className="sr-only">Loading Cavoti snapshot</span>
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -300,7 +393,7 @@ export function Loading() {
         <Skeleton className="size-8" />
       </div>
       <Skeleton className="h-14 w-full" />
-      <section className="flex min-h-40 flex-col gap-4 rounded-lg border border-[var(--line)] bg-white/70 p-3">
+      <section className="flex min-h-40 flex-col gap-4 rounded-lg border border-(--line) bg-white/70 p-3">
         <div className="flex items-start justify-between gap-2">
           <div>
             <Skeleton className="h-3 w-20" />
@@ -323,23 +416,43 @@ export function Loading() {
   );
 }
 
-export function Boundary({ state, onConnect }: { state: BridgeState; onConnect: () => void }) {
+export function Boundary({
+  state,
+  onConnect,
+}: {
+  state: BridgeState;
+  onConnect: () => void;
+}) {
   const copy =
     state === "offline"
-      ? ["Cavoti is offline", "The authenticated profile could not reach Cavoti. Try again when the site is available."]
+      ? [
+          "Cavoti is offline",
+          "The authenticated profile could not reach Cavoti. Try again when the site is available.",
+        ]
       : state === "error"
-        ? ["The bridge needs attention", "The local host could not produce a safe snapshot."]
-        : ["Live session required", "Sign in through the Cavoti connection window."];
+        ? [
+            "The bridge needs attention",
+            "The local host could not produce a safe snapshot.",
+          ]
+        : [
+            "Live session required",
+            "Sign in through the Cavoti connection window.",
+          ];
   return (
     <div className="flex min-h-72 flex-col items-center justify-center p-6 text-center">
-      <div className="text-2xl text-[var(--warning)]">{state === "auth-required" ? <LockKeyOpen /> : <WarningCircle />}</div>
-      <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">
+      <div className="text-2xl text-(--warning)">
+        {state === "auth-required" ? <LockKeyOpen /> : <WarningCircle />}
+      </div>
+      <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
         {state === "auth-required" ? "Authentication" : "Connection"}
       </span>
       <h2 className="my-1.5 text-lg font-semibold">{copy[0]}</h2>
-      <p className="mb-3 max-w-[250px] text-[10px] leading-3.5 text-[var(--ink-muted)]">{copy[1]}</p>
+      <p className="mb-3 max-w-62.5 text-[10px] leading-3.5 text-(--ink-muted)">
+        {copy[1]}
+      </p>
       <Button onClick={onConnect}>
-        {state === "auth-required" ? "Connect Cavoti" : "Try again"} <ArrowSquareOut data-icon="inline-end" />
+        {state === "auth-required" ? "Connect Cavoti" : "Try again"}{" "}
+        <ArrowSquareOut data-icon="inline-end" />
       </Button>
     </div>
   );

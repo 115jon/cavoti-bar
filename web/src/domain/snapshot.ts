@@ -1,5 +1,11 @@
 export type UsageUnit = "points" | "usd";
-export type UsageWindow = { used: number; limit: number; configured: boolean; unit: UsageUnit; resetAt: string | null };
+export type UsageWindow = {
+  used: number;
+  limit: number;
+  configured: boolean;
+  unit: UsageUnit;
+  resetAt: string | null;
+};
 
 export type Subscription = {
   name: string;
@@ -8,7 +14,12 @@ export type Subscription = {
   quotaState: "available" | "limited";
   blockedBy: string[];
   expiresAt: string | null;
-  usage: { fiveHour: UsageWindow; daily: UsageWindow; weekly: UsageWindow; monthly: UsageWindow };
+  usage: {
+    fiveHour: UsageWindow;
+    daily: UsageWindow;
+    weekly: UsageWindow;
+    monthly: UsageWindow;
+  };
 };
 
 export type UsageRow = {
@@ -22,7 +33,14 @@ export type UsageRow = {
   cacheCreationTokens?: number;
   cacheReadTokens?: number;
 };
-export type IpLocation = { city: string; region: string; country: string; countryCode: string; organization: string; timezone: string };
+export type IpLocation = {
+  city: string;
+  region: string;
+  country: string;
+  countryCode: string;
+  organization: string;
+  timezone: string;
+};
 export type UsageLog = {
   id: number;
   requestId: string;
@@ -57,7 +75,12 @@ export type UsageError = {
   keyName: string;
   keyDeleted: boolean;
 };
-export type PageInfo = { page: number; pageSize: number; total: number; pages: number };
+export type PageInfo = {
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+};
 export type ChannelMonitor = {
   name: string;
   provider: string;
@@ -127,24 +150,41 @@ export type SnapshotEnvelope = {
 export type CavotiPayload = Record<string, unknown>;
 
 const record = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-const stringValue = (value: unknown, fallback = ""): string => (typeof value === "string" ? value : fallback);
-const numberValue = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
-const nullableNumber = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null);
-const arrayValue = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+const stringValue = (value: unknown, fallback = ""): string =>
+  typeof value === "string" ? value : fallback;
+const numberValue = (value: unknown): number =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+const nullableNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, value)
+    : null;
+const arrayValue = (value: unknown): unknown[] =>
+  Array.isArray(value) ? value : [];
 const optionRows = (value: unknown): OptionItem[] =>
   arrayValue(value)
     .map((item) => {
       const source = record(item);
-      return { id: numberValue(source.id), name: stringValue(source.name, "Unknown") };
+      return {
+        id: numberValue(source.id),
+        name: stringValue(source.name, "Unknown"),
+      };
     })
     .filter((item) => item.id > 0);
 
 function pageInfo(value: unknown): PageInfo {
   const source = record(value);
-  const pageSize = Math.max(1, numberValue(source.pageSize ?? source.page_size) || 100);
+  const pageSize = Math.max(
+    1,
+    numberValue(source.pageSize ?? source.page_size) || 100,
+  );
   const total = numberValue(source.total);
-  const pages = Math.max(1, numberValue(source.pages) || Math.ceil(total / pageSize) || 1);
+  const pages = Math.max(
+    1,
+    numberValue(source.pages) || Math.ceil(total / pageSize) || 1,
+  );
   return {
     page: Math.min(pages, Math.max(1, numberValue(source.page) || 1)),
     pageSize,
@@ -162,9 +202,16 @@ function windowValue(value: unknown, fallbackUnit: UsageUnit): UsageWindow {
   return {
     used: numberValue(source.used),
     limit: numberValue(source.limit),
-    configured: typeof source.configured === "boolean" ? source.configured : numberValue(source.limit) > 0,
+    configured:
+      typeof source.configured === "boolean"
+        ? source.configured
+        : numberValue(source.limit) > 0,
     unit: usageUnit(source.unit, fallbackUnit),
-    resetAt: typeof source.resetAt === "string" && !Number.isNaN(Date.parse(source.resetAt)) ? source.resetAt : null,
+    resetAt:
+      typeof source.resetAt === "string" &&
+      !Number.isNaN(Date.parse(source.resetAt))
+        ? source.resetAt
+        : null,
   };
 }
 
@@ -184,7 +231,8 @@ function row(value: unknown): UsageRow {
     ["cacheReadTokens", source.cacheReadTokens],
   ];
   for (const [key, value] of optionalFields)
-    if (typeof value === "number" && Number.isFinite(value)) Object.assign(normalized, { [key]: Math.max(0, value) });
+    if (typeof value === "number" && Number.isFinite(value))
+      Object.assign(normalized, { [key]: Math.max(0, value) });
   return normalized;
 }
 
@@ -195,59 +243,106 @@ function location(value: unknown): IpLocation | null {
     city: stringValue(source.city),
     region: stringValue(source.region),
     country: stringValue(source.country),
-    countryCode: stringValue(source.countryCode, stringValue(source.country_code)),
-    organization: stringValue(source.organization, stringValue(source.organization_name)),
+    countryCode: stringValue(
+      source.countryCode,
+      stringValue(source.country_code),
+    ),
+    organization: stringValue(
+      source.organization,
+      stringValue(source.organization_name),
+    ),
     timezone: stringValue(source.timezone),
   };
 }
 
 function usageLog(value: unknown): UsageLog {
   const source = record(value);
-  const createdAt = stringValue(source.createdAt, stringValue(source.created_at));
+  const createdAt = stringValue(
+    source.createdAt,
+    stringValue(source.created_at),
+  );
   return {
     id: numberValue(source.id),
     requestId: stringValue(source.requestId, stringValue(source.request_id)),
-    apiKeyName: stringValue(source.apiKeyName, stringValue(source.api_key_name, "Unknown key")),
+    apiKeyName: stringValue(
+      source.apiKeyName,
+      stringValue(source.api_key_name, "Unknown key"),
+    ),
     model: stringValue(source.model, "Unknown model"),
-    reasoningEffort: stringValue(source.reasoningEffort, stringValue(source.reasoning_effort, "default")),
-    endpoint: stringValue(source.endpoint, stringValue(source.inbound_endpoint, "Unknown endpoint")),
-    groupName: stringValue(source.groupName, stringValue(source.group_name, "Unknown group")),
+    reasoningEffort: stringValue(
+      source.reasoningEffort,
+      stringValue(source.reasoning_effort, "default"),
+    ),
+    endpoint: stringValue(
+      source.endpoint,
+      stringValue(source.inbound_endpoint, "Unknown endpoint"),
+    ),
+    groupName: stringValue(
+      source.groupName,
+      stringValue(source.group_name, "Unknown group"),
+    ),
     inputTokens: numberValue(source.inputTokens ?? source.input_tokens),
     outputTokens: numberValue(source.outputTokens ?? source.output_tokens),
-    cacheCreationTokens: numberValue(source.cacheCreationTokens ?? source.cache_creation_tokens),
-    cacheReadTokens: numberValue(source.cacheReadTokens ?? source.cache_read_tokens),
+    cacheCreationTokens: numberValue(
+      source.cacheCreationTokens ?? source.cache_creation_tokens,
+    ),
+    cacheReadTokens: numberValue(
+      source.cacheReadTokens ?? source.cache_read_tokens,
+    ),
     totalTokens: numberValue(source.totalTokens ?? source.total_tokens),
     actualCost: numberValue(source.actualCost ?? source.actual_cost),
-    standardCost: numberValue(source.standardCost ?? source.cost ?? source.total_cost),
-    timeToFirstTokenMs: numberValue(source.timeToFirstTokenMs ?? source.first_token_ms),
+    standardCost: numberValue(
+      source.standardCost ?? source.cost ?? source.total_cost,
+    ),
+    timeToFirstTokenMs: numberValue(
+      source.timeToFirstTokenMs ?? source.first_token_ms,
+    ),
     durationMs: numberValue(source.durationMs ?? source.duration_ms),
-    ipAddress: stringValue(source.ipAddress, stringValue(source.ip_address, "Unknown IP")),
+    ipAddress: stringValue(
+      source.ipAddress,
+      stringValue(source.ip_address, "Unknown IP"),
+    ),
     location: location(source.location),
-    userAgent: stringValue(source.userAgent, stringValue(source.user_agent, "Unknown client")),
+    userAgent: stringValue(
+      source.userAgent,
+      stringValue(source.user_agent, "Unknown client"),
+    ),
     createdAt: !Number.isNaN(Date.parse(createdAt)) ? createdAt : "",
   };
 }
 
 function usageError(value: unknown): UsageError {
   const source = record(value);
-  const createdAt = stringValue(source.createdAt, stringValue(source.created_at));
+  const createdAt = stringValue(
+    source.createdAt,
+    stringValue(source.created_at),
+  );
   return {
     id: numberValue(source.id),
     createdAt: !Number.isNaN(Date.parse(createdAt)) ? createdAt : "",
     model: stringValue(source.model, "Unknown model"),
-    endpoint: stringValue(source.endpoint, stringValue(source.inbound_endpoint, "Unknown endpoint")),
+    endpoint: stringValue(
+      source.endpoint,
+      stringValue(source.inbound_endpoint, "Unknown endpoint"),
+    ),
     statusCode: numberValue(source.statusCode ?? source.status_code),
     category: stringValue(source.category, "Unknown"),
     platform: stringValue(source.platform, "Unknown"),
     message: stringValue(source.message, "No error message"),
-    keyName: stringValue(source.keyName, stringValue(source.key_name, "Unknown key")),
+    keyName: stringValue(
+      source.keyName,
+      stringValue(source.key_name, "Unknown key"),
+    ),
     keyDeleted: source.keyDeleted === true || source.key_deleted === true,
   };
 }
 
 export function usagePercent(value: UsageWindow | undefined): number {
   if (!value?.configured || !value.limit) return 0;
-  return Math.min(100, Math.max(0, Number(((value.used / value.limit) * 100).toFixed(1))));
+  return Math.min(
+    100,
+    Math.max(0, Number(((value.used / value.limit) * 100).toFixed(1))),
+  );
 }
 
 export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
@@ -263,7 +358,11 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
       const rawName = stringValue(item.name, "Unnamed plan");
       const rawBillingKind = stringValue(item.billingKind, "subscription");
       const pointBased = rawBillingKind.toLowerCase().includes("point");
-      const billingKind = pointBased ? "Per-request plan" : rawBillingKind.toLowerCase() === "usage_quota" ? "Usage plan" : rawBillingKind;
+      const billingKind = pointBased
+        ? "Per-request plan"
+        : rawBillingKind.toLowerCase() === "usage_quota"
+          ? "Usage plan"
+          : rawBillingKind;
       const fallbackUnit: UsageUnit = pointBased ? "points" : "usd";
       const fiveHour = windowValue(usage.fiveHour ?? usage.daily, fallbackUnit);
       const weekly = windowValue(usage.weekly, fallbackUnit);
@@ -273,12 +372,15 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
         weekly.limit > 0 && weekly.used >= weekly.limit ? "7 day" : null,
         monthly.limit > 0 && monthly.used >= monthly.limit ? "30 day" : null,
       ].filter((value): value is string => value !== null);
-      const quotaState: Subscription["quotaState"] = blockedBy.length > 0 ? "limited" : "available";
-      const displayBillingKind = billingKind === "subscription" ? "Subscription" : billingKind;
+      const quotaState: Subscription["quotaState"] =
+        blockedBy.length > 0 ? "limited" : "available";
+      const displayBillingKind =
+        billingKind === "subscription" ? "Subscription" : billingKind;
       const status = stringValue(item.status, "unknown");
       return {
         name: rawName.toLowerCase() === "usage_quota" ? "Usage plan" : rawName,
-        status: quotaState === "limited" && status === "active" ? "Limited" : status,
+        status:
+          quotaState === "limited" && status === "active" ? "Limited" : status,
         billingKind: displayBillingKind,
         quotaState,
         blockedBy,
@@ -293,8 +395,13 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
   const keys = record(source.keys);
   const bannerSource = record(source.banner);
   const banner =
-    typeof source.banner === "object" && source.banner !== null && typeof bannerSource.title === "string"
-      ? { title: bannerSource.title, message: stringValue(bannerSource.message) }
+    typeof source.banner === "object" &&
+    source.banner !== null &&
+    typeof bannerSource.title === "string"
+      ? {
+          title: bannerSource.title,
+          message: stringValue(bannerSource.message),
+        }
       : null;
   const channelMonitors = arrayValue(source.channelMonitors)
     .filter((item) => Object.keys(record(item)).length > 0)
@@ -307,14 +414,25 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
         status: stringValue(monitor.status, "unknown"),
         latencyMs: nullableNumber(monitor.latencyMs),
         availability7d: nullableNumber(monitor.availability7d),
-        checkedAt: typeof monitor.checkedAt === "string" && !Number.isNaN(Date.parse(monitor.checkedAt)) ? monitor.checkedAt : null,
+        checkedAt:
+          typeof monitor.checkedAt === "string" &&
+          !Number.isNaN(Date.parse(monitor.checkedAt))
+            ? monitor.checkedAt
+            : null,
       };
     });
   return {
     version: 1,
-    capturedAt: typeof source.capturedAt === "string" && !Number.isNaN(Date.parse(source.capturedAt)) ? source.capturedAt : null,
+    capturedAt:
+      typeof source.capturedAt === "string" &&
+      !Number.isNaN(Date.parse(source.capturedAt))
+        ? source.capturedAt
+        : null,
     source: stringValue(source.source, "live-webview2"),
-    account: { displayName: stringValue(account.displayName, "Connected account"), status: stringValue(account.status, "unknown") },
+    account: {
+      displayName: stringValue(account.displayName, "Connected account"),
+      status: stringValue(account.status, "unknown"),
+    },
     subscriptions,
     stats: {
       requests: numberValue(stats.requests),
@@ -339,11 +457,21 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
           requests: numberValue(trend.requests),
           tokens: numberValue(trend.tokens),
           actualCost: numberValue(trend.actualCost),
-          ...(typeof trend.standardCost === "number" ? { standardCost: numberValue(trend.standardCost) } : {}),
-          ...(typeof trend.inputTokens === "number" ? { inputTokens: numberValue(trend.inputTokens) } : {}),
-          ...(typeof trend.outputTokens === "number" ? { outputTokens: numberValue(trend.outputTokens) } : {}),
-          ...(typeof trend.cacheCreationTokens === "number" ? { cacheCreationTokens: numberValue(trend.cacheCreationTokens) } : {}),
-          ...(typeof trend.cacheReadTokens === "number" ? { cacheReadTokens: numberValue(trend.cacheReadTokens) } : {}),
+          ...(typeof trend.standardCost === "number"
+            ? { standardCost: numberValue(trend.standardCost) }
+            : {}),
+          ...(typeof trend.inputTokens === "number"
+            ? { inputTokens: numberValue(trend.inputTokens) }
+            : {}),
+          ...(typeof trend.outputTokens === "number"
+            ? { outputTokens: numberValue(trend.outputTokens) }
+            : {}),
+          ...(typeof trend.cacheCreationTokens === "number"
+            ? { cacheCreationTokens: numberValue(trend.cacheCreationTokens) }
+            : {}),
+          ...(typeof trend.cacheReadTokens === "number"
+            ? { cacheReadTokens: numberValue(trend.cacheReadTokens) }
+            : {}),
         };
       }),
     groups: normalizeRows(source.groups),
@@ -360,14 +488,20 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
       .filter((item) => Object.keys(record(item)).length > 0)
       .map((item) => {
         const card = record(item);
-        return { label: stringValue(card.label, "Quota reset"), resetAt: typeof card.resetAt === "string" ? card.resetAt : null };
+        return {
+          label: stringValue(card.label, "Quota reset"),
+          resetAt: typeof card.resetAt === "string" ? card.resetAt : null,
+        };
       }),
     banner,
     announcements: arrayValue(source.announcements)
       .filter((item) => Object.keys(record(item)).length > 0)
       .map((item) => {
         const announcement = record(item);
-        return { title: stringValue(announcement.title, "Announcement"), message: stringValue(announcement.message) };
+        return {
+          title: stringValue(announcement.title, "Announcement"),
+          message: stringValue(announcement.message),
+        };
       }),
     channelMonitors,
     apiKeys: optionRows(source.apiKeys),

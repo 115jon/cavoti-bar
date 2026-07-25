@@ -3,8 +3,20 @@ import { KeyIcon as Key } from "@phosphor-icons/react";
 import { Badge, TilePager, useCompactTiles } from "../components/app/shared";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
 
 const refreshOptions = [
@@ -29,12 +41,17 @@ function RefreshSettings({
 }) {
   return (
     <div className="contents">
-      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-[var(--line)] py-1.5 last:border-b-0">
+      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5 last:border-b-0">
         <div>
           <strong className="block text-[11px]">Refresh interval</strong>
-          <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">Choose how often usage refreshes automatically.</small>
+          <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+            Choose how often usage refreshes automatically.
+          </small>
         </div>
-        <Select value={String(refreshIntervalSeconds)} onValueChange={(value) => onRefreshInterval(Number(value))}>
+        <Select
+          value={String(refreshIntervalSeconds)}
+          onValueChange={(value) => onRefreshInterval(Number(value))}
+        >
           <SelectTrigger size="sm" aria-label="Refresh interval">
             <SelectValue />
           </SelectTrigger>
@@ -49,12 +66,18 @@ function RefreshSettings({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-[var(--line)] py-1.5 last:border-b-0">
+      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5 last:border-b-0">
         <div>
           <strong className="block text-[11px]">Show seconds</strong>
-          <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">Show seconds for recent update timing.</small>
+          <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+            Show seconds for recent update timing.
+          </small>
         </div>
-        <Switch checked={showFreshnessSeconds} onCheckedChange={onShowFreshnessSeconds} aria-label="Show seconds in freshness" />
+        <Switch
+          checked={showFreshnessSeconds}
+          onCheckedChange={onShowFreshnessSeconds}
+          aria-label="Show seconds in freshness"
+        />
       </div>
     </div>
   );
@@ -83,27 +106,41 @@ export function Settings({
   const compact = useCompactTiles();
   if (!compact)
     return (
-      <div className="flex w-full max-w-[1480px] flex-col gap-6">
+      <div className="flex w-full max-w-370 flex-col gap-6">
         <div className="flex items-end justify-between gap-6">
           <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Application</span>
-            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">Settings</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+              Application
+            </span>
+            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
+              Settings
+            </h1>
           </div>
           <Badge variant="outline">Local</Badge>
         </div>
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
             <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Application</span>
-              <CardTitle className="text-lg font-semibold leading-7">Window behavior</CardTitle>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                Application
+              </span>
+              <CardTitle className="text-lg font-semibold leading-7">
+                Window behavior
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 p-0">
-              <div className="flex min-h-10 items-center justify-between gap-2 border-b border-[var(--line)] py-1.5">
+              <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                 <div>
                   <strong className="block text-[11px]">Keep on top</strong>
-                  <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">Keep the popover above other windows.</small>
+                  <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+                    Keep the popover above other windows.
+                  </small>
                 </div>
-                <Switch checked={topmost} onCheckedChange={onTopmost} aria-label="Keep on top" />
+                <Switch
+                  checked={topmost}
+                  onCheckedChange={onTopmost}
+                  aria-label="Keep on top"
+                />
               </div>
               <RefreshSettings
                 refreshIntervalSeconds={refreshIntervalSeconds}
@@ -113,8 +150,10 @@ export function Settings({
               />
               <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
                 <div>
-                  <strong className="block text-[11px]">Connection profile</strong>
-                  <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">
+                  <strong className="block text-[11px]">
+                    Connection profile
+                  </strong>
+                  <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
                     Session cookies stay inside the WebView2 profile.
                   </small>
                 </div>
@@ -124,18 +163,25 @@ export function Settings({
               </div>
             </CardContent>
           </Card>
-          <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
             <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Privacy boundary</span>
-              <CardTitle className="text-lg font-semibold leading-7">Local session</CardTitle>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                Privacy boundary
+              </span>
+              <CardTitle className="text-lg font-semibold leading-7">
+                Local session
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 p-0">
-              <Alert className="flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-[var(--accent)]">
+              <Alert className="flex w-full items-center gap-2 rounded-lg border border-(--line) bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-accent">
                 <Key className="shrink-0" />
                 <div>
-                  <AlertTitle className="text-xs font-medium">Credentials never reach this UI</AlertTitle>
-                  <AlertDescription className="mt-0.5 text-[10px] text-[var(--ink-muted)]">
-                    Only normalized usage, plan, and account status data are forwarded.
+                  <AlertTitle className="text-xs font-medium">
+                    Credentials never reach this UI
+                  </AlertTitle>
+                  <AlertDescription className="mt-0.5 text-[10px] text-(--ink-muted)">
+                    Only normalized usage, plan, and account status data are
+                    forwarded.
                   </AlertDescription>
                 </div>
               </Alert>
@@ -152,27 +198,46 @@ export function Settings({
       <div className="flex min-h-0 flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Application</span>
-            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">Settings</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+              Application
+            </span>
+            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">
+              Settings
+            </h1>
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <Badge variant="outline">Local</Badge>
-            <TilePager page={page} count={2} onChange={setPage} label="Settings screen" />
+            <TilePager
+              page={page}
+              count={2}
+              onChange={setPage}
+              label="Settings screen"
+            />
           </div>
         </div>
         {page === 0 ? (
-          <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
             <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Application</span>
-              <CardTitle className="text-lg font-semibold leading-7">Window behavior</CardTitle>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                Application
+              </span>
+              <CardTitle className="text-lg font-semibold leading-7">
+                Window behavior
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 p-0">
-              <div className="flex min-h-10 items-center justify-between gap-2 border-b border-[var(--line)] py-1.5">
+              <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                 <div>
                   <strong className="block text-[11px]">Keep on top</strong>
-                  <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">Keep the popover above other windows.</small>
+                  <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+                    Keep the popover above other windows.
+                  </small>
                 </div>
-                <Switch checked={topmost} onCheckedChange={onTopmost} aria-label="Keep on top" />
+                <Switch
+                  checked={topmost}
+                  onCheckedChange={onTopmost}
+                  aria-label="Keep on top"
+                />
               </div>
               <RefreshSettings
                 refreshIntervalSeconds={refreshIntervalSeconds}
@@ -182,8 +247,10 @@ export function Settings({
               />
               <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
                 <div>
-                  <strong className="block text-[11px]">Connection profile</strong>
-                  <small className="mt-0.5 block text-[10px] text-[var(--ink-muted)]">
+                  <strong className="block text-[11px]">
+                    Connection profile
+                  </strong>
+                  <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
                     Session cookies stay inside the WebView2 profile.
                   </small>
                 </div>
@@ -194,18 +261,25 @@ export function Settings({
             </CardContent>
           </Card>
         ) : (
-          <Card className="gap-3 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm">
+          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
             <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Privacy boundary</span>
-              <CardTitle className="text-lg font-semibold leading-7">Local session</CardTitle>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+                Privacy boundary
+              </span>
+              <CardTitle className="text-lg font-semibold leading-7">
+                Local session
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 p-0">
-              <Alert className="flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-[var(--accent)]">
+              <Alert className="flex w-full items-center gap-2 rounded-lg border border-(--line) bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-accent">
                 <Key className="shrink-0" />
                 <div>
-                  <AlertTitle className="text-xs font-medium">Credentials never reach this UI</AlertTitle>
-                  <AlertDescription className="mt-0.5 text-[10px] text-[var(--ink-muted)]">
-                    Only normalized usage, plan, and account status data are forwarded.
+                  <AlertTitle className="text-xs font-medium">
+                    Credentials never reach this UI
+                  </AlertTitle>
+                  <AlertDescription className="mt-0.5 text-[10px] text-(--ink-muted)">
+                    Only normalized usage, plan, and account status data are
+                    forwarded.
                   </AlertDescription>
                 </div>
               </Alert>

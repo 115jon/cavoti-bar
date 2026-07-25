@@ -1,9 +1,16 @@
 import type { UsageFilters, UsageUnit } from "../domain/snapshot";
 
 export const money = (value: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value);
-export const integer = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
-export const quantity = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  }).format(value);
+export const integer = (value: number) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+export const quantity = (value: number) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 export const tokens = (value: number) =>
   value >= 1e9
     ? `${(value / 1e9).toFixed(2).replace(/\.00$/, "")}B`
@@ -14,13 +21,29 @@ export const tokens = (value: number) =>
         : integer(value);
 export const date = (value: string | null) =>
   value
-    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value))
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(value))
     : "Not provided";
-export const usageAmount = (value: number, unit: UsageUnit) => (unit === "points" ? `${quantity(value)} pts` : money(value));
+export const usageAmount = (value: number, unit: UsageUnit) =>
+  unit === "points" ? `${quantity(value)} pts` : money(value);
 
-export type DateRangePreset = "today" | "yesterday" | "this-week" | "last-week" | "this-month" | "last-month" | "last-30-days";
+export type DateRangePreset =
+  | "today"
+  | "yesterday"
+  | "this-week"
+  | "last-week"
+  | "this-month"
+  | "last-month"
+  | "last-30-days";
 
-export const dateRangeOptions: Array<{ value: DateRangePreset; label: string }> = [
+export const dateRangeOptions: Array<{
+  value: DateRangePreset;
+  label: string;
+}> = [
   { value: "today", label: "Today" },
   { value: "yesterday", label: "Yesterday" },
   { value: "this-week", label: "This week" },
@@ -50,7 +73,10 @@ export function localDateInput(dateValue: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function dateRangeForPreset(preset: DateRangePreset, now = new Date()): Pick<UsageFilters, "startDate" | "endDate"> {
+export function dateRangeForPreset(
+  preset: DateRangePreset,
+  now = new Date(),
+): Pick<UsageFilters, "startDate" | "endDate"> {
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const start = new Date(end);
   const day = end.getDay();
@@ -95,6 +121,12 @@ export function defaultUsageFilterState(): UsageFilters {
   };
 }
 
-export function monitorVariant(status: string): "success" | "warning" | "outline" {
-  return status === "operational" ? "success" : status === "degraded" || status === "outage" ? "warning" : "outline";
+export function monitorVariant(
+  status: string,
+): "success" | "warning" | "outline" {
+  return status === "operational"
+    ? "success"
+    : status === "degraded" || status === "outage"
+      ? "warning"
+      : "outline";
 }

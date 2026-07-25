@@ -10,13 +10,25 @@ describe("parseHostMessage", () => {
         protocol: 1,
         complete: true,
         snapshot: liveSnapshot,
-        settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
+        settings: {
+          topmost: true,
+          maximized: true,
+          refreshIntervalSeconds: 60,
+          showFreshnessSeconds: false,
+          updateReady: true,
+        },
       }),
     ).toEqual({
       type: "snapshot",
       complete: true,
       snapshot: liveSnapshot,
-      settings: { topmost: true, maximized: true, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
+      settings: {
+        topmost: true,
+        maximized: true,
+        refreshIntervalSeconds: 60,
+        showFreshnessSeconds: false,
+        updateReady: true,
+      },
     });
   });
 
@@ -26,15 +38,35 @@ describe("parseHostMessage", () => {
     [0, "offline"],
     [500, "error"],
   ])("maps host result %s to %s", (status, state) => {
-    expect(parseHostMessage({ type: "bridge-state", protocol: 1, state, status, message: "safe message" })).toMatchObject({
+    expect(
+      parseHostMessage({
+        type: "bridge-state",
+        protocol: 1,
+        state,
+        status,
+        message: "safe message",
+      }),
+    ).toMatchObject({
       type: "bridge-state",
       state,
     });
   });
 
   it("rejects malformed or unsupported protocol messages", () => {
-    expect(parseHostMessage({ type: "snapshot", protocol: 2, snapshot: liveSnapshot })).toBeNull();
-    expect(parseHostMessage({ type: "snapshot", protocol: 1, snapshot: { account: { displayName: "unsafe" } } })).toBeNull();
+    expect(
+      parseHostMessage({
+        type: "snapshot",
+        protocol: 2,
+        snapshot: liveSnapshot,
+      }),
+    ).toBeNull();
+    expect(
+      parseHostMessage({
+        type: "snapshot",
+        protocol: 1,
+        snapshot: { account: { displayName: "unsafe" } },
+      }),
+    ).toBeNull();
     expect(parseHostMessage("not a message")).toBeNull();
   });
 });

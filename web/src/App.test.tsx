@@ -4,7 +4,11 @@ import { App } from "./App";
 import type { HostBridge } from "./bridge/host";
 import { liveSnapshot } from "./test/fixtures";
 
-function createBridge(): { bridge: HostBridge; sent: unknown[]; dispatch: (message: unknown) => void } {
+function createBridge(): {
+  bridge: HostBridge;
+  sent: unknown[];
+  dispatch: (message: unknown) => void;
+} {
   const listeners = new Set<(message: unknown) => void>();
   const sent: unknown[] = [];
   return {
@@ -30,7 +34,15 @@ describe("App", () => {
     render(<App bridge={bridge} />);
 
     expect(screen.getByText("Loading Cavoti snapshot")).toBeInTheDocument();
-    act(() => dispatch({ type: "bridge-state", protocol: 1, state: "auth-required", status: 401, message: "Live session required" }));
+    act(() =>
+      dispatch({
+        type: "bridge-state",
+        protocol: 1,
+        state: "auth-required",
+        status: 401,
+        message: "Live session required",
+      }),
+    );
 
     expect(screen.getByText("Live session required")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Connect Cavoti" }));
@@ -45,7 +57,12 @@ describe("App", () => {
         type: "snapshot",
         protocol: 1,
         snapshot: liveSnapshot,
-        settings: { topmost: true, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
+        settings: {
+          topmost: true,
+          maximized: false,
+          refreshIntervalSeconds: 60,
+          showFreshnessSeconds: false,
+        },
       }),
     );
 
@@ -57,7 +74,9 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Status" }));
     expect(screen.getByRole("heading", { name: "Status" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
-    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Settings" }),
+    ).toBeInTheDocument();
   });
 
   it("posts a native drag command from the titlebar background", () => {
@@ -77,7 +96,9 @@ describe("App", () => {
 
     expect(sent).toContainEqual({ action: "refresh" });
     expect(sent).toContainEqual({ action: "close" });
-    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Settings" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the update restart command only when the host reports an update", () => {
@@ -88,11 +109,19 @@ describe("App", () => {
         type: "snapshot",
         protocol: 1,
         snapshot: liveSnapshot,
-        settings: { topmost: false, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false, updateReady: true },
+        settings: {
+          topmost: false,
+          maximized: false,
+          refreshIntervalSeconds: 60,
+          showFreshnessSeconds: false,
+          updateReady: true,
+        },
       }),
     );
 
-    const restart = screen.getByRole("button", { name: "Update ready, restart now?" });
+    const restart = screen.getByRole("button", {
+      name: "Update ready, restart now?",
+    });
     expect(restart).toBeInTheDocument();
     fireEvent.click(restart);
     expect(sent).toContainEqual({ action: "restart" });
@@ -127,7 +156,13 @@ describe("App", () => {
     const { bridge, dispatch } = createBridge();
     render(<App bridge={bridge} />);
 
-    act(() => dispatch({ type: "snapshot", protocol: 1, snapshot: { ...liveSnapshot, capturedAt: new Date().toISOString() } }));
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        snapshot: { ...liveSnapshot, capturedAt: new Date().toISOString() },
+      }),
+    );
 
     expect(screen.getByText("Updated just now")).toBeInTheDocument();
   });

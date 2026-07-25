@@ -1,5 +1,9 @@
 import type { HostBridge } from "../bridge/host";
-import type { SnapshotEnvelope, Subscription, UsageWindow } from "../domain/snapshot";
+import type {
+  SnapshotEnvelope,
+  Subscription,
+  UsageWindow,
+} from "../domain/snapshot";
 import { liveSnapshot } from "../test/fixtures";
 
 const planNames = [
@@ -39,8 +43,16 @@ function mockPlan(name: string, index: number): Subscription {
     usage: {
       fiveHour: quota(limited ? limit : used, limit, resetAt),
       daily: quota(limited ? limit : used, limit, resetAt),
-      weekly: quota(Math.round(used * 2.8), limit * 5, new Date(Date.now() + 3 * 86400000).toISOString()),
-      monthly: quota(Math.round(used * 4.2), limit * 12, new Date(Date.now() + 15 * 86400000).toISOString()),
+      weekly: quota(
+        Math.round(used * 2.8),
+        limit * 5,
+        new Date(Date.now() + 3 * 86400000).toISOString(),
+      ),
+      monthly: quota(
+        Math.round(used * 4.2),
+        limit * 12,
+        new Date(Date.now() + 15 * 86400000).toISOString(),
+      ),
     },
   };
 }
@@ -61,11 +73,21 @@ export function createMockBridge(): HostBridge {
       protocol: 1,
       type: "snapshot",
       snapshot: mockSnapshot(),
-      settings: { topmost: false, maximized: false, refreshIntervalSeconds: 60, showFreshnessSeconds: false },
+      settings: {
+        topmost: false,
+        maximized: false,
+        refreshIntervalSeconds: 60,
+        showFreshnessSeconds: false,
+      },
     });
   return {
     post: (message) => {
-      if (message.action === "bootstrap" || message.action === "refresh" || message.action === "connect") window.setTimeout(emit, 120);
+      if (
+        message.action === "bootstrap" ||
+        message.action === "refresh" ||
+        message.action === "connect"
+      )
+        window.setTimeout(emit, 120);
     },
     subscribe: (next) => {
       listener = next;

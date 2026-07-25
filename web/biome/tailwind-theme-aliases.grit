@@ -1,0 +1,14 @@
+engine biome(1.0)
+language js(jsx)
+
+JsxAttribute(name=$name) as $attribute where {
+  $name <: or { `class`, `className` },
+  $attribute <: r"(.*)([a-z][a-z0-9-]*)-\(--(accent|ring)\)(.*)"($before, $utility, $token, $after),
+  register_diagnostic(
+    span=$attribute,
+    message="Use the Tailwind theme utility instead of a CSS-variable arbitrary value.",
+    severity="error",
+    fix_kind="safe"
+  ),
+  $attribute => `$before$utility-$token$after`
+}

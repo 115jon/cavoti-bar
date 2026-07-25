@@ -5,13 +5,27 @@ import { liveSnapshot } from "../test/fixtures";
 
 describe("Usage", () => {
   it("switches model metrics and activity tabs for rich usage data", () => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
-    Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1024,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 768,
+    });
     render(
       <Usage
         snapshot={{
           ...liveSnapshot,
-          models: [{ name: "gpt-5.6-luna", requests: 10, tokens: 100, actualCost: 0.2, standardCost: 0.3 }],
+          models: [
+            {
+              name: "gpt-5.6-luna",
+              requests: 10,
+              tokens: 100,
+              actualCost: 0.2,
+              standardCost: 0.3,
+            },
+          ],
           usageLogs: [
             {
               id: 1,

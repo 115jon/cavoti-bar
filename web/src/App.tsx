@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import { normalizeSnapshot, type SnapshotEnvelope, type UsageFilters as UsageFilterState } from "./domain/snapshot";
+import {
+  normalizeSnapshot,
+  type SnapshotEnvelope,
+  type UsageFilters as UsageFilterState,
+} from "./domain/snapshot";
 import type { AppProps, BridgeState, View } from "./app/types";
 import { parseHostMessage } from "./bridge/protocol";
 import { AppShell, views } from "./components/app/AppShell";
@@ -21,23 +25,37 @@ export function App({ bridge }: AppProps) {
   const [updateReady, setUpdateReady] = useState(false);
   const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(60);
   const [showFreshnessSeconds, setShowFreshnessSeconds] = useState(false);
-  const [freshnessCapturedAt, setFreshnessCapturedAt] = useState<string | null>(null);
+  const [freshnessCapturedAt, setFreshnessCapturedAt] = useState<string | null>(
+    null,
+  );
   const compact = useCompactTiles();
   const hasSnapshot = useRef(false);
   const connect = () => bridge.post({ action: "connect" });
-  const refresh = useCallback(() => bridge.post({ action: "refresh" }), [bridge]);
-  const openStatus = useCallback(() => bridge.post({ action: "open-status" }), [bridge]);
+  const refresh = useCallback(
+    () => bridge.post({ action: "refresh" }),
+    [bridge],
+  );
+  const openStatus = useCallback(
+    () => bridge.post({ action: "open-status" }),
+    [bridge],
+  );
   const setWindowTopmost = (enabled: boolean) => {
     setTopmost(enabled);
     bridge.post({ action: "setting", value: { name: "topmost", enabled } });
   };
   const setRefreshInterval = (seconds: number) => {
     setRefreshIntervalSeconds(seconds);
-    bridge.post({ action: "setting", value: { name: "refresh-interval", seconds } });
+    bridge.post({
+      action: "setting",
+      value: { name: "refresh-interval", seconds },
+    });
   };
   const setFreshnessSeconds = (enabled: boolean) => {
     setShowFreshnessSeconds(enabled);
-    bridge.post({ action: "setting", value: { name: "freshness-seconds", enabled } });
+    bridge.post({
+      action: "setting",
+      value: { name: "freshness-seconds", enabled },
+    });
   };
 
   useEffect(() => {
@@ -49,7 +67,8 @@ export function App({ bridge }: AppProps) {
         if (next) {
           hasSnapshot.current = true;
           setSnapshot(next);
-          if (message.complete !== false) setFreshnessCapturedAt(next.capturedAt);
+          if (message.complete !== false)
+            setFreshnessCapturedAt(next.capturedAt);
           setState("live");
           if (message.settings) {
             setTopmost(message.settings.topmost);
@@ -65,12 +84,21 @@ export function App({ bridge }: AppProps) {
         setUpdateReady(message.settings.updateReady ?? false);
         setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds);
         setShowFreshnessSeconds(message.settings.showFreshnessSeconds);
-      } else if (message.state !== "loading" || !hasSnapshot.current) setState(message.state);
+      } else if (message.state !== "loading" || !hasSnapshot.current)
+        setState(message.state);
     });
     bridge.post({ action: "bootstrap" });
     const usageRefresh = (event: Event) => {
-      const detail = (event as CustomEvent<UsageFilterState | { filters: UsageFilterState; usagePage?: number; errorPage?: number }>)
-        .detail;
+      const detail = (
+        event as CustomEvent<
+          | UsageFilterState
+          | {
+              filters: UsageFilterState;
+              usagePage?: number;
+              errorPage?: number;
+            }
+        >
+      ).detail;
       const value = "filters" in detail ? detail : { filters: detail };
       bridge.post({ action: "refresh", value });
     };
@@ -93,7 +121,8 @@ export function App({ bridge }: AppProps) {
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)
+        return;
       if (event.key.toLowerCase() === "r") {
         event.preventDefault();
         refresh();
@@ -109,10 +138,19 @@ export function App({ bridge }: AppProps) {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [bridge, refresh]);
 
-  const title = useMemo(() => (view === "about" ? "About" : (views.find((item) => item.id === view)?.label ?? "Overview")), [view]);
-  const displayedSnapshot = snapshot ? { ...snapshot, capturedAt: freshnessCapturedAt } : snapshot;
+  const title = useMemo(
+    () =>
+      view === "about"
+        ? "About"
+        : (views.find((item) => item.id === view)?.label ?? "Overview"),
+    [view],
+  );
+  const displayedSnapshot = snapshot
+    ? { ...snapshot, capturedAt: freshnessCapturedAt }
+    : snapshot;
   const beginDrag = (event: MouseEvent<HTMLElement>) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button"))
+      return;
     bridge.post({ action: "drag" });
   };
 
@@ -160,7 +198,11 @@ export function App({ bridge }: AppProps) {
       ) : view === "plans" ? (
         <Plans snapshot={displayedSnapshot} onConnect={connect} />
       ) : view === "status" ? (
-        <Status snapshot={displayedSnapshot} state={state} onConnect={connect} />
+        <Status
+          snapshot={displayedSnapshot}
+          state={state}
+          onConnect={connect}
+        />
       ) : view === "about" ? (
         <About />
       ) : (

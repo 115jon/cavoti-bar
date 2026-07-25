@@ -16,7 +16,12 @@ export type HostMessage =
       settings?: HostSettings;
     }
   | { type: "settings"; settings: HostSettings }
-  | { type: "bridge-state"; state: "auth-required" | "offline" | "error" | "loading"; status: number; message: string };
+  | {
+      type: "bridge-state";
+      state: "auth-required" | "offline" | "error" | "loading";
+      status: number;
+      message: string;
+    };
 type BridgeState = "auth-required" | "offline" | "error" | "loading";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -24,8 +29,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseHostMessage(value: unknown): HostMessage | null {
-  if (!isRecord(value) || value.protocol !== 1 || typeof value.type !== "string") return null;
-  if (value.type === "snapshot" && isRecord(value.snapshot) && value.snapshot.version === 1) {
+  if (
+    !isRecord(value) ||
+    value.protocol !== 1 ||
+    typeof value.type !== "string"
+  )
+    return null;
+  if (
+    value.type === "snapshot" &&
+    isRecord(value.snapshot) &&
+    value.snapshot.version === 1
+  ) {
     const settings =
       isRecord(value.settings) &&
       typeof value.settings.topmost === "boolean" &&
@@ -37,7 +51,9 @@ export function parseHostMessage(value: unknown): HostMessage | null {
             maximized: value.settings.maximized,
             refreshIntervalSeconds: value.settings.refreshIntervalSeconds,
             showFreshnessSeconds: value.settings.showFreshnessSeconds,
-            ...(typeof value.settings.updateReady === "boolean" ? { updateReady: value.settings.updateReady } : {}),
+            ...(typeof value.settings.updateReady === "boolean"
+              ? { updateReady: value.settings.updateReady }
+              : {}),
           }
         : undefined;
     return {
@@ -62,15 +78,25 @@ export function parseHostMessage(value: unknown): HostMessage | null {
         maximized: value.settings.maximized,
         refreshIntervalSeconds: value.settings.refreshIntervalSeconds,
         showFreshnessSeconds: value.settings.showFreshnessSeconds,
-        ...(typeof value.settings.updateReady === "boolean" ? { updateReady: value.settings.updateReady } : {}),
+        ...(typeof value.settings.updateReady === "boolean"
+          ? { updateReady: value.settings.updateReady }
+          : {}),
       },
     };
-  if (value.type === "bridge-state" && ["auth-required", "offline", "error", "loading"].includes(String(value.state))) {
+  if (
+    value.type === "bridge-state" &&
+    ["auth-required", "offline", "error", "loading"].includes(
+      String(value.state),
+    )
+  ) {
     return {
       type: "bridge-state",
       state: value.state as BridgeState,
       status: typeof value.status === "number" ? value.status : 0,
-      message: typeof value.message === "string" ? value.message : "Cavoti connection unavailable",
+      message:
+        typeof value.message === "string"
+          ? value.message
+          : "Cavoti connection unavailable",
     };
   }
   return null;

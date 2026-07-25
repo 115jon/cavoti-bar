@@ -1,5 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
+  "plugins": ["./biome/tailwind-theme-aliases.grit"],
   "files": {
     "includes": ["src/**/*.ts", "src/**/*.tsx"]
   },
@@ -9,7 +10,7 @@
     "indentStyle": "space",
     "indentWidth": 2,
     "lineEnding": "lf",
-    "lineWidth": 140,
+    "lineWidth": 80,
     "attributePosition": "auto"
   },
   "linter": {
@@ -18,7 +19,7 @@
       "preset": "recommended",
       "a11y": {
         "useKeyWithClickEvents": "off",
-        "noStaticElementInteractions": "off"
+        "noStaticElementInteractions": "error"
       },
       "complexity": {
         "noForEach": "off"

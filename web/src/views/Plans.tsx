@@ -1,23 +1,52 @@
 import { useState } from "react";
-import { ArrowSquareOutIcon as ArrowSquareOut, TimerIcon as Timer } from "@phosphor-icons/react";
+import {
+  ArrowSquareOutIcon as ArrowSquareOut,
+  TimerIcon as Timer,
+} from "@phosphor-icons/react";
 import type { SnapshotEnvelope } from "../domain/snapshot";
 import { date, resetLabel } from "../app/formatters";
-import { Badge, Empty, SignalNote, TilePager, UsageMeter, useCompactTiles } from "../components/app/shared";
+import {
+  Badge,
+  Empty,
+  SignalNote,
+  TilePager,
+  UsageMeter,
+  useCompactTiles,
+} from "../components/app/shared";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 
-export function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onConnect: () => void }) {
+export function Plans({
+  snapshot,
+  onConnect,
+}: {
+  snapshot: SnapshotEnvelope;
+  onConnect: () => void;
+}) {
   const [page, setPage] = useState(0);
   const compact = useCompactTiles();
-  const safePage = Math.min(page, Math.max(snapshot.subscriptions.length - 1, 0));
+  const safePage = Math.min(
+    page,
+    Math.max(snapshot.subscriptions.length - 1, 0),
+  );
   const plan = snapshot.subscriptions[safePage];
   if (!compact)
     return (
-      <div className="flex w-full max-w-[1480px] flex-col gap-6">
+      <div className="flex w-full max-w-370 flex-col gap-6">
         <div className="flex items-end justify-between gap-6">
           <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Entitlements</span>
-            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">Plans</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+              Entitlements
+            </span>
+            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
+              Plans
+            </h1>
           </div>
           <Button variant="outline" size="sm" onClick={onConnect}>
             Manage on Cavoti <ArrowSquareOut data-icon="inline-end" />
@@ -25,31 +54,42 @@ export function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onC
         </div>
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {snapshot.subscriptions.map((item) => (
-            <Card className="min-w-0 gap-0 rounded-xl border border-[var(--line)] bg-white/75 p-3 shadow-sm" key={item.name}>
+            <Card
+              className="min-w-0 gap-0 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm"
+              key={item.name}
+            >
               <CardHeader className="flex items-start justify-between gap-3 p-0">
                 <div>
-                  <Badge variant={item.status === "active" ? "success" : "outline"}>{item.status}</Badge>
-                  <CardTitle className="m-0 text-lg font-semibold leading-7">{item.name}</CardTitle>
-                  <span className="mt-0.5 block text-[11px] leading-4 text-[var(--ink-muted)]">{item.billingKind}</span>
+                  <Badge
+                    variant={item.status === "active" ? "success" : "outline"}
+                  >
+                    {item.status}
+                  </Badge>
+                  <CardTitle className="m-0 text-lg font-semibold leading-7">
+                    {item.name}
+                  </CardTitle>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-(--ink-muted)">
+                    {item.billingKind}
+                  </span>
                 </div>
               </CardHeader>
               <CardContent className="mt-3 grid grid-cols-3 gap-2 p-0">
                 <UsageMeter
                   label="5 hour"
                   window={item.usage.fiveHour}
-                  className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+                  className="rounded-lg border border-(--line) bg-(--canvas) p-4"
                 />
                 <UsageMeter
                   label="Weekly"
                   window={item.usage.weekly}
                   tone="good"
-                  className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+                  className="rounded-lg border border-(--line) bg-(--canvas) p-4"
                 />
                 <UsageMeter
                   label="Monthly"
                   window={item.usage.monthly}
                   tone="good"
-                  className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-4"
+                  className="rounded-lg border border-(--line) bg-(--canvas) p-4"
                 />
               </CardContent>
             </Card>
@@ -62,45 +102,81 @@ export function Plans({ snapshot, onConnect }: { snapshot: SnapshotEnvelope; onC
       <div className="flex min-h-0 flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ink-faint)]">Entitlements</span>
-            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">Plans</h1>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+              Entitlements
+            </span>
+            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">
+              Plans
+            </h1>
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={onConnect}>
               Manage on Cavoti <ArrowSquareOut data-icon="inline-end" />
             </Button>
-            <TilePager page={safePage} count={snapshot.subscriptions.length} onChange={setPage} label="Plan screen" />
+            <TilePager
+              page={safePage}
+              count={snapshot.subscriptions.length}
+              onChange={setPage}
+              label="Plan screen"
+            />
           </div>
         </div>
         {plan ? (
-          <Card className="min-w-0 gap-0 rounded-xl border border-[var(--line)] bg-[var(--accent-soft)] p-3 shadow-sm">
+          <Card className="min-w-0 gap-0 rounded-xl border border-(--line) bg-(--accent-soft) p-3 shadow-sm">
             <CardHeader className="flex items-start justify-between gap-3 p-0">
               <div>
-                <Badge variant={plan.status === "active" ? "success" : "outline"}>{plan.status}</Badge>
-                <CardTitle className="m-0 text-lg font-semibold leading-7">{plan.name}</CardTitle>
-                <span className="mt-0.5 block text-[11px] leading-4 text-[var(--ink-muted)]">{plan.billingKind}</span>
+                <Badge
+                  variant={plan.status === "active" ? "success" : "outline"}
+                >
+                  {plan.status}
+                </Badge>
+                <CardTitle className="m-0 text-lg font-semibold leading-7">
+                  {plan.name}
+                </CardTitle>
+                <span className="mt-0.5 block text-[11px] leading-4 text-(--ink-muted)">
+                  {plan.billingKind}
+                </span>
               </div>
-              <span className="text-lg tabular-nums text-[var(--ink-faint)]">{String(safePage + 1).padStart(2, "0")}</span>
+              <span className="text-lg tabular-nums text-(--ink-faint)">
+                {String(safePage + 1).padStart(2, "0")}
+              </span>
             </CardHeader>
             <CardContent className="mt-3 grid grid-cols-1 gap-3 p-0">
               <UsageMeter label="Daily" window={plan.usage.daily} />
-              <UsageMeter label="Weekly" window={plan.usage.weekly} tone="good" />
-              <UsageMeter label="Monthly" window={plan.usage.monthly} tone="good" />
+              <UsageMeter
+                label="Weekly"
+                window={plan.usage.weekly}
+                tone="good"
+              />
+              <UsageMeter
+                label="Monthly"
+                window={plan.usage.monthly}
+                tone="good"
+              />
             </CardContent>
-            <CardFooter className="mt-3 flex items-center justify-between border-t bg-transparent p-0 pt-3 text-xs text-[var(--ink-muted)]">
+            <CardFooter className="mt-3 flex items-center justify-between border-t bg-transparent p-0 pt-3 text-xs text-(--ink-muted)">
               <span>Renews {date(plan.expiresAt)}</span>
-              <span>{plan.usage.daily.unit === "points" ? "Points" : "USD"}</span>
+              <span>
+                {plan.usage.daily.unit === "points" ? "Points" : "USD"}
+              </span>
             </CardFooter>
           </Card>
         ) : (
-          <Empty title="No plan records" message="Connect Cavoti to read your current entitlements." onAction={onConnect} />
+          <Empty
+            title="No plan records"
+            message="Connect Cavoti to read your current entitlements."
+            onAction={onConnect}
+          />
         )}
         {snapshot.quotaResetCards.length ? (
           <SignalNote
             icon={<Timer />}
             title="Quota resets"
             message={snapshot.quotaResetCards
-              .map((card) => `${card.label}${card.resetAt ? ` | ${resetLabel(card.resetAt)}` : ""}`)
+              .map(
+                (card) =>
+                  `${card.label}${card.resetAt ? ` | ${resetLabel(card.resetAt)}` : ""}`,
+              )
               .join(" | ")}
           />
         ) : null}

@@ -13,9 +13,18 @@ import {
 import type { BridgeState, View } from "../../app/types";
 import { Button } from "../ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 
-export const views: Array<{ id: Exclude<View, "about">; label: string; icon: typeof House }> = [
+export const views: Array<{
+  id: Exclude<View, "about">;
+  label: string;
+  icon: typeof House;
+}> = [
   { id: "overview", label: "Overview", icon: House },
   { id: "usage", label: "Usage", icon: ChartBar },
   { id: "plans", label: "Plans", icon: Stack },
@@ -50,18 +59,26 @@ export function AppShell({
 }) {
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="group/app h-screen overflow-hidden bg-[var(--canvas)]" data-layout={compact ? "compact" : "wide"}>
+      <div
+        className="group/app h-screen overflow-hidden bg-(--canvas)"
+        data-layout={compact ? "compact" : "wide"}
+      >
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: The title bar drag surface is native window chrome, not an app interaction. */}
         <header
-          className="flex h-12 items-center border-b border-[var(--line)] bg-[var(--chrome)] px-3 backdrop-blur-xl group-data-[layout=wide]/app:h-14 group-data-[layout=wide]/app:px-6"
+          className="flex h-12 items-center border-b border-(--line) bg-(--chrome) px-3 backdrop-blur-xl group-data-[layout=wide]/app:h-14 group-data-[layout=wide]/app:px-6"
           data-drag-region
           onMouseDown={onBeginDrag}
         >
           <button
             type="button"
-            className="flex items-center gap-2 text-left text-[var(--ink)] group-data-[layout=wide]/app:gap-3"
+            className="flex items-center gap-2 text-left text-(--ink) group-data-[layout=wide]/app:gap-3"
             onClick={() => onViewChange("overview")}
           >
-            <img className="size-7 object-contain group-data-[layout=wide]/app:size-9" src="./favicon.png" alt="Cavoti" />
+            <img
+              className="size-7 object-contain group-data-[layout=wide]/app:size-9"
+              src="./favicon.png"
+              alt="Cavoti"
+            />
             <span>
               <strong className="block text-sm font-bold leading-4 group-data-[layout=wide]/app:text-base group-data-[layout=wide]/app:font-semibold group-data-[layout=wide]/app:leading-5">
                 Cavoti
@@ -70,7 +87,7 @@ export function AppShell({
           </button>
           <div className="ml-auto flex gap-px group-data-[layout=wide]/app:gap-1">
             <Button
-              className="text-[var(--ink-muted)] group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
+              className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
               variant="ghost"
               size="icon"
               aria-label={maximized ? "Restore window" : "Maximize window"}
@@ -79,7 +96,7 @@ export function AppShell({
               {maximized ? <CornersIn /> : <CornersOut />}
             </Button>
             <Button
-              className="text-[var(--ink-muted)] group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
+              className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
               variant="ghost"
               size="icon"
               aria-label="Minimize window"
@@ -88,7 +105,7 @@ export function AppShell({
               <Minus />
             </Button>
             <Button
-              className="text-[var(--ink-muted)] group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
+              className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
               variant="ghost"
               size="icon"
               aria-label="Close window"
@@ -100,22 +117,29 @@ export function AppShell({
         </header>
         <div className="flex h-[calc(100vh-3rem)] min-h-0 group-data-[layout=wide]/app:h-[calc(100vh-3.5rem)] group-data-[layout=compact]/app:flex-col">
           <nav
-            className="flex w-12 basis-12 flex-col items-center gap-1 border-r border-[var(--line)] bg-white/40 px-1.5 py-3 group-data-[layout=wide]/app:w-20 group-data-[layout=wide]/app:basis-20 group-data-[layout=wide]/app:gap-3 group-data-[layout=wide]/app:px-3 group-data-[layout=wide]/app:py-5 group-data-[layout=compact]/app:hidden"
+            className="flex w-12 basis-12 flex-col items-center gap-1 border-r border-(--line) bg-white/40 px-1.5 py-3 group-data-[layout=wide]/app:w-20 group-data-[layout=wide]/app:basis-20 group-data-[layout=wide]/app:gap-3 group-data-[layout=wide]/app:px-3 group-data-[layout=wide]/app:py-5 group-data-[layout=compact]/app:hidden"
             aria-label="Primary navigation"
           >
-            <Tabs value={view} onValueChange={(value) => onViewChange(value as View)} orientation="vertical" className="w-full flex-1">
+            <Tabs
+              value={view}
+              onValueChange={(value) => onViewChange(value as View)}
+              orientation="vertical"
+              className="w-full flex-1"
+            >
               <TabsList className="flex w-full flex-col items-center gap-1 bg-transparent p-0">
                 {views.map(({ id, label, icon: Icon }) => (
                   <Tooltip key={id}>
                     <TooltipTrigger asChild>
                       <TabsTrigger
                         value={id}
-                        className="relative flex h-9 w-9 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent text-[var(--ink-faint)] transition-all duration-150 hover:bg-white/70 hover:text-[var(--accent)] data-[state=active]:bg-white/75 data-[state=active]:text-[var(--accent)] data-[state=active]:shadow-sm before:absolute before:left-[-6px] before:h-4 before:w-0 before:rounded-r before:bg-transparent before:content-[''] data-[state=active]:before:w-0.5 group-data-[layout=wide]/app:h-14 group-data-[layout=wide]/app:w-14 group-data-[layout=wide]/app:gap-1 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:[&_svg]:size-6"
+                        className="relative flex h-9 w-9 flex-col items-center justify-center gap-0.5 rounded-lg border-0 bg-transparent text-(--ink-faint) transition-all duration-150 hover:bg-white/70 hover:text-accent data-[state=active]:bg-white/75 data-[state=active]:text-accent data-[state=active]:shadow-sm before:absolute before:-left-1.5 before:h-4 before:w-0 before:rounded-r before:bg-transparent before:content-[''] data-[state=active]:before:w-0.5 group-data-[layout=wide]/app:h-14 group-data-[layout=wide]/app:w-14 group-data-[layout=wide]/app:gap-1 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:[&_svg]:size-6"
                         aria-label={label}
                         onClick={() => onViewChange(id)}
                       >
                         <Icon weight={view === id ? "fill" : "regular"} />
-                        <span className="hidden text-xs font-medium leading-3 group-data-[layout=wide]/app:block">{label}</span>
+                        <span className="hidden text-xs font-medium leading-3 group-data-[layout=wide]/app:block">
+                          {label}
+                        </span>
                       </TabsTrigger>
                     </TooltipTrigger>
                     <TooltipContent>{label}</TooltipContent>

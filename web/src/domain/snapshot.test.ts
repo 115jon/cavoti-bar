@@ -14,7 +14,11 @@ describe("normalizeSnapshot", () => {
           status: "active",
           billingKind: "point_pack",
           expiresAt: "2026-08-19T15:47:58Z",
-          usage: { fiveHour: { used: 441.5, limit: 650 }, weekly: { used: 473.5, limit: 4000 }, monthly: { used: 473.5, limit: 9000 } },
+          usage: {
+            fiveHour: { used: 441.5, limit: 650 },
+            weekly: { used: 473.5, limit: 4000 },
+            monthly: { used: 473.5, limit: 9000 },
+          },
         },
       ],
       stats: {
@@ -67,7 +71,13 @@ describe("normalizeSnapshot", () => {
       capturedAt: "invalid",
       source: "live-webview2",
       account: { displayName: 4, status: "active", email: "never surface" },
-      subscriptions: [{ name: "Lite", usage: { daily: { used: -2, limit: 0 } }, rawKey: "never surface" }],
+      subscriptions: [
+        {
+          name: "Lite",
+          usage: { daily: { used: -2, limit: 0 } },
+          rawKey: "never surface",
+        },
+      ],
       stats: { requests: -1, endpoints: [{ name: 2, requests: -3 }] },
       models: [{ name: "gpt", requests: -3, rawIp: "never surface" }],
       dailyTrend: [],
@@ -75,13 +85,20 @@ describe("normalizeSnapshot", () => {
       keys: { total: 1, active: 3, raw: "never surface" },
       quotaResetCards: [],
       banner: { title: "<script>", message: 2 },
-      announcements: [{ title: "Update", message: "Safe", requestId: "never surface" }],
+      announcements: [
+        { title: "Update", message: "Safe", requestId: "never surface" },
+      ],
     });
 
     expect(snapshot?.capturedAt).toBeNull();
     expect(snapshot?.account.displayName).toBe("Connected account");
     expect(snapshot?.stats.requests).toBe(0);
-    expect(snapshot?.models[0]).toEqual({ name: "gpt", requests: 0, tokens: 0, actualCost: 0 });
+    expect(snapshot?.models[0]).toEqual({
+      name: "gpt",
+      requests: 0,
+      tokens: 0,
+      actualCost: 0,
+    });
     expect(snapshot?.keys).toEqual({ total: 1, active: 1, expiringSoon: 0 });
   });
 
@@ -111,7 +128,11 @@ describe("normalizeSnapshot", () => {
           first_token_ms: 90,
           duration_ms: 640,
           ip_address: "192.0.2.10",
-          location: { city: "Example City", country: "Exampleland", country_code: "EX" },
+          location: {
+            city: "Example City",
+            country: "Exampleland",
+            country_code: "EX",
+          },
           user_agent: "Cavoti test",
           created_at: "2026-07-24T10:00:00Z",
           api_key: { secret: "must not surface" },
@@ -148,7 +169,14 @@ describe("normalizeSnapshot", () => {
       timeToFirstTokenMs: 90,
       durationMs: 640,
       ipAddress: "192.0.2.10",
-      location: { city: "Example City", region: "", country: "Exampleland", countryCode: "EX", organization: "", timezone: "" },
+      location: {
+        city: "Example City",
+        region: "",
+        country: "Exampleland",
+        countryCode: "EX",
+        organization: "",
+        timezone: "",
+      },
       userAgent: "Cavoti test",
       createdAt: "2026-07-24T10:00:00Z",
     });
