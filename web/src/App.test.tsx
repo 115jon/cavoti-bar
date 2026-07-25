@@ -95,7 +95,7 @@ describe("App", () => {
     fireEvent.keyDown(window, { key: "q", ctrlKey: true });
 
     expect(sent).toContainEqual({ action: "refresh" });
-    expect(sent).toContainEqual({ action: "close" });
+    expect(sent).toContainEqual({ action: "exit" });
     expect(
       screen.getByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
@@ -136,7 +136,10 @@ describe("App", () => {
         type: "snapshot",
         protocol: 1,
         complete: false,
-        snapshot: { ...liveSnapshot, capturedAt: "2026-07-25T12:00:00.000Z" },
+        snapshot: {
+          ...liveSnapshot,
+          capturedAt: new Date(Date.now() - 4000).toISOString(),
+        },
       }),
     );
     expect(screen.getByText("Waiting for first sync")).toBeInTheDocument();
@@ -146,10 +149,51 @@ describe("App", () => {
         type: "snapshot",
         protocol: 1,
         complete: true,
-        snapshot: { ...liveSnapshot, capturedAt: "2026-07-25T12:00:04.000Z" },
+        snapshot: {
+          ...liveSnapshot,
+          capturedAt: new Date(Date.now() - 4000).toISOString(),
+        },
       }),
     );
     expect(screen.getByText("Updated just now")).toBeInTheDocument();
+  });
+
+  it("renders tray and startup controls from host settings", () => {
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        snapshot: liveSnapshot,
+        settings: {
+          topmost: false,
+          maximized: false,
+          refreshIntervalSeconds: 60,
+          showFreshnessSeconds: false,
+          closeToTray: true,
+          launchAtStartup: false,
+          startupError: null,
+          quotaThresholds: [],
+        },
+      }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(screen.getByText("Close to tray")).toBeInTheDocument();
+    expect(screen.getByText("Run at startup")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Close to tray" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Run at startup" }));
+
+    expect(sent).toContainEqual({
+      action: "setting",
+      value: { name: "close-to-tray", enabled: false },
+    });
+    expect(sent).toContainEqual({
+      action: "setting",
+      value: { name: "launch-at-startup", enabled: true },
+    });
   });
 
   it("treats snapshots without a completion flag as terminal", () => {

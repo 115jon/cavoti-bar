@@ -25,6 +25,10 @@ export function App({ bridge }: AppProps) {
   const [updateReady, setUpdateReady] = useState(false);
   const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(60);
   const [showFreshnessSeconds, setShowFreshnessSeconds] = useState(false);
+  const [closeToTray, setCloseToTray] = useState(true);
+  const [launchAtStartup, setLaunchAtStartup] = useState(false);
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [quotaThresholds, setQuotaThresholds] = useState<number[]>([]);
   const [freshnessCapturedAt, setFreshnessCapturedAt] = useState<string | null>(
     null,
   );
@@ -57,6 +61,37 @@ export function App({ bridge }: AppProps) {
       value: { name: "freshness-seconds", enabled },
     });
   };
+  const setCloseBehavior = (enabled: boolean) => {
+    setCloseToTray(enabled);
+    bridge.post({
+      action: "setting",
+      value: { name: "close-to-tray", enabled },
+    });
+  };
+  const setStartup = (enabled: boolean) => {
+    setLaunchAtStartup(enabled);
+    bridge.post({
+      action: "setting",
+      value: { name: "launch-at-startup", enabled },
+    });
+  };
+  const setQuotaAlerts = (thresholds: number[]) => {
+    setQuotaThresholds(thresholds);
+    bridge.post({
+      action: "setting",
+      value: { name: "quota-thresholds", thresholds },
+    });
+  };
+  const settingsProps = {
+    closeToTray,
+    onCloseToTray: setCloseBehavior,
+    launchAtStartup,
+    onLaunchAtStartup: setStartup,
+    startupError,
+    onRetryStartup: () => setStartup(true),
+    quotaThresholds,
+    onQuotaThresholds: setQuotaAlerts,
+  };
 
   useEffect(() => {
     const unsubscribe = bridge.subscribe((raw) => {
@@ -76,6 +111,10 @@ export function App({ bridge }: AppProps) {
             setUpdateReady(message.settings.updateReady ?? false);
             setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds);
             setShowFreshnessSeconds(message.settings.showFreshnessSeconds);
+            setCloseToTray(message.settings.closeToTray);
+            setLaunchAtStartup(message.settings.launchAtStartup);
+            setStartupError(message.settings.startupError);
+            setQuotaThresholds(message.settings.quotaThresholds);
           }
         }
       } else if (message.type === "settings") {
@@ -84,6 +123,12 @@ export function App({ bridge }: AppProps) {
         setUpdateReady(message.settings.updateReady ?? false);
         setRefreshIntervalSeconds(message.settings.refreshIntervalSeconds);
         setShowFreshnessSeconds(message.settings.showFreshnessSeconds);
+        setCloseToTray(message.settings.closeToTray);
+        setLaunchAtStartup(message.settings.launchAtStartup);
+        setStartupError(message.settings.startupError);
+        setQuotaThresholds(message.settings.quotaThresholds);
+      } else if (message.type === "host-navigation") {
+        setView(message.target);
       } else if (message.state !== "loading" || !hasSnapshot.current)
         setState(message.state);
     });
@@ -131,7 +176,7 @@ export function App({ bridge }: AppProps) {
         setView("settings");
       } else if (event.key.toLowerCase() === "q") {
         event.preventDefault();
-        bridge.post({ action: "close" });
+        bridge.post({ action: "exit" });
       }
     };
     window.addEventListener("keydown", handleShortcut);
@@ -173,6 +218,7 @@ export function App({ bridge }: AppProps) {
           onTopmost={setWindowTopmost}
           onClear={() => bridge.post({ action: "clear" })}
           onConnect={connect}
+          {...settingsProps}
           refreshIntervalSeconds={refreshIntervalSeconds}
           onRefreshInterval={setRefreshInterval}
           showFreshnessSeconds={showFreshnessSeconds}
@@ -188,7 +234,7 @@ export function App({ bridge }: AppProps) {
           onNavigate={setView}
           onConnect={connect}
           onOpenStatus={openStatus}
-          onQuit={() => bridge.post({ action: "close" })}
+          onQuit={() => bridge.post({ action: "exit" })}
           onRestart={() => bridge.post({ action: "restart" })}
           updateReady={updateReady}
           showSeconds={showFreshnessSeconds}
@@ -211,6 +257,7 @@ export function App({ bridge }: AppProps) {
           onTopmost={setWindowTopmost}
           onClear={() => bridge.post({ action: "clear" })}
           onConnect={connect}
+          {...settingsProps}
           refreshIntervalSeconds={refreshIntervalSeconds}
           onRefreshInterval={setRefreshInterval}
           showFreshnessSeconds={showFreshnessSeconds}

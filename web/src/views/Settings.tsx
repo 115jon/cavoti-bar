@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyIcon as Key } from "@phosphor-icons/react";
 import { Badge, TilePager, useCompactTiles } from "../components/app/shared";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
+import { Input } from "../components/ui/input";
 
 const refreshOptions = [
   { value: 0, label: "Manual only" },
@@ -83,6 +84,107 @@ function RefreshSettings({
   );
 }
 
+function parseThresholds(value: string): number[] {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isInteger(item) && item >= 1 && item <= 100),
+    ),
+  ].sort((a, b) => a - b);
+}
+
+function WindowBehaviorSettings({
+  closeToTray,
+  onCloseToTray,
+  launchAtStartup,
+  onLaunchAtStartup,
+  startupError,
+  onRetryStartup,
+  quotaThresholds,
+  onQuotaThresholds,
+}: {
+  closeToTray: boolean;
+  onCloseToTray: (value: boolean) => void;
+  launchAtStartup: boolean;
+  onLaunchAtStartup: (value: boolean) => void;
+  startupError: string | null;
+  onRetryStartup: () => void;
+  quotaThresholds: number[];
+  onQuotaThresholds: (value: number[]) => void;
+}) {
+  const [thresholdText, setThresholdText] = useState(
+    quotaThresholds.join(", "),
+  );
+  useEffect(
+    () => setThresholdText(quotaThresholds.join(", ")),
+    [quotaThresholds],
+  );
+  return (
+    <>
+      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
+        <div>
+          <strong className="block text-[11px]">Close to tray</strong>
+          <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+            Keep Cavoti Bar running when the titlebar close is used.
+          </small>
+        </div>
+        <Switch
+          checked={closeToTray}
+          onCheckedChange={onCloseToTray}
+          aria-label="Close to tray"
+        />
+      </div>
+      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
+        <div>
+          <strong className="block text-[11px]">Run at startup</strong>
+          <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+            Start Cavoti Bar for this Windows user.
+          </small>
+        </div>
+        <Switch
+          checked={launchAtStartup}
+          onCheckedChange={onLaunchAtStartup}
+          aria-label="Run at startup"
+        />
+      </div>
+      {startupError ? (
+        <Alert className="flex items-center justify-between gap-2 rounded-lg border border-(--bad) bg-(--bad-soft) p-2.5">
+          <div>
+            <AlertTitle className="text-xs font-medium">
+              Startup registration failed
+            </AlertTitle>
+            <AlertDescription className="mt-0.5 text-[10px] text-(--ink-muted)">
+              {startupError}
+            </AlertDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={onRetryStartup}>
+            Retry
+          </Button>
+        </Alert>
+      ) : null}
+      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
+        <div>
+          <strong className="block text-[11px]">Quota alerts</strong>
+          <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+            Notify at these usage percentages. Leave empty to disable.
+          </small>
+        </div>
+        <Input
+          className="max-w-28 text-right text-[11px]"
+          aria-label="Quota thresholds"
+          value={thresholdText}
+          placeholder="80, 95"
+          inputMode="numeric"
+          onChange={(event) => setThresholdText(event.target.value)}
+          onBlur={() => onQuotaThresholds(parseThresholds(thresholdText))}
+        />
+      </div>
+    </>
+  );
+}
+
 export function Settings({
   topmost,
   onTopmost,
@@ -92,6 +194,14 @@ export function Settings({
   onRefreshInterval,
   showFreshnessSeconds,
   onShowFreshnessSeconds,
+  closeToTray,
+  onCloseToTray,
+  launchAtStartup,
+  onLaunchAtStartup,
+  startupError,
+  onRetryStartup,
+  quotaThresholds,
+  onQuotaThresholds,
 }: {
   topmost: boolean;
   onTopmost: (value: boolean) => void;
@@ -101,6 +211,14 @@ export function Settings({
   onRefreshInterval: (seconds: number) => void;
   showFreshnessSeconds: boolean;
   onShowFreshnessSeconds: (value: boolean) => void;
+  closeToTray: boolean;
+  onCloseToTray: (value: boolean) => void;
+  launchAtStartup: boolean;
+  onLaunchAtStartup: (value: boolean) => void;
+  startupError: string | null;
+  onRetryStartup: () => void;
+  quotaThresholds: number[];
+  onQuotaThresholds: (value: number[]) => void;
 }) {
   const [page, setPage] = useState(0);
   const compact = useCompactTiles();
@@ -129,6 +247,16 @@ export function Settings({
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 p-0">
+              <WindowBehaviorSettings
+                closeToTray={closeToTray}
+                onCloseToTray={onCloseToTray}
+                launchAtStartup={launchAtStartup}
+                onLaunchAtStartup={onLaunchAtStartup}
+                startupError={startupError}
+                onRetryStartup={onRetryStartup}
+                quotaThresholds={quotaThresholds}
+                onQuotaThresholds={onQuotaThresholds}
+              />
               <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                 <div>
                   <strong className="block text-[11px]">Keep on top</strong>
@@ -226,6 +354,16 @@ export function Settings({
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 p-0">
+              <WindowBehaviorSettings
+                closeToTray={closeToTray}
+                onCloseToTray={onCloseToTray}
+                launchAtStartup={launchAtStartup}
+                onLaunchAtStartup={onLaunchAtStartup}
+                startupError={startupError}
+                onRetryStartup={onRetryStartup}
+                quotaThresholds={quotaThresholds}
+                onQuotaThresholds={onQuotaThresholds}
+              />
               <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                 <div>
                   <strong className="block text-[11px]">Keep on top</strong>

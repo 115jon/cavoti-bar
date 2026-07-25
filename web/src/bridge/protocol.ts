@@ -6,6 +6,10 @@ export type HostSettings = {
   refreshIntervalSeconds: number;
   showFreshnessSeconds: boolean;
   updateReady?: boolean;
+  closeToTray: boolean;
+  launchAtStartup: boolean;
+  startupError: string | null;
+  quotaThresholds: number[];
 };
 
 export type HostMessage =
@@ -21,11 +25,56 @@ export type HostMessage =
       state: "auth-required" | "offline" | "error" | "loading";
       status: number;
       message: string;
-    };
+    }
+  | { type: "host-navigation"; target: "settings" };
 type BridgeState = "auth-required" | "offline" | "error" | "loading";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function quotaThresholds(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.filter(
+        (item): item is number =>
+          typeof item === "number" &&
+          Number.isInteger(item) &&
+          item >= 1 &&
+          item <= 100,
+      ),
+    ),
+  ].sort((a, b) => a - b);
+}
+
+function parseSettings(value: unknown): HostSettings | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.topmost !== "boolean" ||
+    typeof value.maximized !== "boolean" ||
+    typeof value.refreshIntervalSeconds !== "number" ||
+    typeof value.showFreshnessSeconds !== "boolean"
+  )
+    return undefined;
+  return {
+    topmost: value.topmost,
+    maximized: value.maximized,
+    refreshIntervalSeconds: value.refreshIntervalSeconds,
+    showFreshnessSeconds: value.showFreshnessSeconds,
+    ...(typeof value.updateReady === "boolean"
+      ? { updateReady: value.updateReady }
+      : {}),
+    closeToTray:
+      typeof value.closeToTray === "boolean" ? value.closeToTray : true,
+    launchAtStartup:
+      typeof value.launchAtStartup === "boolean"
+        ? value.launchAtStartup
+        : false,
+    startupError:
+      typeof value.startupError === "string" ? value.startupError : null,
+    quotaThresholds: quotaThresholds(value.quotaThresholds),
+  };
 }
 
 export function parseHostMessage(value: unknown): HostMessage | null {
@@ -40,22 +89,7 @@ export function parseHostMessage(value: unknown): HostMessage | null {
     isRecord(value.snapshot) &&
     value.snapshot.version === 1
   ) {
-    const settings =
-      isRecord(value.settings) &&
-      typeof value.settings.topmost === "boolean" &&
-      typeof value.settings.maximized === "boolean" &&
-      typeof value.settings.refreshIntervalSeconds === "number" &&
-      typeof value.settings.showFreshnessSeconds === "boolean"
-        ? {
-            topmost: value.settings.topmost,
-            maximized: value.settings.maximized,
-            refreshIntervalSeconds: value.settings.refreshIntervalSeconds,
-            showFreshnessSeconds: value.settings.showFreshnessSeconds,
-            ...(typeof value.settings.updateReady === "boolean"
-              ? { updateReady: value.settings.updateReady }
-              : {}),
-          }
-        : undefined;
+    const settings = parseSettings(value.settings);
     return {
       type: "snapshot",
       complete: value.complete !== false,
@@ -63,26 +97,10 @@ export function parseHostMessage(value: unknown): HostMessage | null {
       settings,
     };
   }
-  if (
-    value.type === "settings" &&
-    isRecord(value.settings) &&
-    typeof value.settings.topmost === "boolean" &&
-    typeof value.settings.maximized === "boolean" &&
-    typeof value.settings.refreshIntervalSeconds === "number" &&
-    typeof value.settings.showFreshnessSeconds === "boolean"
-  )
-    return {
-      type: "settings",
-      settings: {
-        topmost: value.settings.topmost,
-        maximized: value.settings.maximized,
-        refreshIntervalSeconds: value.settings.refreshIntervalSeconds,
-        showFreshnessSeconds: value.settings.showFreshnessSeconds,
-        ...(typeof value.settings.updateReady === "boolean"
-          ? { updateReady: value.settings.updateReady }
-          : {}),
-      },
-    };
+  if (value.type === "settings") {
+    const settings = parseSettings(value.settings);
+    if (settings) return { type: "settings", settings };
+  }
   if (
     value.type === "bridge-state" &&
     ["auth-required", "offline", "error", "loading"].includes(
@@ -99,5 +117,7 @@ export function parseHostMessage(value: unknown): HostMessage | null {
           : "Cavoti connection unavailable",
     };
   }
+  if (value.type === "host-navigation" && value.target === "settings")
+    return { type: "host-navigation", target: "settings" };
   return null;
 }

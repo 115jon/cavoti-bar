@@ -16,6 +16,10 @@ describe("parseHostMessage", () => {
           refreshIntervalSeconds: 60,
           showFreshnessSeconds: false,
           updateReady: true,
+          closeToTray: true,
+          launchAtStartup: true,
+          startupError: null,
+          quotaThresholds: [80, 95],
         },
       }),
     ).toEqual({
@@ -28,6 +32,10 @@ describe("parseHostMessage", () => {
         refreshIntervalSeconds: 60,
         showFreshnessSeconds: false,
         updateReady: true,
+        closeToTray: true,
+        launchAtStartup: true,
+        startupError: null,
+        quotaThresholds: [80, 95],
       },
     });
   });

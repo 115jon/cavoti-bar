@@ -10,6 +10,9 @@ A Windows overlay for the Cavoti usage surface. The native shell is WPF; the pan
 - Overview, usage, plans, status, and settings views render from a typed `SnapshotEnvelope`.
 - The default UI does not render sample metrics. It waits for a live snapshot or shows an explicit auth/offline/error state.
 - The supplied Cavoti favicon and transparent butterfly logo are packaged locally for the UI and executable icon.
+- The app owns a notification-area tray icon with Show, Refresh, Settings, and Exit commands. Window close can either hide to the tray or exit, and the tray remains available while the window is hidden.
+- Settings can register the current Windows user for sign-in startup through the Task Manager-visible Startup Apps registry, and can configure quota alert percentages. Connection and quota alerts use Windows notifications with a tray fallback.
+- Only one instance runs per interactive Windows session; launching a second copy focuses the existing window.
 
 ## Session boundary
 
@@ -17,7 +20,7 @@ The supplied HAR maps the API surface but does not include reusable request cook
 
 `data/demo.json` remains a sanitized contract fixture for tests only. It is not packaged or used as the default renderer source.
 
-The host bridge accepts only source-validated `minimize`, `close`, `drag`, `refresh`, `clear`, `bootstrap`, `connect`, and fixed-target `open-site` messages, plus `setting` messages whose value is an object with the boolean `topmost` name. Refresh rereads the authenticated Cavoti profile; clear deletes `settings.json`, restores topmost, and posts a versioned setting state. Local WebView2 navigation is origin-gated, approved Google/X OAuth popups are routed back through the same auth surface, collection runs only after returning to Cavoti, malformed messages are ignored, and the topmost plus geometry preferences are persisted under the current user's local application data.
+The host bridge accepts only source-validated window, tray, refresh, navigation, and connection actions, plus `setting` messages with validated topmost, close-to-tray, startup, refresh, freshness, and quota-threshold values. Refresh rereads the authenticated Cavoti profile; clear deletes `settings.json`, removes startup registration, restores defaults, and posts a versioned setting state. Local WebView2 navigation is origin-gated, approved Google/X OAuth popups are routed back through the same auth surface, collection runs only after returning to Cavoti, malformed messages are ignored, and the local preferences are persisted under the current user's application data.
 
 Live data remains read-only. Plan purchases, API-key changes, profile changes, and payment actions hand off to Cavoti in the authenticated browser window.
 
@@ -33,7 +36,13 @@ $dotnet = Join-Path (scoop prefix dotnet-sdk) 'dotnet.exe'
 & $dotnet build .\CavotiBar.csproj
 ```
 
-The native build invokes `bun run build` from the `web` project and copies the fresh hashed assets into `ui` and the output directory. The renderer is served through the WebView2 virtual origin `https://app.cavoti.local` so Vite's module assets execute reliably; it is not loaded from `file:`. The project targets .NET 9 and requires the WebView2 Runtime for execution.
+The native build invokes `bun run build` from the `web` project and copies the fresh hashed assets into `ui` and the output directory. The renderer is served through the WebView2 virtual origin `https://app.cavoti.local` so Vite's module assets execute reliably; it is not loaded from `file:`. The project targets .NET 10 with a Windows 10 1903 minimum for native notifications and requires the WebView2 Runtime for execution.
+
+To stop any running instance, rebuild, and launch the fresh executable in one step:
+
+```powershell
+pwsh -NoProfile -File .\scripts\build-and-run.ps1
+```
 
 Web checks can be run directly with:
 
