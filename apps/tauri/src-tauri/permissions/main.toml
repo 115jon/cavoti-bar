@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "host-command"
+description = "Allow the main Cavoti window to send typed host commands."
+commands.allow = ["host_command"]

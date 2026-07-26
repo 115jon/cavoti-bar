@@ -4,12 +4,14 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const tauri = mode === "tauri";
+  return {
   base: "./",
   resolve: { alias: { "@": resolve("src") } },
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: "../obj/GeneratedUi",
+    outDir: tauri ? "../apps/tauri/dist" : "../obj/GeneratedUi",
     emptyOutDir: true,
     rollupOptions: {
       output: {
@@ -19,9 +21,11 @@ export default defineConfig({
       },
     },
   },
+  server: tauri ? { port: 1420, strictPort: true } : undefined,
   test: {
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
   },
+  };
 });

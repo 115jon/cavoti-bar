@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "auth-collection-result"
+description = "Allow the Cavoti auth WebView to submit bounded session probe results."
+commands.allow = ["auth_collection_result"]
