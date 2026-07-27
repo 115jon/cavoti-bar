@@ -25,6 +25,29 @@ function Get-TauriRoot {
     return Join-Path (Split-Path -Parent $PSScriptRoot) "apps\tauri"
 }
 
+function Import-CavotiEnv {
+    $envPath = Join-Path (Split-Path -Parent $PSScriptRoot) ".env"
+    if (-not (Test-Path -LiteralPath $envPath)) {
+        return
+    }
+
+    foreach ($line in Get-Content -LiteralPath $envPath) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
+            continue
+        }
+        $parts = $line -split "=", 2
+        if ($parts.Count -ne 2) {
+            continue
+        }
+        $name = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        if ($value.Length -ge 2 -and $value.StartsWith('"') -and $value.EndsWith('"')) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        Set-Item -Path "Env:$name" -Value $value
+    }
+}
+
 function Get-ReleaseExecutable {
     return Join-Path (Get-TauriRoot) "src-tauri\target\release\cavoti_bar.exe"
 }

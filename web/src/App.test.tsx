@@ -124,7 +124,7 @@ describe("App", () => {
     });
     expect(restart).toBeInTheDocument();
     fireEvent.click(restart);
-    expect(sent).toContainEqual({ action: "restart" });
+    expect(sent).toContainEqual({ action: "install-update" });
   });
 
   it("updates freshness only after the terminal enrichment snapshot", () => {

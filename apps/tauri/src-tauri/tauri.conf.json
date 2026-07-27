@@ -40,17 +40,31 @@
     "deep-link": {
       "mobile": [{ "scheme": ["cavoti"], "host": "open" }],
       "desktop": { "schemes": ["cavoti"] }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDMDM4ODM2M0MwNzgxRDMKUldUVGdRYzhOb2dEdkNVblRyOUFreEp3UFordVpsYlNxWElNVGpwbzZlMmdzc1U0UDYvT2ZNRUYK",
+      "endpoints": ["https://github.com/115jon/cavoti-bar/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive",
+        "installerArgs": ["/S"]
+      }
     }
   },
   "bundle": {
-    "active": true,
-    "targets": "all",
+    "active": false,
+    "targets": [],
+    "category": "Utility",
+    "publisher": "115jon",
+    "shortDescription": "Cavoti usage monitor",
+    "longDescription": "A native Cavoti usage monitor with persistent authentication, desktop integration, and Android foreground support.",
+    "homepage": "https://cavoti.com",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {}
   }
 }

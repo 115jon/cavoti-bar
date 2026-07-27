@@ -1,0 +1,83 @@
+name: Cavoti Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop-release:
+    runs-on: windows-latest
+    env:
+      CARGO_INCREMENTAL: 0
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup .NET Framework build tools
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install web dependencies
+        working-directory: web
+        run: bun install --frozen-lockfile
+
+      - name: Install Tauri dependencies
+        working-directory: apps/tauri
+        run: bun install --frozen-lockfile
+
+      - name: Build custom Cavoti installer
+        shell: pwsh
+        run: .\scripts\build-tauri-installer.ps1
+
+      - name: Publish setup and updater metadata
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = "installer/bin/Release/net48/CavotiBarSetup.exe"
+          $signature = "$installer.sig"
+          if (-not (Test-Path -LiteralPath $installer)) { throw "Custom installer not found: $installer" }
+          if (-not (Test-Path -LiteralPath $signature)) { throw "Custom installer signature not found: $signature" }
+
+          $config = Get-Content -Raw -LiteralPath "apps/tauri/src-tauri/tauri.conf.json" | ConvertFrom-Json
+          $version = $config.version
+          $assetName = "CavotiBarSetup.exe"
+          Copy-Item -LiteralPath $installer -Destination "installer/bin/Release/net48/$assetName" -Force
+          Copy-Item -LiteralPath $signature -Destination "installer/bin/Release/net48/$assetName.sig" -Force
+
+          $metadata = [ordered]@{
+            version = $version
+            notes = "Cavoti Bar $version"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = (Get-Content -Raw -LiteralPath "installer/bin/Release/net48/$assetName.sig").Trim()
+                url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$assetName"
+              }
+            }
+          }
+          $latestPath = "installer/bin/Release/net48/latest.json"
+          $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $latestPath -NoNewline
+
+          gh release create "${{ github.ref_name }}" `
+            "installer/bin/Release/net48/$assetName" `
+            "installer/bin/Release/net48/$assetName.sig" `
+            $latestPath `
+            --title "Cavoti Bar $version" `
+            --generate-notes `
+            --latest

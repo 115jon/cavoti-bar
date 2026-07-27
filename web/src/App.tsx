@@ -263,7 +263,9 @@ export function App({ bridge }: AppProps) {
           onConnect={connect}
           onOpenStatus={openStatus}
           onQuit={() => bridge.post({ action: "exit" })}
-          onRestart={() => bridge.post({ action: "restart" })}
+          onRestart={() =>
+            bridge.post({ action: updateReady ? "install-update" : "restart" })
+          }
           updateReady={updateReady}
           showSeconds={showFreshnessSeconds}
         />

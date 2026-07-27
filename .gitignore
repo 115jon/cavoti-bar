@@ -7,3 +7,9 @@ web/node_modules/
 web/.vite/
 web/coverage/
 obj/GeneratedUi/
+.env
+.env.*
+!.env.example
+installer/Assets/payload.zip
+installer/bin/
+installer/obj/

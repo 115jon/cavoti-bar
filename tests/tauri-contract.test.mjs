@@ -318,3 +318,47 @@ test("Tauri development and release scripts stop stale binaries before launching
   assert.match(packageJson.scripts.dev, /tauri-dev\.ps1/);
   assert.match(packageJson.scripts.release, /run-tauri-release\.ps1/);
 });
+
+test("Cavoti packages a signed custom bootstrapper installer and updater", () => {
+  const config = JSON.parse(read("apps/tauri/src-tauri/tauri.conf.json"));
+  const packageJson = JSON.parse(read("apps/tauri/package.json"));
+  const installer = read("installer/InstallerLogic.cs");
+  const project = read("installer/CavotiBarSetup.csproj");
+  const updates = read("apps/tauri/src-tauri/src/updates.rs");
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const build = read("scripts/build-tauri-installer.ps1");
+  const workflow = read(".github/workflows/windows-release.yml");
+  const gitignore = read(".gitignore");
+
+  assert.equal(config.bundle.active, false);
+  assert.deepEqual(config.bundle.targets, []);
+  assert.doesNotMatch(JSON.stringify(config.bundle), /nsis|msi/i);
+  assert.match(project, /CavotiBarSetup/);
+  assert.match(project, /ApplicationIcon.*icons\\icon\.ico/);
+  assert.match(project, /Company>115jon<\/Company>/);
+  assert.match(project, /Product>Cavoti Bar Setup<\/Product>/);
+  assert.equal(config.bundle.publisher, "115jon");
+  assert.match(installer, /payload\.zip/);
+  assert.match(installer, /StatePath/);
+  assert.match(installer, /UpdatePath/);
+  assert.match(installer, /RootIconPath/);
+  assert.match(installer, /DeepLinkRegistration/);
+  assert.equal(config.plugins.updater.windows.installMode, "passive");
+  assert.match(config.plugins.updater.endpoints[0], /latest\.json$/);
+  assert.match(config.plugins.updater.pubkey, /^[A-Za-z0-9+/=]+$/);
+  assert.match(updates, /check_for_update/);
+  assert.match(updates, /install_update/);
+  assert.match(updates, /download_and_install/);
+  assert.match(native, /tauri_plugin_updater::Builder/);
+  assert.match(native, /updates::spawn_startup_check/);
+  assert.match(native, /"install-update" =>/);
+  assert.match(build, /TAURI_SIGNING_PRIVATE_KEY/);
+  assert.match(build, /Import-CavotiEnv/);
+  assert.match(build, /run\", \"tauri\", \"build/);
+  assert.match(build, /CavotiBarSetup\.exe/);
+  assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY/);
+  assert.match(workflow, /latest\.json/);
+  assert.match(workflow, /gh release create/);
+  assert.match(packageJson.scripts["build:installer"], /build-tauri-installer\.ps1/);
+  assert.match(gitignore, /^\.env$/m);
+});

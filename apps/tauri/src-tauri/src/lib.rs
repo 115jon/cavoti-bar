@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::{thread, time::Duration};
+use std::{
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tauri::{
-    webview::PageLoadEvent, AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow,
+    webview::PageLoadEvent, AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -18,6 +23,7 @@ mod navigation;
 mod notifications;
 mod quota;
 mod snapshot;
+mod updates;
 use auth::{
     is_allowed_auth_navigation, is_cavoti_origin, AuthAcceptError, AuthAdapter, AuthAdapterEvent,
     AuthCollectionPayload, AuthRawResults, AUTH_COLLECTION_TIMEOUT, AUTH_WINDOW_LABEL,
@@ -371,26 +377,77 @@ impl Default for HostSettings {
 
 const SETTINGS_STORE: &str = "settings.json";
 const SETTINGS_KEY: &str = "host";
+const SETTINGS_LOG: &str = "settings.log";
+
+fn log_settings<R: Runtime>(app: &AppHandle<R>, message: impl AsRef<str>) {
+    let Ok(directory) = app.path().app_data_dir() else {
+        return;
+    };
+    if std::fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    let path = directory.join(SETTINGS_LOG);
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    let _ = writeln!(file, "{} {}", timestamp, message.as_ref());
+}
 
 fn load_settings(app: &AppHandle) -> HostSettings {
-    app.store(SETTINGS_STORE)
-        .ok()
-        .and_then(|store| store.get(SETTINGS_KEY))
-        .and_then(|value| serde_json::from_value(value).ok())
-        .unwrap_or_default()
+    let resolved_path = tauri_plugin_store::resolve_store_path(app, SETTINGS_STORE)
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|error| format!("<unresolved: {error}>"));
+    eprintln!("[cavoti-settings] store path={resolved_path}");
+    let settings: HostSettings = match app.store(SETTINGS_STORE) {
+        Ok(store) => store
+            .get(SETTINGS_KEY)
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default(),
+        Err(error) => {
+            eprintln!("[cavoti-settings] store load failed: {error}");
+            HostSettings::default()
+        }
+    };
+    log_settings(
+        app,
+        format!(
+            "load showFreshnessSeconds={} closeToTray={} interval={}",
+            settings.show_freshness_seconds,
+            settings.close_to_tray,
+            settings.refresh_interval_seconds
+        ),
+    );
+    settings
 }
 
 fn save_settings(app: &AppHandle, settings: &HostSettings) -> Result<(), String> {
-    let store = app
-        .store(SETTINGS_STORE)
-        .map_err(|error| format!("Settings store could not open: {error}"))?;
+    log_settings(
+        app,
+        format!(
+            "save begin showFreshnessSeconds={} closeToTray={} interval={}",
+            settings.show_freshness_seconds,
+            settings.close_to_tray,
+            settings.refresh_interval_seconds
+        ),
+    );
+    let store = app.store(SETTINGS_STORE).map_err(|error| {
+        log_settings(app, format!("save store-open-error={error}"));
+        format!("Settings store could not open: {error}")
+    })?;
     store.set(
         SETTINGS_KEY.to_owned(),
         serde_json::to_value(settings).map_err(|error| error.to_string())?,
     );
-    store
-        .save()
-        .map_err(|error| format!("Settings could not be saved: {error}"))
+    store.save().map_err(|error| {
+        log_settings(app, format!("save error={error}"));
+        format!("Settings could not be saved: {error}")
+    })?;
+    log_settings(app, "save success");
+    Ok(())
 }
 
 fn current_settings(state: &AuthState) -> HostSettings {
@@ -401,18 +458,28 @@ fn current_settings(state: &AuthState) -> HostSettings {
         .unwrap_or_default()
 }
 
-fn emit_settings(app: &AppHandle, state: &AuthState) -> Result<(), String> {
+fn emit_settings<R: Runtime>(app: &AppHandle<R>, state: &AuthState) -> Result<(), String> {
+    let settings = current_settings(state);
+    log_settings(
+        app,
+        format!(
+            "emit showFreshnessSeconds={} closeToTray={} interval={}",
+            settings.show_freshness_seconds,
+            settings.close_to_tray,
+            settings.refresh_interval_seconds
+        ),
+    );
     emit_event(
         app,
         json!({
             "protocol": 1,
             "type": "settings",
-            "settings": current_settings(state),
+            "settings": settings,
         }),
     )
 }
 
-fn emit_capabilities(app: &AppHandle) -> Result<(), String> {
+fn emit_capabilities<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     emit_event(
         app,
         json!({
@@ -423,7 +490,7 @@ fn emit_capabilities(app: &AppHandle) -> Result<(), String> {
     )
 }
 
-fn emit_lifecycle(app: &AppHandle, state: &str) -> Result<(), String> {
+fn emit_lifecycle<R: Runtime>(app: &AppHandle<R>, state: &str) -> Result<(), String> {
     emit_event(
         app,
         json!({
@@ -434,13 +501,13 @@ fn emit_lifecycle(app: &AppHandle, state: &str) -> Result<(), String> {
     )
 }
 
-fn emit_event(app: &AppHandle, event: Value) -> Result<(), String> {
+fn emit_event<R: Runtime>(app: &AppHandle<R>, event: Value) -> Result<(), String> {
     app.emit("host-event", event)
         .map_err(|error| error.to_string())
 }
 
-fn emit_bridge_state(
-    app: &AppHandle,
+fn emit_bridge_state<R: Runtime>(
+    app: &AppHandle<R>,
     state: &str,
     status: u16,
     message: &str,
@@ -460,7 +527,7 @@ fn emit_bridge_state(
     )
 }
 
-fn emit_navigation(app: &AppHandle, route: HostRoute) -> Result<(), String> {
+fn emit_navigation<R: Runtime>(app: &AppHandle<R>, route: HostRoute) -> Result<(), String> {
     emit_event(
         app,
         json!({
@@ -1081,6 +1148,7 @@ async fn host_command(
     message: HostCommand,
 ) -> Result<(), String> {
     eprintln!("[cavoti-host] command action={}", message.action);
+    log_settings(&app, format!("command action={}", message.action));
     if window.label() != "main" {
         return Err("Host commands are restricted to the main window".into());
     }
@@ -1100,7 +1168,16 @@ async fn host_command(
         "lifecycle" => apply_lifecycle_command(&app, state.inner(), message.value.as_ref()),
         "bootstrap" => {
             emit_bootstrap(&app, state.inner())?;
+            updates::spawn_startup_check(app.clone());
             flush_pending_navigation(&app, state.inner())
+        }
+        "check-update" => {
+            updates::check_for_update(app.clone(), app.state::<updates::PendingUpdate>(), state)
+                .await
+                .map(|_| ())
+        }
+        "install-update" => {
+            updates::install_update(app.clone(), app.state::<updates::PendingUpdate>(), state).await
         }
         "connect" | "refresh" => {
             let request = probe_request(message.value.as_ref());
@@ -1294,6 +1371,7 @@ fn restore_main_window_state(window: &WebviewWindow) {
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(AuthState::default())
+        .manage(updates::PendingUpdate::default())
         .on_page_load(|webview, payload| {
             if payload.event() != PageLoadEvent::Finished {
                 return;
@@ -1352,8 +1430,13 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             host_command,
-            auth_collection_result
+            auth_collection_result,
+            updates::check_for_update,
+            updates::install_update
         ]);
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     let builder = builder.setup(|app| {
         let persisted = load_settings(&app.handle());
@@ -1395,6 +1478,25 @@ pub fn run() {
             }
         }
         start_refresh_scheduler(&app.handle(), state.inner());
+
+        #[cfg(desktop)]
+        {
+            if cfg!(debug_assertions) {
+                eprintln!("[cavoti-settings] startup registration skipped in debug build");
+            } else {
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = app.autolaunch();
+                let result = if persisted.launch_at_startup {
+                    manager.enable()
+                } else {
+                    manager.disable()
+                };
+                if let Err(error) = result {
+                    eprintln!("[cavoti-settings] startup registration sync failed: {error}");
+                }
+            }
+            build_tray(app)?;
+        }
         Ok(())
     });
 
@@ -1413,25 +1515,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app)
         }))
-        .plugin(tauri_plugin_autostart::Builder::new().build())
-        .setup(|app| {
-            let persisted = current_settings(&app.state::<AuthState>());
-            if cfg!(debug_assertions) {
-                eprintln!("[cavoti-settings] startup registration skipped in debug build");
-            } else {
-                use tauri_plugin_autostart::ManagerExt;
-                let manager = app.autolaunch();
-                let result = if persisted.launch_at_startup {
-                    manager.enable()
-                } else {
-                    manager.disable()
-                };
-                if let Err(error) = result {
-                    eprintln!("[cavoti-settings] startup registration sync failed: {error}");
-                }
-            }
-            Ok(build_tray(app)?)
-        });
+        .plugin(tauri_plugin_autostart::Builder::new().build());
 
     builder
         .run(tauri::generate_context!())

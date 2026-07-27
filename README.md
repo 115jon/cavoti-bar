@@ -42,15 +42,24 @@ Build a standalone release executable, or build and launch it:
 ```powershell
 Push-Location .\apps\tauri
 bun run build:release
+bun run build:installer # builds the custom CavotiBarSetup.exe bootstrapper
 bun run run:release
 # Or use: bun run release
 Pop-Location
 ```
 
 The equivalent PowerShell entry points are `scripts\tauri-dev.ps1`,
-`scripts\build-tauri-release.ps1`, and `scripts\run-tauri-release.ps1`.
+`scripts\build-tauri-release.ps1`, `scripts\build-tauri-installer.ps1`, and
+`scripts\run-tauri-release.ps1`.
 Each release operation stops an existing `cavoti_bar.exe` before replacing or
 launching the artifact.
+
+Installer builds load the ignored repository-local `.env` file. They compile
+the custom `installer/CavotiBarSetup.csproj` bootstrapper and embed the Tauri
+payload in `payload.zip`. The `.env` contains
+`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and the
+Cavoti GitHub release endpoint. The GitHub release workflow uses repository
+secrets instead; the private key must never be committed.
 
 ## Validation
 
