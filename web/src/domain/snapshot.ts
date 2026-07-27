@@ -428,7 +428,7 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
       !Number.isNaN(Date.parse(source.capturedAt))
         ? source.capturedAt
         : null,
-    source: stringValue(source.source, "live-webview2"),
+    source: stringValue(source.source, "live-cavoti-webview"),
     account: {
       displayName: stringValue(account.displayName, "Connected account"),
       status: stringValue(account.status, "unknown"),

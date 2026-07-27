@@ -31,7 +31,9 @@ describe("Tauri host bridge startup", () => {
     bridge.post({ action: "bootstrap" });
 
     expect(state.invoke).not.toHaveBeenCalled();
-    state.resolveListeners.forEach((resolve) => resolve());
+    state.resolveListeners.forEach((resolve) => {
+      resolve();
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(state.invoke).toHaveBeenCalledWith("host_command", {
@@ -46,7 +48,9 @@ describe("Tauri host bridge startup", () => {
 
     bridge.subscribe(() => undefined);
     bridge.post({ action: "bootstrap" });
-    state.resolveListeners.forEach((resolve) => resolve());
+    state.resolveListeners.forEach((resolve) => {
+      resolve();
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(state.invoke).toHaveBeenCalledWith("host_command", {

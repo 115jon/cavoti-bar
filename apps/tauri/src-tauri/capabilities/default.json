@@ -10,8 +10,6 @@
     "core:webview:default",
     "core:app:default",
     "core:resources:default",
-    "core:menu:default",
-    "core:tray:default",
     "opener:default",
     "host-command"
   ]

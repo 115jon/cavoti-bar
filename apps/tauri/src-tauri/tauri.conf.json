@@ -36,6 +36,12 @@
       "capabilities": ["default", "desktop-capability", "auth"]
     }
   },
+  "plugins": {
+    "deep-link": {
+      "mobile": [{ "scheme": ["cavoti"], "host": "open" }],
+      "desktop": { "schemes": ["cavoti"] }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

@@ -16,7 +16,52 @@ test("Tauri shell is configured as the Cavoti product", () => {
   assert.match(cargo, /tauri-plugin-notification/);
   assert.match(cargo, /tauri-plugin-single-instance/);
   assert.match(cargo, /tauri-plugin-store/);
+  assert.match(cargo, /tauri-plugin-process/);
+  assert.match(cargo, /tauri-plugin-window-state/);
   assert.match(cargo, /tray-icon/);
+});
+
+test("deep links register the Cavoti scheme on desktop and Android", () => {
+  const config = JSON.parse(read("apps/tauri/src-tauri/tauri.conf.json"));
+  const cargo = read("apps/tauri/src-tauri/Cargo.toml");
+  const manifest = read(
+    "apps/tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml",
+  );
+
+  assert.deepEqual(config.plugins["deep-link"].desktop.schemes, ["cavoti"]);
+  assert.deepEqual(config.plugins["deep-link"].mobile, [
+    { scheme: ["cavoti"], host: "open" },
+  ]);
+  assert.match(
+    cargo,
+    /tauri-plugin-single-instance\s*=\s*\{\s*version\s*=\s*"2",\s*features\s*=\s*\["deep-link"\]\s*\}/,
+  );
+  assert.match(manifest, /android\.intent\.action\.VIEW/);
+  assert.match(manifest, /android\.intent\.category\.BROWSABLE/);
+  assert.match(manifest, /android:scheme="cavoti"/);
+  assert.match(manifest, /android:host="open"/);
+});
+
+test("deep-link handling is normalized before it crosses the host boundary", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const parser = read("apps/tauri/src-tauri/src/navigation.rs");
+  const protocol = read("web/src/bridge/protocol.ts");
+
+  assert.match(native, /on_open_url/);
+  assert.match(native, /get_current/);
+  assert.match(native, /host-navigation/);
+  assert.match(native, /show_main_window/);
+  assert.match(parser, /cavoti/);
+  assert.match(parser, /open/);
+  for (const route of ["overview", "usage", "plans", "status", "settings"]) {
+    assert.match(parser, new RegExp(`\\b${route}\\b`));
+  }
+  assert.match(parser, /query/);
+  assert.match(parser, /fragment/);
+  assert.match(
+    protocol,
+    /target: "overview" \| "usage" \| "plans" \| "status" \| "settings"/,
+  );
 });
 
 test("Tauri keeps remote auth in a separate, narrowly scoped capability", () => {
@@ -84,7 +129,7 @@ test("auth probe uses Tauri's runtime invoke key on postMessage", () => {
   assert.doesNotMatch(auth, /fetch\([^\n]*ipc/);
 });
 
-test("auth probe matches the WPF optional endpoint contract", () => {
+test("auth probe matches the optional endpoint contract", () => {
   const auth = read("apps/tauri/src-tauri/src/auth.rs");
 
   for (const endpoint of [
@@ -149,6 +194,50 @@ test("settings persist through the Tauri store and drive native refresh behavior
   assert.match(native, /autolaunch\(\)/);
 });
 
+test("desktop host actions use fixed opener destinations and the process restart API", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const host = read("apps/tauri/src-tauri/src/host.rs");
+  assert.match(native, /resolve_external_command/);
+  assert.match(native, /\.opener\(\)[\s\S]{0,40}\.open_url\(/);
+  assert.match(native, /app\.request_restart\(\)/);
+  assert.match(native, /\.plugin\(tauri_plugin_process::init\(\)\)/);
+  assert.match(host, /https:\/\/cavoti\.com\/usage/);
+  assert.match(host, /https:\/\/cavoti\.com\/monitor/);
+  assert.match(host, /IpAddr/);
+  assert.match(host, /iplocation\.net\/ip-lookup/);
+  assert.match(host, /IP address is invalid/);
+  assert.doesNotMatch(native, /ProcessStartInfo|std::process::Command/);
+});
+
+test("window state restores desktop geometry with an off-screen fallback", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  assert.match(native, /tauri_plugin_window_state::Builder::default\(\)/);
+  assert.match(native, /StateFlags::SIZE/);
+  assert.match(native, /StateFlags::POSITION/);
+  assert.match(native, /StateFlags::MAXIMIZED/);
+  assert.match(native, /skip_initial_state\("main"\)/);
+  assert.match(native, /restore_main_window_state/);
+  assert.match(native, /available_monitors\(\)/);
+  assert.match(native, /intersection_width >= 32/);
+  assert.match(native, /window\.unmaximize\(\)/);
+  assert.match(native, /set_position\(PhysicalPosition::new/);
+});
+
+test("native notifications use normalized quota state without forwarding raw payloads", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const notifications = read("apps/tauri/src-tauri/src/notifications.rs");
+  const quota = read("apps/tauri/src-tauri/src/quota.rs");
+  assert.match(native, /notify_connection_state/);
+  assert.match(native, /notify_quota_alerts/);
+  assert.match(notifications, /NotificationExt/);
+  assert.match(notifications, /Cavoti quota alert/);
+  assert.match(notifications, /Usage monitoring is active/);
+  assert.match(quota, /initialized/);
+  assert.match(quota, /reset_at/);
+  assert.match(quota, /notified/);
+  assert.doesNotMatch(notifications, /AuthRawResults|auth_token|Authorization/);
+});
+
 test("Tauri host uses typed command and event boundaries", () => {
   const host = read("web/src/bridge/host.ts");
   const native = read("apps/tauri/src-tauri/src/lib.rs");
@@ -169,7 +258,41 @@ test("Tauri host uses typed command and event boundaries", () => {
   assert.match(read("apps/tauri/src-tauri/tauri.conf.json"), /http:\/\/ipc\.localhost/);
 });
 
-test("Tauri builds the shared renderer without changing the WPF output", () => {
+test("Tauri advertises mobile capabilities and gates desktop-only permissions", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const mainCapability = JSON.parse(
+    read("apps/tauri/src-tauri/capabilities/default.json"),
+  );
+  const desktopCapability = JSON.parse(
+    read("apps/tauri/src-tauri/capabilities/desktop.json"),
+  );
+
+  assert.match(native, /type": "capabilities"/);
+  assert.match(native, /titlebar_controls/);
+  assert.match(native, /window_settings/);
+  assert.deepEqual(mainCapability.permissions.includes("core:tray:default"), false);
+  assert.deepEqual(desktopCapability.permissions.includes("core:tray:default"), true);
+});
+
+test("foreground lifecycle pauses collection and resumes one bounded probe", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const auth = read("apps/tauri/src-tauri/src/auth.rs");
+  const lifecycle = read("apps/tauri/src-tauri/src/lifecycle.rs");
+  const app = read("web/src/App.tsx");
+
+  assert.match(native, /"lifecycle"/);
+  assert.match(native, /__cavotiAuthAbort/);
+  assert.match(native, /foreground_refresh_started/);
+  assert.match(native, /AUTH_COLLECTION_TIMEOUT/);
+  assert.match(native, /is_foreground/);
+  assert.match(auth, /try_begin_collection/);
+  assert.match(lifecycle, /pause/);
+  assert.match(lifecycle, /resume/);
+  assert.match(app, /visibilitychange/);
+  assert.match(app, /action: "lifecycle"/);
+});
+
+test("Tauri builds the shared renderer without changing the web output", () => {
   const packageJson = read("web/package.json");
   const vite = read("web/vite.config.ts");
   const config = read("apps/tauri/src-tauri/tauri.conf.json");
@@ -177,4 +300,21 @@ test("Tauri builds the shared renderer without changing the WPF output", () => {
   assert.match(vite, /mode === "tauri"/);
   assert.match(vite, /apps\/tauri\/dist/);
   assert.match(config, /"frontendDist": "\.\.\/dist"/);
+});
+
+test("Tauri development and release scripts stop stale binaries before launching", () => {
+  const dev = read("scripts/tauri-dev.ps1");
+  const build = read("scripts/build-tauri-release.ps1");
+  const run = read("scripts/run-tauri-release.ps1");
+  const packageJson = JSON.parse(read("apps/tauri/package.json"));
+
+  assert.match(dev, /Stop-CavotiProcesses/);
+  assert.match(dev, /run\", \"tauri\", \"dev/);
+  assert.match(build, /Stop-CavotiProcesses/);
+  assert.match(build, /build\", \"--no-bundle/);
+  assert.match(build, /Get-ReleaseExecutable/);
+  assert.match(run, /Stop-CavotiProcesses/);
+  assert.match(run, /Start-Process/);
+  assert.match(packageJson.scripts.dev, /tauri-dev\.ps1/);
+  assert.match(packageJson.scripts.release, /run-tauri-release\.ps1/);
 });

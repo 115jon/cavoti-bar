@@ -6,7 +6,11 @@ import {
   type UsageFilters as UsageFilterState,
 } from "./domain/snapshot";
 import type { AppProps, BridgeState, View } from "./app/types";
-import { parseHostMessage } from "./bridge/protocol";
+import {
+  DEFAULT_HOST_CAPABILITIES,
+  parseHostMessage,
+  type HostCapabilities,
+} from "./bridge/protocol";
 import { AppShell, views } from "./components/app/AppShell";
 import { Boundary, Loading, useCompactTiles } from "./components/app/shared";
 import { Overview } from "./views/Overview";
@@ -29,16 +33,19 @@ export function App({ bridge }: AppProps) {
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
   const [startupError, setStartupError] = useState<string | null>(null);
   const [quotaThresholds, setQuotaThresholds] = useState<number[]>([]);
+  const [capabilities, setCapabilities] = useState<HostCapabilities>(
+    DEFAULT_HOST_CAPABILITIES,
+  );
   const [freshnessCapturedAt, setFreshnessCapturedAt] = useState<string | null>(
     null,
   );
   const compact = useCompactTiles();
   const hasSnapshot = useRef(false);
+  const foreground = useRef(document.visibilityState !== "hidden");
   const connect = () => bridge.post({ action: "connect" });
-  const refresh = useCallback(
-    () => bridge.post({ action: "refresh" }),
-    [bridge],
-  );
+  const refresh = useCallback(() => {
+    if (foreground.current) bridge.post({ action: "refresh" });
+  }, [bridge]);
   const openStatus = useCallback(
     () => bridge.post({ action: "open-status" }),
     [bridge],
@@ -97,7 +104,11 @@ export function App({ bridge }: AppProps) {
     const unsubscribe = bridge.subscribe((raw) => {
       const message = parseHostMessage(raw);
       if (!message) return;
-      if (message.type === "snapshot") {
+      if (message.type === "capabilities") {
+        setCapabilities(message.capabilities);
+      } else if (message.type === "lifecycle") {
+        foreground.current = message.state === "foreground";
+      } else if (message.type === "snapshot") {
         const next = normalizeSnapshot(message.snapshot);
         if (next) {
           hasSnapshot.current = true;
@@ -145,7 +156,7 @@ export function App({ bridge }: AppProps) {
         >
       ).detail;
       const value = "filters" in detail ? detail : { filters: detail };
-      bridge.post({ action: "refresh", value });
+      if (foreground.current) bridge.post({ action: "refresh", value });
     };
     const openIp = (event: Event) => {
       const ip = (event as CustomEvent<string>).detail;
@@ -163,6 +174,20 @@ export function App({ bridge }: AppProps) {
       window.removeEventListener("cavoti-open-ip", openIp);
     };
   }, [bridge, openStatus, refresh]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const nextForeground = document.visibilityState !== "hidden";
+      foreground.current = nextForeground;
+      bridge.post({
+        action: "lifecycle",
+        value: { state: nextForeground ? "foreground" : "paused" },
+      });
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [bridge]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -194,6 +219,7 @@ export function App({ bridge }: AppProps) {
     ? { ...snapshot, capturedAt: freshnessCapturedAt }
     : snapshot;
   const beginDrag = (event: MouseEvent<HTMLElement>) => {
+    if (!capabilities.titlebarControls) return;
     if (event.button !== 0 || (event.target as HTMLElement).closest("button"))
       return;
     bridge.post({ action: "drag" });
@@ -205,6 +231,7 @@ export function App({ bridge }: AppProps) {
       view={view}
       title={title}
       state={state}
+      capabilities={capabilities}
       maximized={maximized}
       onViewChange={setView}
       onBeginDrag={beginDrag}
@@ -218,6 +245,7 @@ export function App({ bridge }: AppProps) {
           onTopmost={setWindowTopmost}
           onClear={() => bridge.post({ action: "clear" })}
           onConnect={connect}
+          capabilities={capabilities}
           {...settingsProps}
           refreshIntervalSeconds={refreshIntervalSeconds}
           onRefreshInterval={setRefreshInterval}
@@ -257,6 +285,7 @@ export function App({ bridge }: AppProps) {
           onTopmost={setWindowTopmost}
           onClear={() => bridge.post({ action: "clear" })}
           onConnect={connect}
+          capabilities={capabilities}
           {...settingsProps}
           refreshIntervalSeconds={refreshIntervalSeconds}
           onRefreshInterval={setRefreshInterval}

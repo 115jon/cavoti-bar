@@ -6,7 +6,7 @@ describe("normalizeSnapshot", () => {
     const snapshot = normalizeSnapshot({
       version: 1,
       capturedAt: "2026-07-23T10:52:12Z",
-      source: "live-webview2",
+      source: "live-cavoti-webview",
       account: { displayName: "Connected account", status: "active" },
       subscriptions: [
         {
@@ -69,7 +69,7 @@ describe("normalizeSnapshot", () => {
     const snapshot = normalizeSnapshot({
       version: 1,
       capturedAt: "invalid",
-      source: "live-webview2",
+      source: "live-cavoti-webview",
       account: { displayName: 4, status: "active", email: "never surface" },
       subscriptions: [
         {

@@ -120,6 +120,16 @@ impl AuthAdapter {
         id
     }
 
+    pub fn try_begin_collection_with_request(
+        &mut self,
+        request: AuthProbeRequest,
+    ) -> Option<String> {
+        if self.active.is_some() {
+            return None;
+        }
+        Some(self.begin_collection_with_request(request))
+    }
+
     pub fn active_collection_id(&self) -> Option<&str> {
         self.active
             .as_ref()

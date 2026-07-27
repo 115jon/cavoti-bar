@@ -12,6 +12,24 @@ export type HostSettings = {
   quotaThresholds: number[];
 };
 
+export type HostCapabilities = {
+  platform: "desktop" | "mobile";
+  titlebarControls: boolean;
+  tray: boolean;
+  startup: boolean;
+  topmost: boolean;
+  windowSettings: boolean;
+};
+
+export const DEFAULT_HOST_CAPABILITIES: HostCapabilities = {
+  platform: "desktop",
+  titlebarControls: true,
+  tray: true,
+  startup: true,
+  topmost: true,
+  windowSettings: true,
+};
+
 export type HostMessage =
   | {
       type: "snapshot";
@@ -20,14 +38,31 @@ export type HostMessage =
       settings?: HostSettings;
     }
   | { type: "settings"; settings: HostSettings }
+  | { type: "capabilities"; capabilities: HostCapabilities }
+  | { type: "lifecycle"; state: "paused" | "foreground" }
   | {
       type: "bridge-state";
       state: "auth-required" | "offline" | "error" | "loading";
       status: number;
       message: string;
     }
-  | { type: "host-navigation"; target: "settings" };
+  | {
+      type: "host-navigation";
+      target: "overview" | "usage" | "plans" | "status" | "settings";
+    };
 type BridgeState = "auth-required" | "offline" | "error" | "loading";
+type HostNavigationTarget = Extract<
+  HostMessage,
+  { type: "host-navigation" }
+>["target"];
+
+const hostNavigationTargets: HostNavigationTarget[] = [
+  "overview",
+  "usage",
+  "plans",
+  "status",
+  "settings",
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -77,6 +112,27 @@ function parseSettings(value: unknown): HostSettings | undefined {
   };
 }
 
+function parseCapabilities(value: unknown): HostCapabilities | undefined {
+  if (
+    !isRecord(value) ||
+    (value.platform !== "desktop" && value.platform !== "mobile") ||
+    typeof value.titlebarControls !== "boolean" ||
+    typeof value.tray !== "boolean" ||
+    typeof value.startup !== "boolean" ||
+    typeof value.topmost !== "boolean" ||
+    typeof value.windowSettings !== "boolean"
+  )
+    return undefined;
+  return {
+    platform: value.platform,
+    titlebarControls: value.titlebarControls,
+    tray: value.tray,
+    startup: value.startup,
+    topmost: value.topmost,
+    windowSettings: value.windowSettings,
+  };
+}
+
 export function parseHostMessage(value: unknown): HostMessage | null {
   if (
     !isRecord(value) ||
@@ -101,6 +157,16 @@ export function parseHostMessage(value: unknown): HostMessage | null {
     const settings = parseSettings(value.settings);
     if (settings) return { type: "settings", settings };
   }
+  if (value.type === "capabilities") {
+    const capabilities = parseCapabilities(value.capabilities);
+    if (capabilities) return { type: "capabilities", capabilities };
+  }
+  if (
+    value.type === "lifecycle" &&
+    (value.state === "paused" || value.state === "foreground")
+  ) {
+    return { type: "lifecycle", state: value.state };
+  }
   if (
     value.type === "bridge-state" &&
     ["auth-required", "offline", "error", "loading"].includes(
@@ -117,7 +183,14 @@ export function parseHostMessage(value: unknown): HostMessage | null {
           : "Cavoti connection unavailable",
     };
   }
-  if (value.type === "host-navigation" && value.target === "settings")
-    return { type: "host-navigation", target: "settings" };
+  if (
+    value.type === "host-navigation" &&
+    typeof value.target === "string" &&
+    hostNavigationTargets.includes(value.target as HostNavigationTarget)
+  )
+    return {
+      type: "host-navigation",
+      target: value.target as HostNavigationTarget,
+    };
   return null;
 }

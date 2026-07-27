@@ -43,7 +43,7 @@ export function About() {
         <Separator />
         <CardFooter className="flex justify-between border-t bg-transparent p-0 pt-3 text-[10px] text-(--ink-faint)">
           <span>Built for Cavoti</span>
-          <span>Local WebView2 session</span>
+          <span>Local Cavoti session</span>
         </CardFooter>
       </Card>
     </div>

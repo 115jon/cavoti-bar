@@ -11,6 +11,7 @@ import {
   XIcon as X,
 } from "@phosphor-icons/react";
 import type { BridgeState, View } from "../../app/types";
+import type { HostCapabilities } from "../../bridge/protocol";
 import { Button } from "../ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import {
@@ -38,6 +39,7 @@ export function AppShell({
   title,
   state,
   maximized,
+  capabilities,
   onViewChange,
   onBeginDrag,
   onMaximize,
@@ -50,6 +52,7 @@ export function AppShell({
   title: string;
   state: BridgeState;
   maximized: boolean;
+  capabilities: HostCapabilities;
   onViewChange: (view: View) => void;
   onBeginDrag: (event: MouseEvent<HTMLElement>) => void;
   onMaximize: () => void;
@@ -85,35 +88,37 @@ export function AppShell({
               </strong>
             </span>
           </button>
-          <div className="ml-auto flex gap-px group-data-[layout=wide]/app:gap-1">
-            <Button
-              className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
-              variant="ghost"
-              size="icon"
-              aria-label={maximized ? "Restore window" : "Maximize window"}
-              onClick={onMaximize}
-            >
-              {maximized ? <CornersIn /> : <CornersOut />}
-            </Button>
-            <Button
-              className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
-              variant="ghost"
-              size="icon"
-              aria-label="Minimize window"
-              onClick={onMinimize}
-            >
-              <Minus />
-            </Button>
-            <Button
-              className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
-              variant="ghost"
-              size="icon"
-              aria-label="Close window"
-              onClick={onClose}
-            >
-              <X />
-            </Button>
-          </div>
+          {capabilities.titlebarControls ? (
+            <div className="ml-auto flex gap-px group-data-[layout=wide]/app:gap-1">
+              <Button
+                className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
+                variant="ghost"
+                size="icon"
+                aria-label={maximized ? "Restore window" : "Maximize window"}
+                onClick={onMaximize}
+              >
+                {maximized ? <CornersIn /> : <CornersOut />}
+              </Button>
+              <Button
+                className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
+                variant="ghost"
+                size="icon"
+                aria-label="Minimize window"
+                onClick={onMinimize}
+              >
+                <Minus />
+              </Button>
+              <Button
+                className="text-(--ink-muted) group-data-[layout=wide]/app:size-10 group-data-[layout=wide]/app:[&_svg]:size-5"
+                variant="ghost"
+                size="icon"
+                aria-label="Close window"
+                onClick={onClose}
+              >
+                <X />
+              </Button>
+            </div>
+          ) : null}
         </header>
         <div className="flex h-[calc(100vh-3rem)] min-h-0 group-data-[layout=wide]/app:h-[calc(100vh-3.5rem)] group-data-[layout=compact]/app:flex-col">
           <nav

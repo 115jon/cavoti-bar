@@ -7,14 +7,25 @@ use tauri::{
     webview::PageLoadEvent, AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_store::StoreExt;
 
 mod auth;
+mod host;
+mod lifecycle;
+mod navigation;
+mod notifications;
+mod quota;
 mod snapshot;
 use auth::{
     is_allowed_auth_navigation, is_cavoti_origin, AuthAcceptError, AuthAdapter, AuthAdapterEvent,
     AuthCollectionPayload, AuthRawResults, AUTH_COLLECTION_TIMEOUT, AUTH_WINDOW_LABEL,
 };
+use host::{resolve_external_command, ExternalCommand};
+use lifecycle::{parse_command, LifecycleCommand, LifecycleState};
+use navigation::{parse_route, HostRoute};
+use notifications::NativeNotifications;
 use snapshot::normalize_core_snapshot;
 
 #[derive(Clone, Default)]
@@ -23,6 +34,23 @@ struct AuthState {
     startup_probe_started: Arc<AtomicBool>,
     settings: Arc<Mutex<HostSettings>>,
     refresh_scheduler_started: Arc<AtomicBool>,
+    foreground_refresh_started: Arc<AtomicBool>,
+    lifecycle: Arc<LifecycleState>,
+    notifications: Arc<NativeNotifications>,
+    navigation: Arc<Mutex<NavigationState>>,
+}
+
+#[derive(Default)]
+struct NavigationState {
+    ready: bool,
+    pending: Option<HostRoute>,
+}
+
+impl NavigationState {
+    fn set_ready_and_take(&mut self) -> Option<HostRoute> {
+        self.ready = true;
+        self.pending.take()
+    }
 }
 
 #[cfg(test)]
@@ -87,6 +115,18 @@ mod tests {
         ));
         assert!(adapter.abort(&collection_id));
         assert!(adapter.active_collection_id().is_none());
+    }
+
+    #[test]
+    fn lifecycle_transitions_are_idempotent() {
+        let lifecycle = LifecycleState::default();
+        assert!(lifecycle.is_foreground());
+        assert!(lifecycle.pause());
+        assert!(!lifecycle.pause());
+        assert!(!lifecycle.is_foreground());
+        assert!(lifecycle.resume());
+        assert!(!lifecycle.resume());
+        assert!(lifecycle.is_foreground());
     }
 
     #[test]
@@ -278,6 +318,41 @@ struct HostSettings {
     quota_thresholds: Vec<u8>,
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct HostCapabilities {
+    platform: &'static str,
+    titlebar_controls: bool,
+    tray: bool,
+    startup: bool,
+    topmost: bool,
+    window_settings: bool,
+}
+
+fn host_capabilities() -> HostCapabilities {
+    #[cfg(mobile)]
+    {
+        return HostCapabilities {
+            platform: "mobile",
+            titlebar_controls: false,
+            tray: false,
+            startup: false,
+            topmost: false,
+            window_settings: false,
+        };
+    }
+
+    #[cfg(not(mobile))]
+    HostCapabilities {
+        platform: "desktop",
+        titlebar_controls: true,
+        tray: true,
+        startup: true,
+        topmost: true,
+        window_settings: true,
+    }
+}
+
 impl Default for HostSettings {
     fn default() -> Self {
         Self {
@@ -337,6 +412,28 @@ fn emit_settings(app: &AppHandle, state: &AuthState) -> Result<(), String> {
     )
 }
 
+fn emit_capabilities(app: &AppHandle) -> Result<(), String> {
+    emit_event(
+        app,
+        json!({
+            "protocol": 1,
+            "type": "capabilities",
+            "capabilities": host_capabilities(),
+        }),
+    )
+}
+
+fn emit_lifecycle(app: &AppHandle, state: &str) -> Result<(), String> {
+    emit_event(
+        app,
+        json!({
+            "protocol": 1,
+            "type": "lifecycle",
+            "state": state,
+        }),
+    )
+}
+
 fn emit_event(app: &AppHandle, event: Value) -> Result<(), String> {
     app.emit("host-event", event)
         .map_err(|error| error.to_string())
@@ -348,6 +445,9 @@ fn emit_bridge_state(
     status: u16,
     message: &str,
 ) -> Result<(), String> {
+    if let Some(host_state) = app.try_state::<AuthState>() {
+        host_state.notifications.notify_connection_state(app, state);
+    }
     emit_event(
         app,
         json!({
@@ -360,7 +460,58 @@ fn emit_bridge_state(
     )
 }
 
+fn emit_navigation(app: &AppHandle, route: HostRoute) -> Result<(), String> {
+    emit_event(
+        app,
+        json!({
+            "protocol": 1,
+            "type": "host-navigation",
+            "target": route.as_str(),
+        }),
+    )
+}
+
+fn route_navigation<I, S>(app: &AppHandle, state: &AuthState, urls: I)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    for raw in urls {
+        let Some(route) = parse_route(raw.as_ref()) else {
+            continue;
+        };
+        let ready = if let Ok(mut navigation) = state.navigation.lock() {
+            if navigation.ready {
+                true
+            } else {
+                navigation.pending = Some(route);
+                false
+            }
+        } else {
+            false
+        };
+        if ready {
+            show_main_window(app);
+            let _ = emit_navigation(app, route);
+        }
+    }
+}
+
+fn flush_pending_navigation(app: &AppHandle, state: &AuthState) -> Result<(), String> {
+    let route = state
+        .navigation
+        .lock()
+        .map_err(|_| "Cavoti navigation state is unavailable".to_string())?
+        .set_ready_and_take();
+    if let Some(route) = route {
+        show_main_window(app);
+        emit_navigation(app, route)?;
+    }
+    Ok(())
+}
+
 fn emit_bootstrap(app: &AppHandle, state: &AuthState) -> Result<(), String> {
+    emit_capabilities(app)?;
     emit_settings(app, state)?;
     start_auth_session_probe(app, state);
     Ok(())
@@ -414,6 +565,9 @@ fn apply_setting(app: &AppHandle, state: &AuthState, value: Option<&Value>) -> R
                 .get("enabled")
                 .and_then(Value::as_bool)
                 .ok_or_else(|| "Startup setting is invalid".to_string())?;
+            if cfg!(debug_assertions) {
+                return Err("Startup registration is only available in a packaged build".into());
+            }
             #[cfg(desktop)]
             {
                 use tauri_plugin_autostart::ManagerExt;
@@ -441,6 +595,9 @@ fn apply_setting(app: &AppHandle, state: &AuthState, value: Option<&Value>) -> R
                 .filter(|threshold| (1..=100).contains(threshold))
                 .map(|threshold| threshold as u8)
                 .collect();
+            if !next.quota_thresholds.is_empty() {
+                state.notifications.ensure_permission(app);
+            }
         }
         _ => return Ok(()),
     }
@@ -452,12 +609,73 @@ fn apply_setting(app: &AppHandle, state: &AuthState, value: Option<&Value>) -> R
     emit_settings(app, state)
 }
 
-#[cfg(desktop)]
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
+        #[cfg(desktop)]
         let _ = window.unminimize();
         let _ = window.set_focus();
+    }
+}
+
+fn abort_auth_collection(app: &AppHandle, state: &AuthState) {
+    if let Ok(mut adapter) = state.adapter.lock() {
+        if let Some(collection_id) = adapter.active_collection_id().map(str::to_owned) {
+            let _ = adapter.abort(&collection_id);
+        }
+    }
+    if let Some(window) = app.get_webview_window(AUTH_WINDOW_LABEL) {
+        let _ = window.eval("window.__cavotiAuthAbort?.();");
+    }
+}
+
+fn start_foreground_refresh(app: &AppHandle, state: &AuthState) {
+    if !state.lifecycle.is_foreground()
+        || state
+            .foreground_refresh_started
+            .swap(true, Ordering::AcqRel)
+    {
+        return;
+    }
+    let app = app.clone();
+    let state = state.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = open_auth_window(
+            &app,
+            &state,
+            auth::AuthProbeRequest::default(),
+            false,
+            "Refreshing Cavoti usage",
+        )
+        .await
+        {
+            eprintln!("[cavoti-lifecycle] foreground refresh failed: {error}");
+        }
+    });
+}
+
+fn apply_lifecycle_command(
+    app: &AppHandle,
+    state: &AuthState,
+    value: Option<&Value>,
+) -> Result<(), String> {
+    match parse_command(value)? {
+        LifecycleCommand::Pause => {
+            state.lifecycle.pause();
+            state
+                .foreground_refresh_started
+                .store(false, Ordering::Release);
+            abort_auth_collection(app, state);
+            emit_lifecycle(app, "paused")
+        }
+        LifecycleCommand::Foreground => {
+            let transitioned = state.lifecycle.resume();
+            emit_lifecycle(app, "foreground")?;
+            if transitioned {
+                start_foreground_refresh(app, state);
+            }
+            Ok(())
+        }
     }
 }
 
@@ -486,6 +704,10 @@ fn start_refresh_scheduler(app: &AppHandle, state: &AuthState) {
         loop {
             thread::sleep(Duration::from_secs(1));
             let interval = current_settings(&state).refresh_interval_seconds;
+            if !state.lifecycle.is_foreground() {
+                elapsed_seconds = 0;
+                continue;
+            }
             if interval == 0 {
                 elapsed_seconds = 0;
                 continue;
@@ -568,6 +790,9 @@ fn probe_request(value: Option<&Value>) -> auth::AuthProbeRequest {
 }
 
 fn start_auth_session_probe(app: &AppHandle, state: &AuthState) -> bool {
+    if !state.lifecycle.is_foreground() {
+        return false;
+    }
     if state.startup_probe_started.swap(true, Ordering::AcqRel) {
         return false;
     }
@@ -608,12 +833,19 @@ async fn open_auth_window(
     show: bool,
     message: &'static str,
 ) -> Result<(), String> {
+    if !state.lifecycle.is_foreground() {
+        return Ok(());
+    }
     let collection_id = {
         let mut adapter = state
             .adapter
             .lock()
             .map_err(|_| "Cavoti auth state is unavailable".to_string())?;
-        adapter.begin_collection_with_request(request)
+        let Some(collection_id) = adapter.try_begin_collection_with_request(request) else {
+            eprintln!("[cavoti-auth] collection already active; ignoring duplicate request");
+            return Ok(());
+        };
+        collection_id
     };
     emit_bridge_state(app, "loading", 0, message)?;
     let login_url: url::Url = "https://cavoti.com/login"
@@ -652,7 +884,9 @@ async fn open_auth_window(
                 })?;
             }
         } else {
-            eprintln!("[cavoti-auth] auth window URL unavailable during hidden probe");
+            window
+                .navigate(login_url.clone())
+                .map_err(|error| format!("The Cavoti sign-in page could not be opened: {error}"))?;
         }
         eprintln!("[cavoti-auth] auth window request accepted show={show}");
         spawn_auth_timeout(app.clone(), state.clone(), collection_id);
@@ -794,7 +1028,9 @@ fn auth_collection_result(
         }
     };
     let AuthAdapterEvent::RawResults(raw) = event;
-    if matches!(raw.phase.as_str(), "core" | "enrichment") && raw.session_state == "authenticated" {
+    let normalized_snapshot = if matches!(raw.phase.as_str(), "core" | "enrichment")
+        && raw.session_state == "authenticated"
+    {
         let Some(snapshot) = normalize_core_snapshot(&raw) else {
             if let Ok(mut adapter) = state.adapter.lock() {
                 adapter.abort(&raw.collection_id);
@@ -802,6 +1038,11 @@ fn auth_collection_result(
             emit_bridge_state(&app, "error", 0, "Cavoti returned malformed usage data")?;
             return Err("Cavoti core snapshot could not be normalized".into());
         };
+        Some(snapshot)
+    } else {
+        None
+    };
+    if let Some(snapshot) = normalized_snapshot.as_ref() {
         emit_event(
             &app,
             json!({
@@ -812,8 +1053,17 @@ fn auth_collection_result(
             }),
         )?;
     }
-    let (state, status, message) = raw_results_state(&raw);
-    let result = emit_bridge_state(&app, state, status, message);
+    let (bridge_state, status, message) = raw_results_state(&raw);
+    if raw.phase == "enrichment" && raw.session_state == "authenticated" {
+        state.notifications.notify_connection_state(&app, "live");
+        if let Some(snapshot) = normalized_snapshot.as_ref() {
+            let thresholds = current_settings(state.inner()).quota_thresholds;
+            state
+                .notifications
+                .notify_quota_alerts(&app, snapshot, &thresholds);
+        }
+    }
+    let result = emit_bridge_state(&app, bridge_state, status, message);
     if raw.phase == "enrichment" && raw.session_state == "authenticated" {
         window
             .hide()
@@ -834,8 +1084,24 @@ async fn host_command(
     if window.label() != "main" {
         return Err("Host commands are restricted to the main window".into());
     }
+    if let Some(command) = resolve_external_command(&message.action, message.value.as_ref())? {
+        return match command {
+            ExternalCommand::Restart => {
+                app.request_restart();
+                Ok(())
+            }
+            ExternalCommand::OpenUrl(url) => app
+                .opener()
+                .open_url(url, None::<&str>)
+                .map_err(|error| format!("External destination could not be opened: {error}")),
+        };
+    }
     match message.action.as_str() {
-        "bootstrap" => emit_bootstrap(&app, state.inner()),
+        "lifecycle" => apply_lifecycle_command(&app, state.inner(), message.value.as_ref()),
+        "bootstrap" => {
+            emit_bootstrap(&app, state.inner())?;
+            flush_pending_navigation(&app, state.inner())
+        }
         "connect" | "refresh" => {
             let request = probe_request(message.value.as_ref());
             let result = open_auth_window(
@@ -861,7 +1127,6 @@ async fn host_command(
             }
             result
         }
-        "open-status" | "open-site" | "open-ip" => Ok(()),
         "setting" => apply_setting(&app, state.inner(), message.value.as_ref()),
         "clear" => {
             let defaults = HostSettings::default();
@@ -982,6 +1247,49 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+#[cfg(desktop)]
+fn restore_main_window_state(window: &WebviewWindow) {
+    use tauri::{PhysicalPosition, PhysicalSize};
+    use tauri_plugin_window_state::{StateFlags, WindowExt};
+
+    let flags = StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED;
+    let _ = window.restore_state(flags);
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let Ok(size) = window.outer_size() else {
+        return;
+    };
+    let Ok(monitors) = window.available_monitors() else {
+        return;
+    };
+    let visible = monitors.iter().any(|monitor| {
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+        let right = i64::from(position.x) + i64::from(size.width);
+        let bottom = i64::from(position.y) + i64::from(size.height);
+        let monitor_right = i64::from(monitor_position.x) + i64::from(monitor_size.width);
+        let monitor_bottom = i64::from(monitor_position.y) + i64::from(monitor_size.height);
+        let intersection_width =
+            right.min(monitor_right) - i64::from(position.x).max(i64::from(monitor_position.x));
+        let intersection_height =
+            bottom.min(monitor_bottom) - i64::from(position.y).max(i64::from(monitor_position.y));
+        intersection_width >= 32 && intersection_height >= 32
+    });
+    if visible {
+        return;
+    }
+    if let Some(monitor) = monitors.first() {
+        let _ = window.unmaximize();
+        let position = monitor.position();
+        let size = monitor.size();
+        let width = size.width.min(430);
+        let height = size.height.min(720);
+        let _ = window.set_size(PhysicalSize::new(width, height));
+        let _ = window.set_position(PhysicalPosition::new(position.x + 22, position.y + 22));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1041,6 +1349,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             host_command,
             auth_collection_result
@@ -1058,11 +1367,31 @@ pub fn run() {
         if let Ok(mut settings) = state.settings.lock() {
             *settings = persisted.clone();
         }
+        let navigation_state = state.inner().clone();
+        let navigation_app = app.handle().clone();
+        let _ = app.deep_link().on_open_url(move |event| {
+            let urls = event.urls();
+            route_navigation(
+                &navigation_app,
+                &navigation_state,
+                urls.iter().map(|url| url.as_str()),
+            );
+        });
+        if let Ok(Some(urls)) = app.deep_link().get_current() {
+            route_navigation(
+                &app.handle(),
+                state.inner(),
+                urls.iter().map(|url| url.as_str()),
+            );
+        }
         #[cfg(desktop)]
         if let Some(window) = app.get_webview_window("main") {
+            restore_main_window_state(&window);
             let _ = window.set_always_on_top(persisted.topmost);
             if persisted.maximized {
                 let _ = window.maximize();
+            } else {
+                let _ = window.unmaximize();
             }
         }
         start_refresh_scheduler(&app.handle(), state.inner());
@@ -1071,21 +1400,35 @@ pub fn run() {
 
     #[cfg(desktop)]
     let builder = builder
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .skip_initial_state("main")
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app)
         }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .setup(|app| {
             let persisted = current_settings(&app.state::<AuthState>());
-            use tauri_plugin_autostart::ManagerExt;
-            let manager = app.autolaunch();
-            let result = if persisted.launch_at_startup {
-                manager.enable()
+            if cfg!(debug_assertions) {
+                eprintln!("[cavoti-settings] startup registration skipped in debug build");
             } else {
-                manager.disable()
-            };
-            if let Err(error) = result {
-                eprintln!("[cavoti-settings] startup registration sync failed: {error}");
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = app.autolaunch();
+                let result = if persisted.launch_at_startup {
+                    manager.enable()
+                } else {
+                    manager.disable()
+                };
+                if let Err(error) = result {
+                    eprintln!("[cavoti-settings] startup registration sync failed: {error}");
+                }
             }
             Ok(build_tray(app)?)
         });

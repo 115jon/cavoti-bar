@@ -210,4 +210,80 @@ describe("App", () => {
 
     expect(screen.getByText("Updated just now")).toBeInTheDocument();
   });
+
+  it("hides desktop-only controls and keeps shared refresh on mobile", () => {
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Minimize window" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close window" })).toBeNull();
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "snapshot",
+        snapshot: liveSnapshot,
+        settings: {
+          topmost: false,
+          maximized: false,
+          refreshIntervalSeconds: 60,
+          showFreshnessSeconds: false,
+          closeToTray: true,
+          launchAtStartup: false,
+          startupError: null,
+          quotaThresholds: [],
+        },
+      }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.queryByText("Close to tray")).toBeNull();
+    expect(screen.queryByText("Run at startup")).toBeNull();
+    expect(screen.queryByText("Keep on top")).toBeNull();
+    expect(screen.getByText("Refresh interval")).toBeInTheDocument();
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    fireEvent.keyDown(window, { key: "r", ctrlKey: true });
+    act(() =>
+      window.dispatchEvent(
+        new CustomEvent("cavoti-usage-refresh", { detail: {} }),
+      ),
+    );
+    expect(sent).toContainEqual({
+      action: "lifecycle",
+      value: { state: "paused" },
+    });
+    expect(sent).not.toContainEqual({ action: "refresh" });
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(sent).toContainEqual({
+      action: "lifecycle",
+      value: { state: "foreground" },
+    });
+    fireEvent.keyDown(window, { key: "r", ctrlKey: true });
+    expect(sent).toContainEqual({ action: "refresh" });
+  });
 });

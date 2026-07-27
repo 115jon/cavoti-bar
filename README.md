@@ -1,66 +1,68 @@
 # Cavoti Bar
 
-A Windows overlay for the Cavoti usage surface. The native shell is WPF; the panel is a local React/Tailwind renderer built with Vite and loaded through WebView2.
+Cavoti Bar is a Tauri 2 client for Windows, macOS, Linux, and Android. The
+shared React renderer provides the overview, usage, plans, status, and settings
+surfaces. Native Rust code owns the authenticated Cavoti WebView, snapshot
+collection, platform integration, and persistence.
 
-## Current scope
+## Runtime Boundary
 
-- Compact overlay window positioned in the top-right work area.
-- Overview, usage, plans, status, and settings screens.
-- Light glass compact popover with a Phosphor icon rail and shadcn-style controls.
-- Overview, usage, plans, status, and settings views render from a typed `SnapshotEnvelope`.
-- The default UI does not render sample metrics. It waits for a live snapshot or shows an explicit auth/offline/error state.
-- The supplied Cavoti favicon and transparent butterfly logo are packaged locally for the UI and executable icon.
-- The app owns a notification-area tray icon with Show, Refresh, Settings, and Exit commands. Window close can either hide to the tray or exit, and the tray remains available while the window is hidden.
-- Settings can register the current Windows user for sign-in startup through the Task Manager-visible Startup Apps registry, and can configure quota alert percentages. Connection and quota alerts use Windows notifications with a tray fallback.
-- Only one instance runs per interactive Windows session; launching a second copy focuses the existing window.
+The app owns a persistent Cavoti WebView profile. Same-origin Cavoti requests
+run inside that profile and only bounded, normalized snapshot data crosses into
+the local renderer. Cookies, bearer tokens, and authenticated page contents do
+not cross the bridge.
 
-## Session boundary
+The app-owned deep-link routes are navigation-only:
 
-The supplied HAR maps the API surface but does not include reusable request cookies or `Authorization` headers. The app never copies credentials or replays the HAR. A dedicated WebView2 profile under `%LocalAppData%\CavotiBar\WebView2` owns the Cavoti session. The authenticated window performs same-origin GET requests and forwards only normalized aggregate JSON to the local renderer.
+- `cavoti://open/overview`
+- `cavoti://open/usage`
+- `cavoti://open/plans`
+- `cavoti://open/status`
+- `cavoti://open/settings`
 
-`data/demo.json` remains a sanitized contract fixture for tests only. It is not packaged or used as the default renderer source.
+They do not establish authentication or carry OAuth tokens. Unknown routes and
+query or fragment payloads are ignored.
 
-The host bridge accepts only source-validated window, tray, refresh, navigation, and connection actions, plus `setting` messages with validated topmost, close-to-tray, startup, refresh, freshness, and quota-threshold values. Refresh rereads the authenticated Cavoti profile; clear deletes `settings.json`, removes startup registration, restores defaults, and posts a versioned setting state. Local WebView2 navigation is origin-gated, approved Google/X OAuth popups are routed back through the same auth surface, collection runs only after returning to Cavoti, malformed messages are ignored, and the local preferences are persisted under the current user's application data.
+## Development
 
-Live data remains read-only. Plan purchases, API-key changes, profile changes, and payment actions hand off to Cavoti in the authenticated browser window.
+Requirements: Rust, Bun, Tauri 2 prerequisites, and Android SDK/NDK tooling for
+Android builds.
 
-## Build
-
-The Scoop-managed .NET SDK and Bun are required. Build the web renderer and native host from this folder with:
-
-```powershell
-Push-Location .\web
-bun install
-Pop-Location
-$dotnet = Join-Path (scoop prefix dotnet-sdk) 'dotnet.exe'
-& $dotnet build .\CavotiBar.csproj
-```
-
-The native build invokes `bun run build` from the `web` project and copies the fresh hashed assets into `ui` and the output directory. The renderer is served through the WebView2 virtual origin `https://app.cavoti.local` so Vite's module assets execute reliably; it is not loaded from `file:`. The project targets .NET 10 with a Windows 10 1903 minimum for native notifications and requires the WebView2 Runtime for execution.
-
-To stop any running instance, rebuild, and launch the fresh executable in one step:
+Run the desktop development shell from `apps/tauri`. It stops any existing
+Cavoti binary before starting Tauri:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\build-and-run.ps1
-```
-
-Web checks can be run directly with:
-
-```powershell
-Push-Location .\web
-bun install
-bun run verify
+Push-Location .\apps\tauri
+bun run dev
 Pop-Location
 ```
 
-The test suite covers snapshot normalization, bridge protocol validation, auth-required states, and core navigation. Native WebView2 integration still requires a real Windows session and a signed-in Cavoti profile.
-
-## HAR inspection
-
-The original HAR is intentionally kept outside the project. To inspect endpoint coverage without printing credentials:
+Build a standalone release executable, or build and launch it:
 
 ```powershell
-.\scripts\inspect-har.ps1 -Path 'C:\Users\developer\Downloads\cavoti.com.har'
+Push-Location .\apps\tauri
+bun run build:release
+bun run run:release
+# Or use: bun run release
+Pop-Location
 ```
 
-The HAR-derived fixture lives at `data/demo.json` and is intentionally not the runtime source.
+The equivalent PowerShell entry points are `scripts\tauri-dev.ps1`,
+`scripts\build-tauri-release.ps1`, and `scripts\run-tauri-release.ps1`.
+Each release operation stops an existing `cavoti_bar.exe` before replacing or
+launching the artifact.
+
+## Validation
+
+```powershell
+node --test .\tests\tauri-contract.test.mjs .\tests\ui-contract.test.mjs .\tests\data.test.mjs
+Push-Location .\web
+bun run typecheck
+bun run test
+Pop-Location
+cargo test --manifest-path .\apps\tauri\src-tauri\Cargo.toml
+cargo check --manifest-path .\apps\tauri\src-tauri\Cargo.toml --target armv7-linux-androideabi
+```
+
+Real authenticated OAuth, installed-artifact, macOS, Android device, and
+notification permission checks require the corresponding platform runtime.

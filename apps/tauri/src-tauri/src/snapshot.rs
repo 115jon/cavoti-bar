@@ -446,7 +446,7 @@ pub fn normalize_core_snapshot(raw: &AuthRawResults) -> Option<Value> {
     Some(json!({
         "version": 1,
         "capturedAt": captured_at(),
-        "source": "live-webview2",
+        "source": "live-cavoti-webview",
         "account": {
             "displayName": text(Some(me), "username", "Connected account"),
             "status": text(Some(me), "status", "unknown"),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHostMessage } from "./protocol";
+import { DEFAULT_HOST_CAPABILITIES, parseHostMessage } from "./protocol";
 import { liveSnapshot } from "../test/fixtures";
 
 describe("parseHostMessage", () => {
@@ -76,5 +76,70 @@ describe("parseHostMessage", () => {
       }),
     ).toBeNull();
     expect(parseHostMessage("not a message")).toBeNull();
+  });
+
+  it.each(["overview", "usage", "plans", "status", "settings"])(
+    "accepts only the allowlisted host navigation target %s",
+    (target) => {
+      expect(
+        parseHostMessage({ protocol: 1, type: "host-navigation", target }),
+      ).toEqual({ type: "host-navigation", target });
+    },
+  );
+
+  it("rejects host navigation payloads outside the allowlist", () => {
+    expect(
+      parseHostMessage({
+        protocol: 1,
+        type: "host-navigation",
+        target: "about",
+        code: "must-not-cross-bridge",
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts an explicit mobile capability state", () => {
+    expect(
+      parseHostMessage({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    ).toEqual({
+      type: "capabilities",
+      capabilities: {
+        platform: "mobile",
+        titlebarControls: false,
+        tray: false,
+        startup: false,
+        topmost: false,
+        windowSettings: false,
+      },
+    });
+    expect(DEFAULT_HOST_CAPABILITIES.titlebarControls).toBe(true);
+  });
+
+  it("accepts lifecycle state messages and rejects incomplete capabilities", () => {
+    expect(
+      parseHostMessage({
+        protocol: 1,
+        type: "lifecycle",
+        state: "paused",
+      }),
+    ).toEqual({ type: "lifecycle", state: "paused" });
+    expect(
+      parseHostMessage({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: { platform: "mobile" },
+      }),
+    ).toBeNull();
   });
 });

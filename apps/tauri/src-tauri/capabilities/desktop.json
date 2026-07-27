@@ -9,6 +9,8 @@
     "main"
   ],
   "permissions": [
+    "core:menu:default",
+    "core:tray:default",
     "autostart:default"
   ]
 }

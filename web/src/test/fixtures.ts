@@ -3,7 +3,7 @@ import type { SnapshotEnvelope } from "../domain/snapshot";
 export const liveSnapshot: SnapshotEnvelope = {
   version: 1,
   capturedAt: "2026-07-23T10:52:12.000Z",
-  source: "live-webview2",
+  source: "live-cavoti-webview",
   account: {
     displayName: "Connected account",
     status: "active",
