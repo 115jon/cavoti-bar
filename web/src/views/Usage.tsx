@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowsClockwiseIcon as ArrowsClockwise,
   CaretLeftIcon as CaretLeft,
   CaretRightIcon as CaretRight,
   ChartBarIcon as ChartBar,
+  FunnelSimpleIcon as FunnelSimple,
   StackIcon as Stack,
   UsersThreeIcon as UsersThree,
   XIcon as X,
@@ -22,6 +23,7 @@ import {
 import type {
   PageInfo,
   SnapshotEnvelope,
+  UsageError,
   UsageFilters as UsageFilterState,
   UsageLog,
   UsageRow,
@@ -35,12 +37,7 @@ import {
   tokens,
   type DateRangePreset,
 } from "../app/formatters";
-import {
-  Badge,
-  Empty,
-  TilePager,
-  useCompactTiles,
-} from "../components/app/shared";
+import { Badge, Empty, useCompactTiles } from "../components/app/shared";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -67,6 +64,16 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "../components/ui/drawer";
 
 type DistributionMetric = "cost" | "tokens";
 type DistributionPoint = UsageRow & {
@@ -136,11 +143,13 @@ function FilterSelect({
   value,
   options,
   onChange,
+  compact = false,
 }: {
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
+  compact?: boolean;
 }) {
   const fieldId = `usage-${label.toLowerCase().replaceAll(" ", "-")}`;
   return (
@@ -150,7 +159,12 @@ function FilterSelect({
         value={value || "__all__"}
         onValueChange={(next) => onChange(next === "__all__" ? "" : next)}
       >
-        <SelectTrigger id={fieldId} size="sm" aria-label={label}>
+        <SelectTrigger
+          id={fieldId}
+          size={compact ? "default" : "sm"}
+          className={compact ? "h-12 w-full px-3 text-base" : "w-full"}
+          aria-label={label}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -159,6 +173,7 @@ function FilterSelect({
               <SelectItem
                 value={option.value || "__all__"}
                 key={`${label}-${option.value}`}
+                className={compact ? "py-3 text-base" : undefined}
               >
                 {option.label}
               </SelectItem>
@@ -173,9 +188,11 @@ function FilterSelect({
 function DateRangeSelect({
   filters,
   onChange,
+  compact = false,
 }: {
   filters: UsageFilterState;
   onChange: (filters: Pick<UsageFilterState, "startDate" | "endDate">) => void;
+  compact?: boolean;
 }) {
   const preset = dateRangeOptions.find(({ value }) => {
     const range = dateRangeForPreset(value);
@@ -193,7 +210,12 @@ function DateRangeSelect({
             onChange(dateRangeForPreset(next as DateRangePreset));
         }}
       >
-        <SelectTrigger id="usage-date-range" size="sm" aria-label="Date range">
+        <SelectTrigger
+          id="usage-date-range"
+          size={compact ? "default" : "sm"}
+          className={compact ? "h-12 w-full px-3 text-base" : "w-full"}
+          aria-label="Date range"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -213,6 +235,7 @@ function DateRangeSelect({
             id="usage-start-date"
             type="date"
             aria-label="Start date"
+            className={compact ? "h-12" : undefined}
             value={filters.startDate}
             onChange={(event) =>
               onChange({
@@ -225,6 +248,7 @@ function DateRangeSelect({
             id="usage-end-date"
             type="date"
             aria-label="End date"
+            className={compact ? "h-12" : undefined}
             value={filters.endDate}
             onChange={(event) =>
               onChange({
@@ -252,102 +276,228 @@ function UsageFilters({
   onRefresh: () => void;
   onReset: () => void;
 }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const update = (patch: Partial<UsageFilterState>) =>
+    onChange({ ...filters, ...patch });
+  const compact = useCompactTiles();
+  const activeFilters = [
+    filters.apiKeyId !== null,
+    Boolean(filters.model),
+    filters.groupId !== null,
+    Boolean(filters.requestType),
+    filters.billingType !== null,
+    Boolean(filters.billingMode),
+  ].filter(Boolean).length;
+  const fields = (
+    <UsageFilterFields
+      snapshot={snapshot}
+      filters={filters}
+      update={update}
+      compact={compact}
+    />
+  );
+  const setDrawerOpen = (open: boolean) => {
+    setFiltersOpen(open);
+    window.dispatchEvent(
+      new CustomEvent("cavoti-native-refresh-lock", {
+        detail: { locked: open },
+      }),
+    );
+  };
+  useEffect(
+    () => () => {
+      window.dispatchEvent(
+        new CustomEvent("cavoti-native-refresh-lock", {
+          detail: { locked: false },
+        }),
+      );
+    },
+    [],
+  );
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-(--line) bg-white/60 p-3">
+      {compact ? (
+        <Drawer open={filtersOpen} onOpenChange={setDrawerOpen}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <strong className="block text-sm font-semibold">Filters</strong>
+              <span className="block truncate text-xs text-(--ink-muted)">
+                {activeFilters
+                  ? `${activeFilters} filters active`
+                  : "All requests"}
+              </span>
+            </div>
+            <DrawerTrigger asChild>
+              <Button variant="outline" size="sm">
+                <FunnelSimple data-icon="inline-start" />
+                Adjust
+              </Button>
+            </DrawerTrigger>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto text-xs text-(--ink-muted)">
+            <Badge variant="outline" className="shrink-0">
+              {filters.startDate} to {filters.endDate}
+            </Badge>
+            {filters.model ? (
+              <Badge variant="outline" className="shrink-0">
+                {filters.model}
+              </Badge>
+            ) : null}
+            {filters.requestType ? (
+              <Badge variant="outline" className="shrink-0">
+                {filters.requestType}
+              </Badge>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={onRefresh}>
+              <ArrowsClockwise data-icon="inline-start" /> Refresh
+            </Button>
+            {activeFilters ? (
+              <Button size="sm" variant="ghost" onClick={onReset}>
+                <X data-icon="inline-start" /> Reset
+              </Button>
+            ) : null}
+          </div>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Usage filters</DrawerTitle>
+              <DrawerDescription>
+                Narrow the requests shown in the dashboard.
+              </DrawerDescription>
+            </DrawerHeader>
+            <div className="grid max-h-[52dvh] grid-cols-1 gap-4 overflow-y-auto px-4">
+              {fields}
+            </div>
+            <DrawerFooter>
+              <DrawerClose asChild>
+                <Button className="h-12 w-full text-base">Done</Button>
+              </DrawerClose>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <>
+          {fields}
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={onRefresh}>
+              <ArrowsClockwise data-icon="inline-start" /> Refresh usage
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onReset}>
+              <X data-icon="inline-start" /> Reset filters
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function UsageFilterFields({
+  snapshot,
+  filters,
+  update,
+  compact,
+}: {
+  snapshot: SnapshotEnvelope;
+  filters: UsageFilterState;
+  update: (patch: Partial<UsageFilterState>) => void;
+  compact: boolean;
+}) {
   const models = snapshot.models
     .map((model) => model.name)
     .filter((name, index, all) => all.indexOf(name) === index)
     .sort();
-  const update = (patch: Partial<UsageFilterState>) =>
-    onChange({ ...filters, ...patch });
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-(--line) bg-white/60 p-3">
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-[minmax(180px,1.25fr)_repeat(3,minmax(130px,1fr))]">
-        <div className="flex min-w-0 flex-col gap-1 col-span-full xl:col-auto">
-          <Label htmlFor="usage-start-date">Date range</Label>
-          <DateRangeSelect filters={filters} onChange={update} />
-        </div>
-        <FilterSelect
-          label="API key"
-          value={filters.apiKeyId === null ? "" : String(filters.apiKeyId)}
-          options={[
-            { value: "", label: "All API keys" },
-            ...snapshot.apiKeys.map((item) => ({
-              value: String(item.id),
-              label: item.name,
-            })),
-          ]}
-          onChange={(value) =>
-            update({ apiKeyId: value ? Number(value) : null })
-          }
-        />
-        <FilterSelect
-          label="Model"
-          value={filters.model}
-          options={[
-            { value: "", label: "All models" },
-            ...models.map((model) => ({ value: model, label: model })),
-          ]}
-          onChange={(model) => update({ model })}
-        />
-        <FilterSelect
-          label="Group"
-          value={filters.groupId === null ? "" : String(filters.groupId)}
-          options={[
-            { value: "", label: "All groups" },
-            ...snapshot.groupOptions.map((item) => ({
-              value: String(item.id),
-              label: item.name,
-            })),
-          ]}
-          onChange={(value) =>
-            update({ groupId: value ? Number(value) : null })
-          }
-        />
-        <FilterSelect
-          label="Type"
-          value={filters.requestType}
-          options={[
-            { value: "", label: "All types" },
-            { value: "ws_v2", label: "WS" },
-            { value: "stream", label: "Stream" },
-            { value: "sync", label: "Sync" },
-          ]}
-          onChange={(requestType) => update({ requestType })}
-        />
-        <FilterSelect
-          label="Billing type"
-          value={
-            filters.billingType === null ? "" : String(filters.billingType)
-          }
-          options={[
-            { value: "", label: "All billing types" },
-            { value: "0", label: "Balance" },
-            { value: "1", label: "Subscription" },
-          ]}
-          onChange={(value) =>
-            update({ billingType: value ? Number(value) : null })
-          }
-        />
-        <FilterSelect
-          label="Billing mode"
-          value={filters.billingMode}
-          options={[
-            { value: "", label: "All billing modes" },
-            { value: "token", label: "Token" },
-            { value: "per_request", label: "Per request" },
-            { value: "image", label: "Image" },
-          ]}
-          onChange={(billingMode) => update({ billingMode })}
+    <div
+      className={
+        compact
+          ? "grid grid-cols-1 gap-3"
+          : "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(180px,1.25fr)_repeat(3,minmax(130px,1fr))]"
+      }
+    >
+      <div className="col-span-full flex min-w-0 flex-col gap-1 xl:col-auto">
+        <Label htmlFor="usage-start-date">Date range</Label>
+        <DateRangeSelect
+          filters={filters}
+          onChange={update}
+          compact={compact}
         />
       </div>
-      <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onRefresh}>
-          <ArrowsClockwise data-icon="inline-start" /> Refresh usage
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onReset}>
-          <X data-icon="inline-start" /> Reset filters
-        </Button>
-      </div>
-    </section>
+      <FilterSelect
+        label="API key"
+        value={filters.apiKeyId === null ? "" : String(filters.apiKeyId)}
+        options={[
+          { value: "", label: "All API keys" },
+          ...snapshot.apiKeys.map((item) => ({
+            value: String(item.id),
+            label: item.name,
+          })),
+        ]}
+        onChange={(value) => update({ apiKeyId: value ? Number(value) : null })}
+        compact={compact}
+      />
+      <FilterSelect
+        label="Model"
+        value={filters.model}
+        options={[
+          { value: "", label: "All models" },
+          ...models.map((model) => ({ value: model, label: model })),
+        ]}
+        onChange={(model) => update({ model })}
+        compact={compact}
+      />
+      <FilterSelect
+        label="Group"
+        value={filters.groupId === null ? "" : String(filters.groupId)}
+        options={[
+          { value: "", label: "All groups" },
+          ...snapshot.groupOptions.map((item) => ({
+            value: String(item.id),
+            label: item.name,
+          })),
+        ]}
+        onChange={(value) => update({ groupId: value ? Number(value) : null })}
+        compact={compact}
+      />
+      <FilterSelect
+        label="Type"
+        value={filters.requestType}
+        options={[
+          { value: "", label: "All types" },
+          { value: "ws_v2", label: "WS" },
+          { value: "stream", label: "Stream" },
+          { value: "sync", label: "Sync" },
+        ]}
+        onChange={(requestType) => update({ requestType })}
+        compact={compact}
+      />
+      <FilterSelect
+        label="Billing type"
+        value={filters.billingType === null ? "" : String(filters.billingType)}
+        options={[
+          { value: "", label: "All billing types" },
+          { value: "0", label: "Balance" },
+          { value: "1", label: "Subscription" },
+        ]}
+        onChange={(value) =>
+          update({ billingType: value ? Number(value) : null })
+        }
+        compact={compact}
+      />
+      <FilterSelect
+        label="Billing mode"
+        value={filters.billingMode}
+        options={[
+          { value: "", label: "All billing modes" },
+          { value: "token", label: "Token" },
+          { value: "per_request", label: "Per request" },
+          { value: "image", label: "Image" },
+        ]}
+        onChange={(billingMode) => update({ billingMode })}
+        compact={compact}
+      />
+    </div>
   );
 }
 
@@ -394,6 +544,7 @@ function DistributionChart({
   metric: DistributionMetric;
   label: string;
 }) {
+  const compact = useCompactTiles();
   const values = rows
     .filter((row) => (metric === "cost" ? row.actualCost : row.tokens) > 0)
     .sort((a, b) =>
@@ -420,6 +571,40 @@ function DistributionChart({
         compact
       />
     );
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-xs text-(--ink-muted)">Total</span>
+          <strong className="text-base font-semibold tabular-nums">
+            {metric === "cost" ? money(total) : tokens(total)}
+          </strong>
+        </div>
+        <div className="flex flex-col gap-3">
+          {points.map((row) => (
+            <div className="min-w-0" key={row.name}>
+              <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate text-(--ink-muted)">
+                  {row.name}
+                </span>
+                <strong className="shrink-0 font-semibold tabular-nums">
+                  {metric === "cost"
+                    ? money(row.actualCost)
+                    : `${tokens(row.tokens)} · ${row.percentage.toFixed(1)}%`}
+                </strong>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-(--line)">
+                <div
+                  className="h-full rounded-full"
+                  style={{ background: row.fill, width: `${row.percentage}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="grid min-h-48 grid-cols-[132px_minmax(0,1fr)] items-center gap-4 max-[460px]:grid-cols-1 max-[460px]:justify-items-center">
       <div
@@ -560,6 +745,7 @@ function TrendTooltip({
 }
 
 function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
+  const compact = useCompactTiles();
   if (!rows.length)
     return (
       <Empty
@@ -639,24 +825,28 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
             dot={false}
             activeDot={{ r: 3 }}
           />
-          <Line
-            type="monotone"
-            dataKey="cacheCreationTokens"
-            name="cacheCreationTokens"
-            stroke="var(--chart-3)"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 3 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="cacheReadTokens"
-            name="cacheReadTokens"
-            stroke="var(--chart-4)"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 3 }}
-          />
+          {compact ? null : (
+            <Line
+              type="monotone"
+              dataKey="cacheCreationTokens"
+              name="cacheCreationTokens"
+              stroke="var(--chart-3)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 3 }}
+            />
+          )}
+          {compact ? null : (
+            <Line
+              type="monotone"
+              dataKey="cacheReadTokens"
+              name="cacheReadTokens"
+              stroke="var(--chart-4)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 3 }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -690,11 +880,29 @@ function UsageLogTable({
   logs,
   pageInfo,
   onPageChange,
+  compact = false,
 }: {
   logs: UsageLog[];
   pageInfo: PageInfo;
   onPageChange: (page: number) => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return logs.length ? (
+      <div className="flex flex-col gap-2">
+        {logs.map((log) => (
+          <UsageLogCard log={log} key={log.id} />
+        ))}
+        <ActivityPagination pageInfo={pageInfo} onPageChange={onPageChange} />
+      </div>
+    ) : (
+      <Empty
+        title="No usage logs"
+        message="Recent request details will appear here after the next refresh."
+        compact
+      />
+    );
+  }
   return logs.length ? (
     <div className="flex flex-col gap-2">
       <div className="overflow-x-auto">
@@ -766,36 +974,7 @@ function UsageLogTable({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-(--line) pt-2 text-[10px] text-(--ink-muted)">
-        <span>
-          Showing {(pageInfo.page - 1) * pageInfo.pageSize + 1}-
-          {Math.min(pageInfo.total, pageInfo.page * pageInfo.pageSize)} of{" "}
-          {integer(pageInfo.total)}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Previous usage page"
-            disabled={pageInfo.page <= 1}
-            onClick={() => onPageChange(pageInfo.page - 1)}
-          >
-            <CaretLeft />
-          </Button>
-          <span className="min-w-12 text-center tabular-nums">
-            {pageInfo.page} / {pageInfo.pages}
-          </span>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Next usage page"
-            disabled={pageInfo.page >= pageInfo.pages}
-            onClick={() => onPageChange(pageInfo.page + 1)}
-          >
-            <CaretRight />
-          </Button>
-        </div>
-      </div>
+      <ActivityPagination pageInfo={pageInfo} onPageChange={onPageChange} />
     </div>
   ) : (
     <Empty
@@ -806,12 +985,128 @@ function UsageLogTable({
   );
 }
 
+function ActivityPagination({
+  pageInfo,
+  onPageChange,
+}: {
+  pageInfo: PageInfo;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-t border-(--line) pt-2 text-xs text-(--ink-muted)">
+      <span>
+        Showing {(pageInfo.page - 1) * pageInfo.pageSize + 1}-
+        {Math.min(pageInfo.total, pageInfo.page * pageInfo.pageSize)} of{" "}
+        {integer(pageInfo.total)}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Previous usage page"
+          disabled={pageInfo.page <= 1}
+          onClick={() => onPageChange(pageInfo.page - 1)}
+        >
+          <CaretLeft />
+        </Button>
+        <span className="min-w-12 text-center tabular-nums">
+          {pageInfo.page} / {pageInfo.pages}
+        </span>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Next usage page"
+          disabled={pageInfo.page >= pageInfo.pages}
+          onClick={() => onPageChange(pageInfo.page + 1)}
+        >
+          <CaretRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function UsageLogCard({ log }: { log: UsageLog }) {
+  return (
+    <article className="rounded-lg border border-(--line) bg-white/70 p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <strong className="block truncate text-sm font-semibold">
+            {log.model}
+          </strong>
+          <span className="mt-0.5 block text-xs text-(--ink-muted)">
+            {timestamp(log.createdAt)} · {log.endpoint}
+          </span>
+        </div>
+        <Badge variant="outline">{money(log.actualCost)}</Badge>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <Metric label="Tokens" value={tokens(log.totalTokens)} />
+        <Metric
+          label="Duration"
+          value={
+            log.durationMs ? `${(log.durationMs / 1000).toFixed(1)} s` : "-"
+          }
+        />
+        <Metric label="API key" value={log.apiKeyName || "Unknown"} />
+        <Metric label="Reasoning" value={log.reasoningEffort || "-"} />
+      </div>
+      <button
+        type="button"
+        className="mt-3 block max-w-full truncate text-left text-xs text-accent underline decoration-accent/40 underline-offset-2"
+        title={`Look up ${log.ipAddress}`}
+        onClick={() => openIpLocation(log.ipAddress)}
+      >
+        {formatLocation(log)}
+      </button>
+    </article>
+  );
+}
+
+function UsageErrorCard({ error }: { error: UsageError }) {
+  return (
+    <article className="rounded-lg border border-(--line) bg-white/70 p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <strong className="block truncate text-sm font-semibold">
+            {error.model || error.endpoint}
+          </strong>
+          <span className="mt-0.5 block text-xs text-(--ink-muted)">
+            {timestamp(error.createdAt)} · {error.category || "Error"}
+          </span>
+        </div>
+        <Badge variant="warning">{integer(error.statusCode)}</Badge>
+      </div>
+      <p className="mt-3 line-clamp-3 text-xs text-(--ink-muted)">
+        {error.message}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <Metric label="Endpoint" value={error.endpoint || "-"} />
+        <Metric label="Key" value={error.keyName || "Unknown"} />
+      </div>
+    </article>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md bg-(--panel) px-2 py-1.5">
+      <span className="block text-[10px] text-(--ink-muted)">{label}</span>
+      <strong className="block truncate font-semibold tabular-nums">
+        {value}
+      </strong>
+    </div>
+  );
+}
+
 function ActivityPanel({
   snapshot,
   onPageChange,
+  compact = false,
 }: {
   snapshot: SnapshotEnvelope;
   onPageChange: (page: number) => void;
+  compact?: boolean;
 }) {
   const [tab, setTab] = useState<"usage" | "errors">("usage");
   return (
@@ -845,7 +1140,14 @@ function ActivityPanel({
             logs={snapshot.usageLogs}
             pageInfo={snapshot.usagePageInfo}
             onPageChange={onPageChange}
+            compact={compact}
           />
+        ) : compact && snapshot.errors.length ? (
+          <div className="flex flex-col gap-2">
+            {snapshot.errors.map((error) => (
+              <UsageErrorCard error={error} key={error.id} />
+            ))}
+          </div>
         ) : snapshot.errors.length ? (
           <div className="overflow-x-auto">
             <Table className="min-w-205 text-[10px]">
@@ -1023,7 +1325,6 @@ function UsageWide({
 export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
   const [filters, setFilters] = useState(defaultUsageFilterState);
   const [usagePage, setUsagePage] = useState(1);
-  const [page, setPage] = useState(0);
   const compact = useCompactTiles();
   const refresh = (next: UsageFilterState, page = 1) => {
     setFilters(next);
@@ -1052,95 +1353,70 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
         onPageChange={changeUsagePage}
       />
     );
-  const pageCount = 6;
-  const pageLabel =
-    [
-      "Filters",
-      "Daily trend",
-      "Model distribution",
-      "Groups",
-      "Endpoints",
-      "Usage activity",
-    ][page] ?? "Usage";
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex min-h-0 flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
+    <div className="flex min-h-full flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+            Usage dashboard
+          </span>
+          <h1>Usage</h1>
+        </div>
+        <Badge variant="outline">
+          {filters.startDate} to {filters.endDate}
+        </Badge>
+      </div>
+      <UsageFilters
+        snapshot={snapshot}
+        filters={filters}
+        onChange={changeFilters}
+        onRefresh={apply}
+        onReset={reset}
+      />
+      <StatRail snapshot={snapshot} />
+      <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
+        <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
           <div>
             <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-              {pageLabel}
+              Token volume
             </span>
-            <h1>Usage</h1>
+            <CardTitle className="text-lg font-semibold leading-7">
+              Daily trend
+            </CardTitle>
           </div>
-          <div className="flex min-w-0 items-center gap-2">
-            <Badge variant="outline">
-              {filters.startDate} to {filters.endDate}
-            </Badge>
-            <TilePager
-              page={page}
-              count={pageCount}
-              onChange={setPage}
-              label="Usage screen"
-            />
-          </div>
-        </div>
-        {page === 0 ? (
-          <>
-            <UsageFilters
-              snapshot={snapshot}
-              filters={filters}
-              onChange={changeFilters}
-              onRefresh={apply}
-              onReset={reset}
-            />
-            <StatRail snapshot={snapshot} />
-          </>
-        ) : page === 1 ? (
-          <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                  Token volume
-                </span>
-                <CardTitle className="text-lg font-semibold leading-7">
-                  Daily trend
-                </CardTitle>
-              </div>
-              <ChartBar className="size-5 text-accent" />
-            </CardHeader>
-            <CardContent className="min-w-0 p-0">
-              <TrendChart rows={snapshot.dailyTrend} />
-            </CardContent>
-          </Card>
-        ) : page === 2 ? (
-          <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-3 p-0">
-              <CardTitle className="text-lg font-semibold leading-7">
-                Model distribution
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="min-w-0 p-0">
-              <ModelDistribution rows={snapshot.models} />
-            </CardContent>
-          </Card>
-        ) : page === 3 ? (
-          <DistributionCard
-            title="Groups"
-            eyebrow="Billing groups"
-            icon={<UsersThree className="size-5 text-accent" />}
-            rows={snapshot.groups}
-          />
-        ) : page === 4 ? (
-          <DistributionCard
-            title="Endpoints"
-            eyebrow="Cost centers"
-            icon={<ChartBar className="size-5 text-accent" />}
-            rows={snapshot.stats.endpoints}
-          />
-        ) : (
-          <ActivityPanel snapshot={snapshot} onPageChange={changeUsagePage} />
-        )}
-      </div>
+          <ChartBar className="size-5 text-accent" />
+        </CardHeader>
+        <CardContent className="min-w-0 p-0">
+          <TrendChart rows={snapshot.dailyTrend} />
+        </CardContent>
+      </Card>
+      <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
+        <CardHeader className="mb-3 p-0">
+          <CardTitle className="text-lg font-semibold leading-7">
+            Model distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="min-w-0 p-0">
+          <ModelDistribution rows={snapshot.models} />
+        </CardContent>
+      </Card>
+      <DistributionCard
+        title="Groups"
+        eyebrow="Billing groups"
+        icon={<UsersThree className="size-5 text-accent" />}
+        rows={snapshot.groups}
+      />
+      <DistributionCard
+        title="Endpoints"
+        eyebrow="Cost centers"
+        icon={<ChartBar className="size-5 text-accent" />}
+        rows={snapshot.stats.endpoints}
+      />
+      <ActivityPanel
+        snapshot={snapshot}
+        onPageChange={changeUsagePage}
+        compact
+      />
     </div>
   );
 }

@@ -205,23 +205,18 @@ function DesktopPlanCard({
       }}
     >
       <CardHeader className="flex items-start justify-between gap-3 p-0">
-        <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-            {plan.billingKind}
-          </span>
-          <CardTitle className="m-0 text-lg font-semibold leading-7">
+        <div className="min-w-0">
+          <CardTitle className="m-0 truncate text-xl font-semibold leading-7">
             {plan.name}
           </CardTitle>
+          <p className="mt-1 text-xs text-(--ink-muted)">
+            Billing: {plan.billingKind}
+          </p>
         </div>
         <CardAction className="self-start">
           <Badge
-            variant={
-              plan.quotaState === "limited"
-                ? "warning"
-                : selected
-                  ? "success"
-                  : "outline"
-            }
+            className="capitalize"
+            variant={plan.quotaState === "limited" ? "warning" : "success"}
           >
             {plan.status}
           </Badge>
@@ -385,15 +380,21 @@ function CompactOverview({
       ) : null}
       {plan ? (
         <section className="rounded-lg border border-(--line) bg-white/70 px-3 py-4 shadow-sm">
-          <div className="mb-3">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
+              <span className="block text-xs font-medium text-(--ink-muted)">
                 Quota overview
               </span>
-              <h2 className="m-0 text-base font-semibold leading-6">
-                {plan.billingKind}
+              <h2 className="m-0 text-lg font-semibold leading-7">
+                {plan.name}
               </h2>
             </div>
+            <Badge
+              className="capitalize"
+              variant={plan.quotaState === "limited" ? "warning" : "success"}
+            >
+              {plan.status}
+            </Badge>
           </div>
           <div className="grid grid-cols-1 gap-4">
             <UsageMeter label="Daily" window={plan.usage.daily} />

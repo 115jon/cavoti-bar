@@ -143,6 +143,8 @@ fn show<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) -> bool {
         .title(title)
         .body(body)
         .channel_id("cavoti-monitor")
+        .icon("ic_cavoti_notification")
+        .icon_color("#6F5637")
         .show()
     {
         eprintln!("[cavoti-notifications] notification failed: {error}");

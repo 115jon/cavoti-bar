@@ -28,6 +28,7 @@ import { About } from "./views/About";
 type NativeRefreshWindow = Window & {
   CavotiNativeRefresh?: {
     complete?: () => void;
+    setGestureLocked?: (locked: boolean) => void;
     setEnabled?: (enabled: boolean) => void;
     setCanChildScrollUp?: (canScrollUp: boolean) => void;
   };
@@ -39,6 +40,12 @@ function completeNativeRefresh() {
 
 function setNativeRefreshEnabled(enabled: boolean) {
   (window as NativeRefreshWindow).CavotiNativeRefresh?.setEnabled?.(enabled);
+}
+
+function setNativeRefreshGestureLocked(locked: boolean) {
+  (window as NativeRefreshWindow).CavotiNativeRefresh?.setGestureLocked?.(
+    locked,
+  );
 }
 
 export function App({ bridge }: AppProps) {
@@ -235,9 +242,24 @@ export function App({ bridge }: AppProps) {
   }, [bridge, openStatus, refresh]);
 
   useEffect(() => {
-    setNativeRefreshEnabled(
-      state === "live" && view !== "settings" && view !== "about",
+    const canRefresh =
+      state === "live" && view !== "settings" && view !== "about";
+    const handleNativeRefreshLock = (event: Event) => {
+      const locked =
+        (event as CustomEvent<{ locked?: boolean }>).detail?.locked === true;
+      setNativeRefreshGestureLocked(locked);
+    };
+
+    setNativeRefreshEnabled(canRefresh);
+    window.addEventListener(
+      "cavoti-native-refresh-lock",
+      handleNativeRefreshLock,
     );
+    return () =>
+      window.removeEventListener(
+        "cavoti-native-refresh-lock",
+        handleNativeRefreshLock,
+      );
   }, [state, view]);
 
   useEffect(() => {

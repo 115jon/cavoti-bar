@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyIcon as Key } from "@phosphor-icons/react";
-import { Badge, TilePager, useCompactTiles } from "../components/app/shared";
+import { Badge } from "../components/app/shared";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import {
@@ -231,205 +231,103 @@ export function Settings({
   quotaThresholds: number[];
   onQuotaThresholds: (value: number[]) => void;
 }) {
-  const [page, setPage] = useState(0);
-  const compact = useCompactTiles();
-  if (!compact)
-    return (
-      <div className="flex w-full max-w-370 flex-col gap-6">
-        <div className="flex justify-end">
-          <Badge variant="outline">Local</Badge>
-        </div>
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                Application
-              </span>
-              <CardTitle className="text-lg font-semibold leading-7">
-                {capabilities.windowSettings
-                  ? "Window behavior"
-                  : "Refresh and connection"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 p-0">
-              <WindowBehaviorSettings
-                showTray={capabilities.tray}
-                showStartup={capabilities.startup}
-                closeToTray={closeToTray}
-                onCloseToTray={onCloseToTray}
-                launchAtStartup={launchAtStartup}
-                onLaunchAtStartup={onLaunchAtStartup}
-                startupError={startupError}
-                onRetryStartup={onRetryStartup}
-                quotaThresholds={quotaThresholds}
-                onQuotaThresholds={onQuotaThresholds}
-              />
-              {capabilities.topmost ? (
-                <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
-                  <div>
-                    <strong className="block text-xs">Keep on top</strong>
-                    <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
-                      Keep the popover above other windows.
-                    </small>
-                  </div>
-                  <Switch
-                    checked={topmost}
-                    onCheckedChange={onTopmost}
-                    aria-label="Keep on top"
-                  />
-                </div>
-              ) : null}
-              <RefreshSettings
-                refreshIntervalSeconds={refreshIntervalSeconds}
-                onRefreshInterval={onRefreshInterval}
-                showFreshnessSeconds={showFreshnessSeconds}
-                onShowFreshnessSeconds={onShowFreshnessSeconds}
-              />
-              <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
-                <div>
-                  <strong className="block text-xs">Connection profile</strong>
-                  <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
-                    Session cookies stay inside the Cavoti app profile.
-                  </small>
-                </div>
-                <Button variant="outline" size="sm" onClick={onConnect}>
-                  Open sign in
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                Privacy boundary
-              </span>
-              <CardTitle className="text-lg font-semibold leading-7">
-                Local session
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 p-0">
-              <Alert className="flex w-full items-center gap-2 rounded-lg border border-(--line) bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-accent">
-                <Key className="shrink-0" />
-                <div>
-                  <AlertTitle className="text-xs font-medium">
-                    Credentials never reach this UI
-                  </AlertTitle>
-                  <AlertDescription className="mt-0.5 text-[10px] text-(--ink-muted)">
-                    Only normalized usage, plan, and account status data are
-                    forwarded.
-                  </AlertDescription>
-                </div>
-              </Alert>
-              <Button variant="ghost" size="sm" onClick={onClear}>
-                Clear local preferences
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex min-h-0 flex-col gap-3">
-        <div className="flex items-center justify-end gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <Badge variant="outline">Local</Badge>
-            <TilePager
-              page={page}
-              count={2}
-              onChange={setPage}
-              label="Settings screen"
-            />
-          </div>
+    <div className="flex w-full max-w-370 flex-col gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="block text-xs font-medium text-(--ink-muted)">
+            App preferences
+          </span>
+          <h1 className="m-0 text-2xl font-semibold leading-8">Settings</h1>
         </div>
-        {page === 0 ? (
-          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                Application
-              </span>
-              <CardTitle className="text-lg font-semibold leading-7">
-                {capabilities.windowSettings
-                  ? "Window behavior"
-                  : "Refresh and connection"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 p-0">
-              <WindowBehaviorSettings
-                showTray={capabilities.tray}
-                showStartup={capabilities.startup}
-                closeToTray={closeToTray}
-                onCloseToTray={onCloseToTray}
-                launchAtStartup={launchAtStartup}
-                onLaunchAtStartup={onLaunchAtStartup}
-                startupError={startupError}
-                onRetryStartup={onRetryStartup}
-                quotaThresholds={quotaThresholds}
-                onQuotaThresholds={onQuotaThresholds}
-              />
-              {capabilities.topmost ? (
-                <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
-                  <div>
-                    <strong className="block text-xs">Keep on top</strong>
-                    <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
-                      Keep the popover above other windows.
-                    </small>
-                  </div>
-                  <Switch
-                    checked={topmost}
-                    onCheckedChange={onTopmost}
-                    aria-label="Keep on top"
-                  />
-                </div>
-              ) : null}
-              <RefreshSettings
-                refreshIntervalSeconds={refreshIntervalSeconds}
-                onRefreshInterval={onRefreshInterval}
-                showFreshnessSeconds={showFreshnessSeconds}
-                onShowFreshnessSeconds={onShowFreshnessSeconds}
-              />
-              <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
+        <Badge variant="outline">Local</Badge>
+      </div>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-4 shadow-sm">
+          <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
+            <span className="text-xs font-medium text-(--ink-muted)">
+              Application
+            </span>
+            <CardTitle className="text-xl font-semibold leading-7">
+              {capabilities.windowSettings
+                ? "Window behavior"
+                : "Refresh and connection"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 p-0">
+            <WindowBehaviorSettings
+              showTray={capabilities.tray}
+              showStartup={capabilities.startup}
+              closeToTray={closeToTray}
+              onCloseToTray={onCloseToTray}
+              launchAtStartup={launchAtStartup}
+              onLaunchAtStartup={onLaunchAtStartup}
+              startupError={startupError}
+              onRetryStartup={onRetryStartup}
+              quotaThresholds={quotaThresholds}
+              onQuotaThresholds={onQuotaThresholds}
+            />
+            {capabilities.topmost ? (
+              <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                 <div>
-                  <strong className="block text-xs">Connection profile</strong>
+                  <strong className="block text-xs">Keep on top</strong>
                   <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
-                    Session cookies stay inside the Cavoti app profile.
+                    Keep the popover above other windows.
                   </small>
                 </div>
-                <Button variant="outline" size="sm" onClick={onConnect}>
-                  Open sign in
-                </Button>
+                <Switch
+                  checked={topmost}
+                  onCheckedChange={onTopmost}
+                  aria-label="Keep on top"
+                />
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                Privacy boundary
-              </span>
-              <CardTitle className="text-lg font-semibold leading-7">
-                Local session
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 p-0">
-              <Alert className="flex w-full items-center gap-2 rounded-lg border border-(--line) bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-accent">
-                <Key className="shrink-0" />
-                <div>
-                  <AlertTitle className="text-xs font-medium">
-                    Credentials never reach this UI
-                  </AlertTitle>
-                  <AlertDescription className="mt-0.5 text-[10px] text-(--ink-muted)">
-                    Only normalized usage, plan, and account status data are
-                    forwarded.
-                  </AlertDescription>
-                </div>
-              </Alert>
-              <Button variant="ghost" size="sm" onClick={onClear}>
-                Clear local preferences
+            ) : null}
+            <RefreshSettings
+              refreshIntervalSeconds={refreshIntervalSeconds}
+              onRefreshInterval={onRefreshInterval}
+              showFreshnessSeconds={showFreshnessSeconds}
+              onShowFreshnessSeconds={onShowFreshnessSeconds}
+            />
+            <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
+              <div>
+                <strong className="block text-xs">Connection profile</strong>
+                <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+                  Session cookies stay inside the Cavoti app profile.
+                </small>
+              </div>
+              <Button variant="outline" size="sm" onClick={onConnect}>
+                Open sign in
               </Button>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-4 shadow-sm">
+          <CardHeader className="mb-0 flex-col items-start gap-1 p-0">
+            <span className="text-xs font-medium text-(--ink-muted)">
+              Privacy boundary
+            </span>
+            <CardTitle className="text-xl font-semibold leading-7">
+              Local session
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 p-0">
+            <Alert className="flex w-full items-center gap-2 rounded-lg border border-(--line) bg-white/45 p-2.5 [&>svg]:size-5 [&>svg]:text-accent">
+              <Key className="shrink-0" />
+              <div>
+                <AlertTitle className="text-xs font-medium">
+                  Credentials never reach this UI
+                </AlertTitle>
+                <AlertDescription className="mt-0.5 text-[10px] text-(--ink-muted)">
+                  Only normalized usage, plan, and account status data are
+                  forwarded.
+                </AlertDescription>
+              </div>
+            </Alert>
+            <Button variant="ghost" size="sm" onClick={onClear}>
+              Clear local preferences
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

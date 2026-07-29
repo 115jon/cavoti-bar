@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.cavoti_bar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

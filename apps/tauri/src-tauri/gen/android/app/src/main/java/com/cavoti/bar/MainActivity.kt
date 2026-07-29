@@ -30,8 +30,14 @@ import org.json.JSONObject
 
 private class NativeRefreshLayout(context: Context) : SwipeRefreshLayout(context) {
     var childCanScrollUp = false
+    var gestureLocked = false
 
     override fun canChildScrollUp(): Boolean = childCanScrollUp
+
+    override fun onInterceptTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (gestureLocked) return false
+        return super.onInterceptTouchEvent(event)
+    }
 }
 
 class MainActivity : TauriActivity() {
@@ -119,7 +125,6 @@ class MainActivity : TauriActivity() {
         val refreshLayout = NativeRefreshLayout(this).apply {
             setColorSchemeColors(Color.rgb(181, 98, 46))
             setOnRefreshListener {
-                Log.i("CavotiNativeRefresh", "native pull refresh triggered")
                 webView.evaluateJavascript(
                     "window.dispatchEvent(new Event('cavoti-refresh'));",
                     null,
@@ -150,7 +155,6 @@ class MainActivity : TauriActivity() {
     private fun attachNativeRefresh(webView: WebView, refreshLayout: SwipeRefreshLayout) {
         val parent = webView.parent as? ViewGroup ?: return
         if (parent is SwipeRefreshLayout) return
-        Log.i("CavotiNativeRefresh", "attaching native refresh parent=${parent.javaClass.simpleName}")
         val index = parent.indexOfChild(webView)
         val layoutParams = webView.layoutParams
         parent.removeViewAt(index)
@@ -184,6 +188,15 @@ private class NativeRefreshBridge(
         activity.runOnUiThread {
             refreshLayout.isEnabled = enabled
             if (!enabled) refreshLayout.isRefreshing = false
+        }
+    }
+
+    @JavascriptInterface
+    @Keep
+    fun setGestureLocked(locked: Boolean) {
+        activity.runOnUiThread {
+            refreshLayout.gestureLocked = locked
+            if (locked) refreshLayout.isRefreshing = false
         }
     }
 

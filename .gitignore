@@ -18,3 +18,4 @@ installer/obj/
 *.p12
 *.pfx
 apps/tauri/src-tauri/gen/android/keystore.properties
+plan/

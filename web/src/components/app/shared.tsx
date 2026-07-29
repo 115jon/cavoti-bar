@@ -170,13 +170,8 @@ export function PlanTabs({
       className="flex h-auto w-full min-w-0 rounded-lg border border-(--line) bg-white/45 p-1"
       aria-label="Plans"
     >
-      <TabsList className="grid h-auto w-full min-w-0 grid-cols-3 gap-1 bg-transparent p-0">
+      <TabsList className="grid h-auto w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-1 bg-transparent p-0">
         {plans.map((plan) => {
-          const compactType = plan.billingKind
-            .toLowerCase()
-            .includes("per-request")
-            ? "Request"
-            : "Usage";
           const windows = [
             { label: "5 hour", value: plan.usage.fiveHour },
             { label: "Weekly", value: plan.usage.weekly },
@@ -187,28 +182,32 @@ export function PlanTabs({
               type="button"
               value={plan.name}
               key={plan.name}
-              className={`min-w-0 w-full flex-none grid min-h-14 grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-1.5 gap-y-0 overflow-hidden rounded-md px-1.5 py-1.5 text-left text-[10px] leading-3.5 ${
+              className={`min-w-0 w-full flex-none grid min-h-20 grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-2 gap-y-0 overflow-hidden rounded-md px-2 py-2 text-left ${
                 plan.quotaState === "limited"
                   ? "border-[color-mix(in_srgb,var(--warning)_36%,transparent)] bg-(--warning-soft)"
                   : ""
               }`}
-              title={`${plan.name}: ${compactType} plan, ${plan.status}`}
+              title={`${plan.name}: ${plan.billingKind}, ${plan.status}`}
             >
               <Stack
-                className="row-span-2 mb-0 size-3.5 text-accent"
+                className="row-span-2 mb-0 size-4 text-accent"
                 weight={selected?.name === plan.name ? "fill" : "regular"}
               />
-              <div className="flex min-w-0 max-w-full items-center gap-1">
-                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
+              <div className="flex min-w-0 max-w-full items-center gap-2">
+                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold leading-5">
                   {plan.name}
                 </span>
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${plan.quotaState === "limited" ? "bg-(--bad)" : plan.status === "active" ? "bg-(--good)" : "bg-(--line-strong)"}`}
-                  aria-hidden="true"
-                />
+                <Badge
+                  className="shrink-0 text-[10px] capitalize"
+                  variant={
+                    plan.quotaState === "limited" ? "warning" : "success"
+                  }
+                >
+                  {plan.status}
+                </Badge>
               </div>
-              <small className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[8px] leading-3 text-(--ink-faint)">
-                {compactType} · {plan.status}
+              <small className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-4 text-(--ink-muted)">
+                Billing: {plan.billingKind}
               </small>
               <div
                 className="col-start-2 flex w-full min-w-0 gap-0.5 pt-0.5"
