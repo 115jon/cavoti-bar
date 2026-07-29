@@ -1009,14 +1009,18 @@ fn start_auth_session_probe(app: &AppHandle, state: &AuthState) -> bool {
     let app = app.clone();
     let state = state.clone();
     tauri::async_runtime::spawn(async move {
-        let _ = open_auth_window(
+        if let Err(error) = open_auth_window(
             &app,
             &state,
             auth::AuthProbeRequest::default(),
             false,
             "Restoring Cavoti session",
         )
-        .await;
+        .await
+        {
+            state.startup_probe_started.store(false, Ordering::Release);
+            eprintln!("[cavoti-auth] startup probe failed: {error}");
+        }
     });
     true
 }
@@ -2017,20 +2021,12 @@ pub fn run() {
                 return;
             }
             eprintln!("[cavoti-auth] page finished label={}", webview.label());
-                let Some(state) = webview.app_handle().try_state::<AuthState>() else {
-                    return;
-                };
-                if webview.label() == "main" {
-                    #[cfg(target_os = "android")]
-                    {
-                        return;
-                    }
-                    #[cfg(not(target_os = "android"))]
-                    {
-                        start_auth_session_probe(webview.app_handle(), &state);
-                        return;
-                    }
-                }
+            if webview.label() == "main" {
+                return;
+            }
+            let Some(state) = webview.app_handle().try_state::<AuthState>() else {
+                return;
+            };
             #[cfg(not(target_os = "android"))]
             {
                 if webview.label() != AUTH_WINDOW_LABEL
