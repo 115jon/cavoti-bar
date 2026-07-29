@@ -197,7 +197,7 @@ export function AppShell({
             </Tabs>
           </nav>
           <main
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-4 group-data-[layout=compact]/app:pb-20 group-data-[layout=wide]/app:px-10 group-data-[layout=wide]/app:pb-12 group-data-[layout=wide]/app:pt-8"
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-4 group-data-[layout=compact]/app:pb-24 group-data-[layout=compact]/app:pt-5 group-data-[layout=wide]/app:px-10 group-data-[layout=wide]/app:pb-12 group-data-[layout=wide]/app:pt-8"
             aria-live="polite"
           >
             <div className="hidden">
@@ -215,7 +215,7 @@ export function AppShell({
                 <Button
                   key={id}
                   variant={view === id ? "secondary" : "ghost"}
-                  className="h-12 min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-1 text-[11px]"
+                  className="h-14 min-w-0 flex-1 flex-col gap-1 rounded-lg px-1 text-xs"
                   onClick={() => onViewChange(id)}
                 >
                   <Icon weight={view === id ? "fill" : "regular"} />
@@ -226,7 +226,7 @@ export function AppShell({
                 <SheetTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="h-12 min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-1 text-[11px]"
+                    className="h-14 min-w-0 flex-1 flex-col gap-1 rounded-lg px-1 text-xs"
                     aria-label="More navigation"
                   >
                     <DotsThree weight="bold" />

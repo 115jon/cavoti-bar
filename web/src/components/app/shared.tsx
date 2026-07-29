@@ -136,8 +136,8 @@ export function SourceStrip({
 }) {
   const age = useRelativeAge(capturedAt, showSeconds);
   return (
-    <div className="flex min-h-12 items-center gap-2 border-b border-(--line) px-1 py-2 text-(--ink-muted) group-data-[layout=wide]/app:min-h-16 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:border group-data-[layout=wide]/app:bg-white/70 group-data-[layout=wide]/app:px-5 group-data-[layout=wide]/app:py-4">
-      <span className="text-[11px] font-medium group-data-[layout=wide]/app:text-sm">
+    <div className="flex min-h-14 items-center gap-2 border-b border-(--line) px-1 py-3 text-(--ink-muted) group-data-[layout=wide]/app:min-h-16 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:border group-data-[layout=wide]/app:bg-white/70 group-data-[layout=wide]/app:px-5 group-data-[layout=wide]/app:py-4">
+      <span className="text-xs font-medium group-data-[layout=wide]/app:text-sm">
         {age}
       </span>
       <Button
@@ -285,7 +285,7 @@ export function UsageMeter({
         : "text-[var(--accent-ink)]";
   return (
     <div className={`min-w-0 ${urgencyClass} ${className}`}>
-      <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px]">
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
         <span>{displayLabel}</span>
         <strong className={`font-semibold tabular-nums ${valueClass}`}>
           {configured
@@ -336,7 +336,7 @@ export function Empty({
             alt=""
           />
         </EmptyMedia>
-        <EmptyTitle className="text-[11px] font-medium tracking-normal">
+        <EmptyTitle className="text-xs font-medium tracking-normal">
           {title}
         </EmptyTitle>
         <EmptyDescription className="max-w-57.5 text-[10px] leading-3.5 text-(--ink-muted)">

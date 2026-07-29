@@ -45,7 +45,7 @@ function RefreshSettings({
     <div className="contents">
       <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5 last:border-b-0">
         <div>
-          <strong className="block text-[11px]">Refresh interval</strong>
+          <strong className="block text-xs">Refresh interval</strong>
           <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
             Choose how often usage refreshes automatically.
           </small>
@@ -70,7 +70,7 @@ function RefreshSettings({
       </div>
       <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5 last:border-b-0">
         <div>
-          <strong className="block text-[11px]">Show seconds</strong>
+          <strong className="block text-xs">Show seconds</strong>
           <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
             Show seconds for recent update timing.
           </small>
@@ -131,7 +131,7 @@ function WindowBehaviorSettings({
       {showTray ? (
         <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
           <div>
-            <strong className="block text-[11px]">Close to tray</strong>
+            <strong className="block text-xs">Close to tray</strong>
             <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
               Keep Cavoti Bar running when the titlebar close is used.
             </small>
@@ -146,7 +146,7 @@ function WindowBehaviorSettings({
       {showStartup ? (
         <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
           <div>
-            <strong className="block text-[11px]">Run at startup</strong>
+            <strong className="block text-xs">Run at startup</strong>
             <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
               Start Cavoti Bar for this Windows user.
             </small>
@@ -175,13 +175,13 @@ function WindowBehaviorSettings({
       ) : null}
       <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
         <div>
-          <strong className="block text-[11px]">Quota alerts</strong>
+          <strong className="block text-xs">Quota alerts</strong>
           <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
             Notify at these usage percentages. Leave empty to disable.
           </small>
         </div>
         <Input
-          className="max-w-28 text-right text-[11px]"
+          className="max-w-28 text-right text-xs"
           aria-label="Quota thresholds"
           value={thresholdText}
           placeholder="80, 95"
@@ -267,7 +267,7 @@ export function Settings({
               {capabilities.topmost ? (
                 <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                   <div>
-                    <strong className="block text-[11px]">Keep on top</strong>
+                    <strong className="block text-xs">Keep on top</strong>
                     <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
                       Keep the popover above other windows.
                     </small>
@@ -287,9 +287,7 @@ export function Settings({
               />
               <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
                 <div>
-                  <strong className="block text-[11px]">
-                    Connection profile
-                  </strong>
+                  <strong className="block text-xs">Connection profile</strong>
                   <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
                     Session cookies stay inside the Cavoti app profile.
                   </small>
@@ -372,7 +370,7 @@ export function Settings({
               {capabilities.topmost ? (
                 <div className="flex min-h-10 items-center justify-between gap-2 border-b border-(--line) py-1.5">
                   <div>
-                    <strong className="block text-[11px]">Keep on top</strong>
+                    <strong className="block text-xs">Keep on top</strong>
                     <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
                       Keep the popover above other windows.
                     </small>
@@ -392,9 +390,7 @@ export function Settings({
               />
               <div className="flex min-h-10 items-center justify-between gap-2 py-1.5">
                 <div>
-                  <strong className="block text-[11px]">
-                    Connection profile
-                  </strong>
+                  <strong className="block text-xs">Connection profile</strong>
                   <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
                     Session cookies stay inside the Cavoti app profile.
                   </small>

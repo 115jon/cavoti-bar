@@ -136,6 +136,32 @@ describe("App", () => {
     );
   });
 
+  it("does not register keyboard shortcuts on mobile", () => {
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    );
+    fireEvent.keyDown(window, { key: "r", ctrlKey: true });
+    fireEvent.keyDown(window, { key: ",", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "q", ctrlKey: true });
+
+    expect(sent).not.toContainEqual({ action: "refresh" });
+    expect(sent).not.toContainEqual({ action: "exit" });
+  });
+
   it("shows the update restart command only when the host reports an update", () => {
     const { bridge, dispatch, sent } = createBridge();
     render(<App bridge={bridge} />);
@@ -246,7 +272,7 @@ describe("App", () => {
     expect(screen.getByText("Updated just now")).toBeInTheDocument();
   });
 
-  it("hides desktop-only controls and keeps shared refresh on mobile", () => {
+  it("hides desktop-only controls and ignores keyboard shortcuts on mobile", () => {
     const { bridge, dispatch, sent } = createBridge();
     render(<App bridge={bridge} />);
 
@@ -319,7 +345,7 @@ describe("App", () => {
       value: { state: "foreground" },
     });
     fireEvent.keyDown(window, { key: "r", ctrlKey: true });
-    expect(sent).toContainEqual({ action: "refresh" });
+    expect(sent).not.toContainEqual({ action: "refresh" });
   });
 
   it("opens compact secondary navigation and closes after routing", () => {

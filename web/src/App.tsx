@@ -267,6 +267,7 @@ export function App({ bridge }: AppProps) {
   }, [bridge]);
 
   useEffect(() => {
+    if (capabilities.platform === "mobile") return;
     const handleShortcut = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)
         return;
@@ -283,7 +284,7 @@ export function App({ bridge }: AppProps) {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [bridge, refresh]);
+  }, [bridge, capabilities.platform, refresh]);
 
   const title = useMemo(
     () =>
@@ -345,6 +346,7 @@ export function App({ bridge }: AppProps) {
           }
           updateReady={updateReady}
           showSeconds={showFreshnessSeconds}
+          showShortcuts={capabilities.platform !== "mobile"}
         />
       ) : view === "usage" ? (
         <Usage snapshot={displayedSnapshot} />

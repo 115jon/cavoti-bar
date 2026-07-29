@@ -42,6 +42,7 @@ type OverviewProps = {
   onRestart: () => void;
   updateReady: boolean;
   showSeconds: boolean;
+  showShortcuts: boolean;
 };
 
 function CostSummary({
@@ -122,12 +123,14 @@ function UtilityActions({
   onQuit,
   onRestart,
   updateReady,
+  showShortcuts,
 }: {
   onNavigate: (view: View) => void;
   onOpenStatus: () => void;
   onQuit: () => void;
   onRestart: () => void;
   updateReady: boolean;
+  showShortcuts: boolean;
 }) {
   return (
     <div className="flex flex-col gap-0 pt-2">
@@ -152,13 +155,13 @@ function UtilityActions({
       <UtilityAction
         icon={<ArrowsClockwise />}
         label="Refresh"
-        shortcut="Ctrl+R"
+        shortcut={showShortcuts ? "Ctrl+R" : undefined}
         onClick={() => window.dispatchEvent(new CustomEvent("cavoti-refresh"))}
       />
       <UtilityAction
         icon={<GearSix />}
         label="Settings..."
-        shortcut="Ctrl+,"
+        shortcut={showShortcuts ? "Ctrl+," : undefined}
         onClick={() => onNavigate("settings")}
       />
       <UtilityAction
@@ -169,7 +172,7 @@ function UtilityActions({
       <UtilityAction
         icon={<X />}
         label="Quit"
-        shortcut="Ctrl+Q"
+        shortcut={showShortcuts ? "Ctrl+Q" : undefined}
         onClick={onQuit}
       />
     </div>
@@ -266,6 +269,7 @@ function DesktopOverview({
   updateReady,
   refresh,
   showSeconds,
+  showShortcuts,
 }: OverviewProps & {
   selectedName: string | undefined;
   onSelect: (name: string) => void;
@@ -319,6 +323,7 @@ function DesktopOverview({
             onQuit={onQuit}
             onRestart={onRestart}
             updateReady={updateReady}
+            showShortcuts={showShortcuts}
           />
         </aside>
       </div>
@@ -338,6 +343,7 @@ function CompactOverview({
   updateReady,
   refresh,
   showSeconds,
+  showShortcuts,
 }: OverviewProps & {
   selectedName: string | undefined;
   onSelect: (name: string) => void;
@@ -416,6 +422,7 @@ function CompactOverview({
         onQuit={onQuit}
         onRestart={onRestart}
         updateReady={updateReady}
+        showShortcuts={showShortcuts}
       />
     </div>
   );
@@ -430,6 +437,7 @@ export function Overview({
   onRestart,
   updateReady,
   showSeconds,
+  showShortcuts,
 }: OverviewProps) {
   const activePlan =
     snapshot.subscriptions.find((item) => item.status === "active") ??
@@ -450,6 +458,7 @@ export function Overview({
       updateReady={updateReady}
       refresh={refresh}
       showSeconds={showSeconds}
+      showShortcuts={showShortcuts}
     />
   ) : (
     <DesktopOverview
@@ -464,6 +473,7 @@ export function Overview({
       updateReady={updateReady}
       refresh={refresh}
       showSeconds={showSeconds}
+      showShortcuts={showShortcuts}
     />
   );
 }

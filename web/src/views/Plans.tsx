@@ -60,7 +60,7 @@ export function Plans({
                   <CardTitle className="m-0 text-lg font-semibold leading-7">
                     {item.name}
                   </CardTitle>
-                  <span className="mt-0.5 block text-[11px] leading-4 text-(--ink-muted)">
+                  <span className="mt-0.5 block text-xs leading-4 text-(--ink-muted)">
                     {item.billingKind}
                   </span>
                 </div>
@@ -117,7 +117,7 @@ export function Plans({
                 <CardTitle className="m-0 text-lg font-semibold leading-7">
                   {plan.name}
                 </CardTitle>
-                <span className="mt-0.5 block text-[11px] leading-4 text-(--ink-muted)">
+                <span className="mt-0.5 block text-xs leading-4 text-(--ink-muted)">
                   {plan.billingKind}
                 </span>
               </div>
