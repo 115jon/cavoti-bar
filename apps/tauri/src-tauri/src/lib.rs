@@ -57,6 +57,7 @@ struct AuthState {
     android_auth_bridge_unavailable: Arc<AtomicBool>,
     #[cfg(target_os = "android")]
     android_probe_start_guard: Arc<Mutex<()>>,
+    auth_window_visible: Arc<AtomicBool>,
 }
 
 #[cfg(target_os = "android")]
@@ -1298,8 +1299,10 @@ async fn open_auth_window(
             window.set_focus().map_err(|error| {
                 format!("The Cavoti sign-in window could not be focused: {error}")
             })?;
+            state.auth_window_visible.store(true, Ordering::Release);
         } else {
             let _ = window.hide();
+            state.auth_window_visible.store(false, Ordering::Release);
         }
         if show {
             window
@@ -1341,6 +1344,10 @@ async fn open_auth_window(
         let builder = builder.skip_taskbar(!show);
         #[cfg(desktop)]
         let builder = builder
+            .parent(&main_window)
+            .map_err(|error| format!("The Cavoti sign-in window could not be parented: {error}"))?;
+        #[cfg(desktop)]
+        let builder = builder
             .icon(cavoti_icon()?)
             .map_err(|error| format!("The Cavoti sign-in window could not start: {error}"))?;
         builder
@@ -1360,6 +1367,7 @@ async fn open_auth_window(
             })
             .build()
             .map(|window| {
+                state.auth_window_visible.store(show, Ordering::Release);
                 if show {
                     let _ = window.show();
                     #[cfg(desktop)]
@@ -1523,6 +1531,7 @@ fn auth_collection_result(
         window
             .hide()
             .map_err(|error| format!("The Cavoti sign-in window could not be hidden: {error}"))?;
+        state.auth_window_visible.store(false, Ordering::Release);
         eprintln!("[cavoti-auth] authenticated enrichment complete; auth window hidden");
     }
     Ok(())
@@ -2020,7 +2029,11 @@ pub fn run() {
             if payload.event() != PageLoadEvent::Finished {
                 return;
             }
-            eprintln!("[cavoti-auth] page finished label={}", webview.label());
+            eprintln!(
+                "[cavoti-auth] page finished label={} url={}",
+                webview.label(),
+                auth::safe_navigation_url(payload.url().as_str())
+            );
             if webview.label() == "main" {
                 return;
             }
@@ -2029,8 +2042,19 @@ pub fn run() {
             };
             #[cfg(not(target_os = "android"))]
             {
-                if webview.label() != AUTH_WINDOW_LABEL
-                    || !auth::is_auth_probe_document(payload.url().as_str())
+                if webview.label() != AUTH_WINDOW_LABEL {
+                    return;
+                }
+                let hidden_login = url::Url::parse(payload.url().as_str())
+                    .ok()
+                    .is_some_and(|url| {
+                        auth::is_cavoti_origin(payload.url().as_str())
+                            && url.path().trim_end_matches('/') == "/login"
+                            && !state.auth_window_visible.load(Ordering::Acquire)
+                    });
+                if !auth::is_auth_probe_document(payload.url().as_str())
+                    && !auth::is_auth_callback_document(payload.url().as_str())
+                    && !hidden_login
                 {
                     return;
                 }
@@ -2062,6 +2086,7 @@ pub fn run() {
             if window.label() == AUTH_WINDOW_LABEL && matches!(event, tauri::WindowEvent::Destroyed)
             {
                 if let Some(state) = window.app_handle().try_state::<AuthState>() {
+                    state.auth_window_visible.store(false, Ordering::Release);
                     let aborted = state
                         .adapter
                         .lock()

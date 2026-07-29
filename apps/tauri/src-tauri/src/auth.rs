@@ -269,6 +269,13 @@ pub fn is_auth_probe_document(value: &str) -> bool {
     path != "/login" && path != "/auth/oauth/callback"
 }
 
+pub fn is_auth_callback_document(value: &str) -> bool {
+    let Ok(url) = url::Url::parse(value) else {
+        return false;
+    };
+    is_cavoti_origin(value) && url.path().trim_end_matches('/') == "/auth/oauth/callback"
+}
+
 pub fn safe_navigation_url(value: &str) -> String {
     let Ok(mut url) = url::Url::parse(value) else {
         return "<invalid-url>".into();
@@ -372,7 +379,36 @@ pub fn auth_probe_script_with_request(
     }}
     return invoke('auth_collection_result', {{ payload: JSON.stringify(payload) }});
   }};
+  const waitForAuthenticatedNavigation = () => {{
+    if (location.pathname !== '/auth/oauth/callback') return Promise.resolve();
+    return new Promise((resolve) => {{
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+      const cleanup = () => {{
+        history.pushState = originalPushState;
+        history.replaceState = originalReplaceState;
+        window.removeEventListener('popstate', check);
+      }};
+      const check = () => {{
+        if (location.pathname !== '/auth/oauth/callback') {{
+          cleanup();
+          resolve();
+        }}
+      }};
+      history.pushState = function(...args) {{
+        originalPushState.apply(this, args);
+        check();
+      }};
+      history.replaceState = function(...args) {{
+        originalReplaceState.apply(this, args);
+        check();
+      }};
+      window.addEventListener('popstate', check);
+      check();
+    }});
+  }};
   (async () => {{
+    await waitForAuthenticatedNavigation();
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const today = new Date();
     const start = new Date(today.getTime() - 29 * 86400000);
