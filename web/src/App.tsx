@@ -25,6 +25,22 @@ import { Status } from "./views/Status";
 import { Settings } from "./views/Settings";
 import { About } from "./views/About";
 
+type NativeRefreshWindow = Window & {
+  CavotiNativeRefresh?: {
+    complete?: () => void;
+    setEnabled?: (enabled: boolean) => void;
+    setCanChildScrollUp?: (canScrollUp: boolean) => void;
+  };
+};
+
+function completeNativeRefresh() {
+  (window as NativeRefreshWindow).CavotiNativeRefresh?.complete?.();
+}
+
+function setNativeRefreshEnabled(enabled: boolean) {
+  (window as NativeRefreshWindow).CavotiNativeRefresh?.setEnabled?.(enabled);
+}
+
 export function App({ bridge }: AppProps) {
   const [state, setState] = useState<BridgeState>("loading");
   const [snapshot, setSnapshot] = useState<SnapshotEnvelope>();
@@ -44,12 +60,17 @@ export function App({ bridge }: AppProps) {
   const [freshnessCapturedAt, setFreshnessCapturedAt] = useState<string | null>(
     null,
   );
+  const [, setRefreshing] = useState(false);
   const compact = useCompactTiles();
   const hasSnapshot = useRef(false);
+  const currentState = useRef(state);
+  currentState.current = state;
   const foreground = useRef(document.visibilityState !== "hidden");
   const connect = () => bridge.post({ action: "connect" });
   const refresh = useCallback(() => {
-    if (foreground.current) bridge.post({ action: "refresh" });
+    if (!foreground.current) return;
+    setRefreshing(true);
+    bridge.post({ action: "refresh" });
   }, [bridge]);
   const openStatus = useCallback(
     () => bridge.post({ action: "open-status" }),
@@ -128,6 +149,8 @@ export function App({ bridge }: AppProps) {
           setSnapshot(next);
           if (message.complete !== false) {
             setFreshnessCapturedAt(next.capturedAt);
+            setRefreshing(false);
+            completeNativeRefresh();
             setState("live");
           } else if (!hadSnapshot) {
             setState("loading");
@@ -159,9 +182,23 @@ export function App({ bridge }: AppProps) {
         setQuotaThresholds(message.settings.quotaThresholds);
       } else if (message.type === "host-navigation") {
         setView(message.target);
-      } else if (message.state !== "loading" || !hasSnapshot.current)
-        setState(message.state);
+      } else {
+        if (message.state !== "loading" || !hasSnapshot.current) {
+          setState(message.state);
+        }
+        if (message.state === "error" || message.state === "offline") {
+          setRefreshing(false);
+          completeNativeRefresh();
+        }
+      }
     });
+    const nativeRefresh = () => {
+      if (!hasSnapshot.current || currentState.current !== "live") {
+        completeNativeRefresh();
+        return;
+      }
+      refresh();
+    };
     bridge.post({ action: "bootstrap" });
     const usageRefresh = (event: Event) => {
       const detail = (
@@ -175,24 +212,33 @@ export function App({ bridge }: AppProps) {
         >
       ).detail;
       const value = "filters" in detail ? detail : { filters: detail };
-      if (foreground.current) bridge.post({ action: "refresh", value });
+      if (foreground.current) {
+        setRefreshing(true);
+        bridge.post({ action: "refresh", value });
+      }
     };
     const openIp = (event: Event) => {
       const ip = (event as CustomEvent<string>).detail;
       if (ip) bridge.post({ action: "open-ip", value: { ip } });
     };
-    window.addEventListener("cavoti-refresh", refresh);
+    window.addEventListener("cavoti-refresh", nativeRefresh);
     window.addEventListener("cavoti-open-status", openStatus);
     window.addEventListener("cavoti-usage-refresh", usageRefresh);
     window.addEventListener("cavoti-open-ip", openIp);
     return () => {
       unsubscribe();
-      window.removeEventListener("cavoti-refresh", refresh);
+      window.removeEventListener("cavoti-refresh", nativeRefresh);
       window.removeEventListener("cavoti-open-status", openStatus);
       window.removeEventListener("cavoti-usage-refresh", usageRefresh);
       window.removeEventListener("cavoti-open-ip", openIp);
     };
   }, [bridge, openStatus, refresh]);
+
+  useEffect(() => {
+    setNativeRefreshEnabled(
+      state === "live" && view !== "settings" && view !== "about",
+    );
+  }, [state, view]);
 
   useEffect(() => {
     if (capabilities.platform !== "mobile") return;

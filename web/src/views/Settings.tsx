@@ -236,15 +236,7 @@ export function Settings({
   if (!compact)
     return (
       <div className="flex w-full max-w-370 flex-col gap-6">
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-              Application
-            </span>
-            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
-              Settings
-            </h1>
-          </div>
+        <div className="flex justify-end">
           <Badge variant="outline">Local</Badge>
         </div>
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -341,15 +333,7 @@ export function Settings({
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex min-h-0 flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-              Application
-            </span>
-            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">
-              Settings
-            </h1>
-          </div>
+        <div className="flex items-center justify-end gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <Badge variant="outline">Local</Badge>
             <TilePager

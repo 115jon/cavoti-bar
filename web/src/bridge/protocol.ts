@@ -42,7 +42,7 @@ export type HostMessage =
   | { type: "lifecycle"; state: "paused" | "foreground" }
   | {
       type: "bridge-state";
-      state: "auth-required" | "offline" | "error" | "loading";
+      state: "auth-required" | "offline" | "error" | "loading" | "live";
       status: number;
       message: string;
     }
@@ -50,7 +50,7 @@ export type HostMessage =
       type: "host-navigation";
       target: "overview" | "usage" | "plans" | "status" | "settings";
     };
-type BridgeState = "auth-required" | "offline" | "error" | "loading";
+type BridgeState = "auth-required" | "offline" | "error" | "loading" | "live";
 type HostNavigationTarget = Extract<
   HostMessage,
   { type: "host-navigation" }
@@ -169,7 +169,7 @@ export function parseHostMessage(value: unknown): HostMessage | null {
   }
   if (
     value.type === "bridge-state" &&
-    ["auth-required", "offline", "error", "loading"].includes(
+    ["auth-required", "offline", "error", "loading", "live"].includes(
       String(value.state),
     )
   ) {

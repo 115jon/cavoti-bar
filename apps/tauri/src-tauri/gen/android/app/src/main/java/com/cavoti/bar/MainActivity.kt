@@ -2,6 +2,7 @@ package com.cavoti.bar
 
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
@@ -16,13 +17,22 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.Keep
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+
+private class NativeRefreshLayout(context: Context) : SwipeRefreshLayout(context) {
+    var childCanScrollUp = false
+
+    override fun canChildScrollUp(): Boolean = childCanScrollUp
+}
 
 class MainActivity : TauriActivity() {
     private var sessionAdapter: WebViewSessionAdapter? = null
@@ -62,6 +72,8 @@ class MainActivity : TauriActivity() {
 
     private external fun nativeActivityReady(activity: MainActivity)
 
+    private external fun nativeActivityLifecycle(state: String)
+
     private external fun nativeSubmitAuthResult(payload: String): Boolean
 
     private external fun nativeAbortAuthCollection(collectionId: String)
@@ -93,9 +105,63 @@ class MainActivity : TauriActivity() {
         nativeActivityReady(this)
     }
 
+    override fun onPause() {
+        super.onPause()
+        nativeActivityLifecycle("paused")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        nativeActivityLifecycle("foreground")
+    }
+
     override fun onWebViewCreate(webView: WebView) {
+        val refreshLayout = NativeRefreshLayout(this).apply {
+            setColorSchemeColors(Color.rgb(181, 98, 46))
+            setOnRefreshListener {
+                Log.i("CavotiNativeRefresh", "native pull refresh triggered")
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new Event('cavoti-refresh'));",
+                    null,
+                )
+            }
+        }
+        val attachListener = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) {
+                view.removeOnAttachStateChangeListener(this)
+                attachNativeRefresh(webView, refreshLayout)
+            }
+
+            override fun onViewDetachedFromWindow(view: View) = Unit
+        }
+        webView.addOnAttachStateChangeListener(attachListener)
+        if (webView.isAttachedToWindow) {
+            webView.removeOnAttachStateChangeListener(attachListener)
+            attachNativeRefresh(webView, refreshLayout)
+        }
+        webView.addJavascriptInterface(
+            NativeRefreshBridge(this, refreshLayout),
+            "CavotiNativeRefresh",
+        )
         val adapter = WebViewSessionAdapter(this, webView)
         sessionAdapter = adapter
+    }
+
+    private fun attachNativeRefresh(webView: WebView, refreshLayout: SwipeRefreshLayout) {
+        val parent = webView.parent as? ViewGroup ?: return
+        if (parent is SwipeRefreshLayout) return
+        Log.i("CavotiNativeRefresh", "attaching native refresh parent=${parent.javaClass.simpleName}")
+        val index = parent.indexOfChild(webView)
+        val layoutParams = webView.layoutParams
+        parent.removeViewAt(index)
+        refreshLayout.addView(
+            webView,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        parent.addView(refreshLayout, index, layoutParams)
     }
 
     override fun onDestroy() {
@@ -104,6 +170,35 @@ class MainActivity : TauriActivity() {
         sessionAdapter = null
         if (currentActivity === this) currentActivity = null
         super.onDestroy()
+    }
+}
+
+@Keep
+private class NativeRefreshBridge(
+    private val activity: MainActivity,
+    private val refreshLayout: NativeRefreshLayout,
+) {
+    @JavascriptInterface
+    @Keep
+    fun setEnabled(enabled: Boolean) {
+        activity.runOnUiThread {
+            refreshLayout.isEnabled = enabled
+            if (!enabled) refreshLayout.isRefreshing = false
+        }
+    }
+
+    @JavascriptInterface
+    @Keep
+    fun setCanChildScrollUp(canScrollUp: Boolean) {
+        activity.runOnUiThread {
+            refreshLayout.childCanScrollUp = canScrollUp
+        }
+    }
+
+    @JavascriptInterface
+    @Keep
+    fun complete() {
+        activity.runOnUiThread { refreshLayout.isRefreshing = false }
     }
 }
 
@@ -153,6 +248,7 @@ internal class WebViewSessionAdapter(
     private val sessionDialog = Dialog(activity)
     private val resultGate = SessionResultGate()
     private var pendingProbe: String? = null
+    private var pendingProbeIsVisible = false
     @Volatile private var pendingNativeCollectionId: String? = null
     private var awaitingDocumentReadyProbe = false
     private var destroyed = false
@@ -218,12 +314,13 @@ internal class WebViewSessionAdapter(
                 ) {
                     awaitingDocumentReadyProbe = false
                     pendingProbe = null
+                    pendingProbeIsVisible = false
                     activity.sessionDocumentReady()
                     return
                 }
-                if (!isProbeDocument(uri) && !isOAuthCallback(uri) &&
-                    sessionWebView.visibility == View.VISIBLE
-                ) return
+                val hiddenLoginProbe = pendingProbe != null && !pendingProbeIsVisible &&
+                    uri.path?.trimEnd('/') == "/login"
+                if (!isProbeDocument(uri) && !isOAuthCallback(uri) && !hiddenLoginProbe) return
                 pendingProbe?.let { script ->
                     view.evaluateJavascript(script, null)
                 }
@@ -263,6 +360,7 @@ internal class WebViewSessionAdapter(
             sessionWebView.evaluateJavascript("window.__cavotiAuthAbort?.();", null)
             resultGate.begin(collectionId)
             pendingProbe = script
+            pendingProbeIsVisible = show
             awaitingDocumentReadyProbe = false
             setSessionVisible(show)
             Log.i("CavotiSession", "session visibility=${sessionWebView.visibility} url=${sessionWebView.url}")
@@ -294,6 +392,7 @@ internal class WebViewSessionAdapter(
             }
             resultGate.abort()
             pendingProbe = null
+            pendingProbeIsVisible = false
             awaitingDocumentReadyProbe = false
             sessionWebView.evaluateJavascript("window.__cavotiAuthAbort?.();", null)
             setSessionVisible(false)
@@ -309,6 +408,7 @@ internal class WebViewSessionAdapter(
             if (!destroyed && resultGate.isCurrentGeneration(collectionId)) {
                 resultGate.abort()
                 pendingProbe = null
+                pendingProbeIsVisible = false
                 awaitingDocumentReadyProbe = false
                 setSessionVisible(false)
             }
@@ -317,20 +417,33 @@ internal class WebViewSessionAdapter(
     }
 
     internal fun handleAuthCollectionResult(payload: String) {
+        val completed = CountDownLatch(1)
         activity.runOnUiThread {
-            if (destroyed) return@runOnUiThread
+            try {
+                processAuthCollectionResult(payload)
+            } finally {
+                completed.countDown()
+            }
+        }
+        if (!completed.await(10, TimeUnit.SECONDS)) {
+            Log.w("CavotiSession", "auth result handling timed out")
+        }
+    }
+
+    private fun processAuthCollectionResult(payload: String) {
+            if (destroyed) return
             if (payload.toByteArray(Charsets.UTF_8).size > MAX_PAYLOAD_BYTES) {
                 rejectRemoteResult()
-                return@runOnUiThread
+                return
             }
             if (!isCavotiOrigin(sessionWebView.url?.let(Uri::parse))) {
                 rejectRemoteResult()
-                return@runOnUiThread
+                return
             }
             val result = runCatching { JSONObject(payload) }.getOrNull()
                 ?: run {
                     rejectRemoteResult()
-                    return@runOnUiThread
+                    return
                 }
             val collectionId = result.opt("collectionId") as? String
             val collectionIdValue = collectionId ?: ""
@@ -338,29 +451,30 @@ internal class WebViewSessionAdapter(
             val complete = runCatching { result.getBoolean("complete") }.getOrNull()
                 ?: run {
                     rejectRemoteResult(collectionId)
-                    return@runOnUiThread
+                    return
                 }
             val sessionState = result.optString("sessionState", "")
             val sanitized = sanitizePayload(result)
                 ?: run {
                     rejectRemoteResult(collectionId)
-                    return@runOnUiThread
+                    return
                 }
             val sanitizedPayload = sanitized.toString()
             if (sanitizedPayload.toByteArray(Charsets.UTF_8).size > MAX_PAYLOAD_BYTES) {
                 rejectRemoteResult()
-                return@runOnUiThread
+                return
             }
             when (resultGate.accept(collectionIdValue, phase, complete, sessionState)) {
                 SessionResultGate.Decision.Accepted -> Unit
-                SessionResultGate.Decision.Ignored -> return@runOnUiThread
+                SessionResultGate.Decision.Ignored -> return
                 SessionResultGate.Decision.Invalid -> {
                     rejectRemoteResult(collectionId)
-                    return@runOnUiThread
+                    return
                 }
             }
             if (!resultGate.hasActiveCollection()) {
                 pendingProbe = null
+                pendingProbeIsVisible = false
                 if (pendingNativeCollectionId == collectionIdValue) {
                     pendingNativeCollectionId = null
                 }
@@ -369,7 +483,6 @@ internal class WebViewSessionAdapter(
             if (!activity.submitAuthResult(sanitizedPayload)) {
                 rejectRemoteResult(collectionIdValue)
             }
-        }
     }
 
     private fun rejectRemoteResult(collectionId: String? = null) {
@@ -379,6 +492,7 @@ internal class WebViewSessionAdapter(
         if (collectionId == null || collectionId != activeCollectionId) return
         resultGate.abort()
         pendingProbe = null
+        pendingProbeIsVisible = false
         awaitingDocumentReadyProbe = false
         activity.abortAuthCollection(activeCollectionId)
     }
@@ -387,6 +501,7 @@ internal class WebViewSessionAdapter(
         val collectionId = resultGate.activeCollectionId() ?: pendingNativeCollectionId
         resultGate.abort()
         pendingProbe = null
+        pendingProbeIsVisible = false
         awaitingDocumentReadyProbe = false
         pendingNativeCollectionId = null
         collectionId?.let(activity::abortAuthCollection)
@@ -401,6 +516,7 @@ internal class WebViewSessionAdapter(
             if (destroyed || !resultGate.isCurrentGeneration(collectionId)) return@runOnUiThread
             resultGate.abort()
             pendingProbe = null
+            pendingProbeIsVisible = false
             if (sessionWebView.visibility != View.VISIBLE) {
                 awaitingDocumentReadyProbe = false
                 return@runOnUiThread

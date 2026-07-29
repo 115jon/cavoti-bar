@@ -273,19 +273,6 @@ function DesktopOverview({
 }) {
   return (
     <div className="flex h-full min-h-0 w-full max-w-370 flex-col gap-6 overflow-auto">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-            Account overview
-          </span>
-          <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
-            Overview
-          </h1>
-        </div>
-        <span className="pb-1 text-sm text-(--ink-muted)">
-          {snapshot.subscriptions.length} plans | usage, limits, and shortcuts
-        </span>
-      </div>
       <SourceStrip
         capturedAt={snapshot.capturedAt}
         showSeconds={showSeconds}
@@ -368,9 +355,6 @@ function CompactOverview({
       />
       <div className="flex items-center justify-between gap-3 px-1">
         <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-            Selected plan
-          </span>
           <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">
             {plan?.name ?? "No active plan"}
           </h1>

@@ -52,17 +52,23 @@ function SheetContent({
           side === "top" &&
             "inset-x-0 top-0 border-b border-(--line) data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
           side === "bottom" &&
-            "inset-x-0 bottom-0 border-t border-(--line) data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+            "inset-x-0 bottom-0 max-h-[70dvh] w-full max-w-none rounded-t-2xl border-t border-(--line) data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
           className,
         )}
         {...props}
       >
+        {side === "bottom" ? (
+          <span
+            className="mx-auto -mt-2 h-1 w-10 rounded-full bg-(--line)"
+            aria-hidden="true"
+          />
+        ) : null}
         {children}
         <DialogPrimitive.Close asChild>
           <button
             type="button"
             className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-lg text-(--ink-muted) transition-colors hover:bg-(--muted) hover:text-(--ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            aria-label="Close navigation"
+            aria-label="Close sheet"
           >
             <X aria-hidden="true" />
           </button>

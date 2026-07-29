@@ -11,15 +11,7 @@ import { Separator } from "../components/ui/separator";
 export function About() {
   return (
     <div className="flex w-full max-w-370 flex-col gap-6">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-            About
-          </span>
-          <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
-            Cavoti Bar
-          </h1>
-        </div>
+      <div className="flex justify-end">
         <Badge variant="outline">Baseline</Badge>
       </div>
       <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">

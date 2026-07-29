@@ -1,11 +1,12 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import {
   ChartBarIcon as ChartBar,
   CornersInIcon as CornersIn,
   CornersOutIcon as CornersOut,
+  DotsThreeIcon as DotsThree,
   GearSixIcon as GearSix,
   HouseIcon as House,
-  ListIcon as List,
+  InfoIcon as Info,
   MinusIcon as Minus,
   PulseIcon as Pulse,
   StackIcon as Stack,
@@ -29,6 +30,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "../ui/sheet";
+
+type NativeRefreshWindow = Window & {
+  CavotiNativeRefresh?: {
+    setCanChildScrollUp?: (canScrollUp: boolean) => void;
+  };
+};
 
 export const views: Array<{
   id: Exclude<View, "about">;
@@ -71,6 +78,25 @@ export function AppShell({
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  useEffect(() => {
+    const scrollContainer = document.querySelector<HTMLElement>("main");
+    if (!scrollContainer) return;
+
+    const syncScrollState = () => {
+      (
+        window as NativeRefreshWindow
+      ).CavotiNativeRefresh?.setCanChildScrollUp?.(
+        scrollContainer.scrollTop > 0,
+      );
+    };
+
+    syncScrollState();
+    scrollContainer.addEventListener("scroll", syncScrollState, {
+      passive: true,
+    });
+    return () => scrollContainer.removeEventListener("scroll", syncScrollState);
+  }, []);
+
   return (
     <TooltipProvider delayDuration={300}>
       <div
@@ -105,50 +131,6 @@ export function AppShell({
               </strong>
             </span>
           </button>
-          {compact ? (
-            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto text-(--ink-muted)"
-                  aria-label="Open navigation"
-                >
-                  <List weight="bold" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent
-                side="left"
-                aria-describedby="mobile-navigation-description"
-              >
-                <SheetHeader className="pr-8">
-                  <SheetTitle>Navigation</SheetTitle>
-                  <SheetDescription id="mobile-navigation-description">
-                    Move between Cavoti Bar views.
-                  </SheetDescription>
-                </SheetHeader>
-                <nav
-                  className="flex flex-col gap-1"
-                  aria-label="Mobile navigation"
-                >
-                  {views.map(({ id, label, icon: Icon }) => (
-                    <Button
-                      key={id}
-                      variant={view === id ? "secondary" : "ghost"}
-                      className="h-11 justify-start gap-3 px-3"
-                      onClick={() => {
-                        onViewChange(id);
-                        setMobileNavOpen(false);
-                      }}
-                    >
-                      <Icon weight={view === id ? "fill" : "regular"} />
-                      {label}
-                    </Button>
-                  ))}
-                </nav>
-              </SheetContent>
-            </Sheet>
-          ) : null}
           {capabilities.titlebarControls ? (
             <div className="ml-auto flex gap-px group-data-[layout=wide]/app:gap-1">
               <Button
@@ -215,7 +197,7 @@ export function AppShell({
             </Tabs>
           </nav>
           <main
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-4 group-data-[layout=wide]/app:px-10 group-data-[layout=wide]/app:pb-12 group-data-[layout=wide]/app:pt-8"
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-4 group-data-[layout=compact]/app:pb-20 group-data-[layout=wide]/app:px-10 group-data-[layout=wide]/app:pb-12 group-data-[layout=wide]/app:pt-8"
             aria-live="polite"
           >
             <div className="hidden">
@@ -224,6 +206,74 @@ export function AppShell({
             </div>
             {children}
           </main>
+          {compact ? (
+            <nav
+              className="flex shrink-0 items-stretch border-t border-(--line) bg-(--chrome)/95 px-2 pb-2 pt-1 backdrop-blur-xl"
+              aria-label="Mobile navigation"
+            >
+              {views.slice(0, 4).map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  variant={view === id ? "secondary" : "ghost"}
+                  className="h-12 min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-1 text-[11px]"
+                  onClick={() => onViewChange(id)}
+                >
+                  <Icon weight={view === id ? "fill" : "regular"} />
+                  {label}
+                </Button>
+              ))}
+              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="h-12 min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-1 text-[11px]"
+                    aria-label="More navigation"
+                  >
+                    <DotsThree weight="bold" />
+                    More
+                  </Button>
+                </SheetTrigger>
+                <SheetContent
+                  side="bottom"
+                  className="pb-[calc(1rem+var(--safe-area-bottom))]"
+                  aria-describedby="mobile-more-description"
+                >
+                  <SheetHeader>
+                    <SheetTitle>More</SheetTitle>
+                    <SheetDescription id="mobile-more-description">
+                      App settings and information.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant={view === "settings" ? "secondary" : "ghost"}
+                      className="h-11 justify-start gap-3 px-3"
+                      onClick={() => {
+                        onViewChange("settings");
+                        setMobileNavOpen(false);
+                      }}
+                    >
+                      <GearSix
+                        weight={view === "settings" ? "fill" : "regular"}
+                      />
+                      Settings
+                    </Button>
+                    <Button
+                      variant={view === "about" ? "secondary" : "ghost"}
+                      className="h-11 justify-start gap-3 px-3"
+                      onClick={() => {
+                        onViewChange("about");
+                        setMobileNavOpen(false);
+                      }}
+                    >
+                      <Info weight={view === "about" ? "fill" : "regular"} />
+                      About
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </nav>
+          ) : null}
         </div>
       </div>
     </TooltipProvider>

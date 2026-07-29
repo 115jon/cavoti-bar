@@ -47,6 +47,7 @@ struct AuthState {
     startup_probe_started: Arc<AtomicBool>,
     settings: Arc<Mutex<HostSettings>>,
     refresh_scheduler_started: Arc<AtomicBool>,
+    automatic_refresh_suspended: Arc<AtomicBool>,
     foreground_refresh_started: Arc<AtomicBool>,
     lifecycle: Arc<LifecycleState>,
     notifications: Arc<NativeNotifications>,
@@ -99,6 +100,14 @@ mod tests {
             "https://accounts.youtube.com/accounts/SetSID"
         ));
         assert!(!is_allowed_auth_navigation("https://evil.example/login"));
+    }
+
+    #[test]
+    fn refresh_interval_preserves_manual_only_and_clamps_active_ranges() {
+        assert_eq!(normalize_refresh_interval(0), 0);
+        assert_eq!(normalize_refresh_interval(1), 15);
+        assert_eq!(normalize_refresh_interval(60), 60);
+        assert_eq!(normalize_refresh_interval(901), 900);
     }
 
     #[test]
@@ -444,7 +453,7 @@ fn load_settings(app: &AppHandle) -> HostSettings {
         .map(|path| path.display().to_string())
         .unwrap_or_else(|error| format!("<unresolved: {error}>"));
     eprintln!("[cavoti-settings] store path={resolved_path}");
-    let settings: HostSettings = match app.store(SETTINGS_STORE) {
+    let mut settings: HostSettings = match app.store(SETTINGS_STORE) {
         Ok(store) => store
             .get(SETTINGS_KEY)
             .and_then(|value| serde_json::from_value(value).ok())
@@ -454,6 +463,8 @@ fn load_settings(app: &AppHandle) -> HostSettings {
             HostSettings::default()
         }
     };
+    settings.refresh_interval_seconds =
+        normalize_refresh_interval(settings.refresh_interval_seconds);
     log_settings(
         app,
         format!(
@@ -464,6 +475,14 @@ fn load_settings(app: &AppHandle) -> HostSettings {
         ),
     );
     settings
+}
+
+fn normalize_refresh_interval(seconds: u32) -> u32 {
+    if seconds == 0 {
+        0
+    } else {
+        seconds.clamp(15, 900)
+    }
 }
 
 fn save_settings(app: &AppHandle, settings: &HostSettings) -> Result<(), String> {
@@ -720,7 +739,7 @@ fn apply_setting(app: &AppHandle, state: &AuthState, value: Option<&Value>) -> R
                 .get("seconds")
                 .and_then(Value::as_u64)
                 .ok_or_else(|| "Refresh interval is invalid".to_string())?;
-            next.refresh_interval_seconds = seconds.clamp(15, 900) as u32;
+            next.refresh_interval_seconds = normalize_refresh_interval(seconds as u32);
         }
         "freshness-seconds" => {
             next.show_freshness_seconds = value
@@ -853,6 +872,10 @@ fn apply_lifecycle_command(
             state
                 .foreground_refresh_started
                 .store(false, Ordering::Release);
+            #[cfg(target_os = "android")]
+            if !state.auth_window_visible.load(Ordering::Acquire) {
+                abort_current_android_collection(app, state);
+            }
             emit_lifecycle(app, "paused")
         }
         LifecycleCommand::Foreground => {
@@ -902,6 +925,10 @@ fn start_refresh_scheduler(app: &AppHandle, state: &AuthState) {
             thread::sleep(Duration::from_secs(1));
             let interval = current_settings(&state).refresh_interval_seconds;
             if !state.lifecycle.is_foreground() {
+                elapsed_seconds = 0;
+                continue;
+            }
+            if state.automatic_refresh_suspended.load(Ordering::Acquire) {
                 elapsed_seconds = 0;
                 continue;
             }
@@ -1203,6 +1230,12 @@ fn start_android_session_probe(
             "The Android WebView provider does not support the Cavoti session bridge".into(),
         );
     }
+    state.auth_window_visible.store(show, Ordering::Release);
+    if show {
+        state
+            .automatic_refresh_suspended
+            .store(false, Ordering::Release);
+    }
     let _probe_start_guard = state
         .android_probe_start_guard
         .lock()
@@ -1265,6 +1298,11 @@ async fn open_auth_window(
 ) -> Result<(), String> {
     if !state.lifecycle.is_foreground() {
         return Ok(());
+    }
+    if show {
+        state
+            .automatic_refresh_suspended
+            .store(false, Ordering::Release);
     }
     let collection_id = {
         let mut adapter = state
@@ -1456,6 +1494,11 @@ fn publish_auth_collection(
         }
     };
     let AuthAdapterEvent::RawResults(raw) = event;
+    if raw.phase == "core" && raw.session_state == "auth-required" {
+        state
+            .automatic_refresh_suspended
+            .store(true, Ordering::Release);
+    }
     let (bridge_state, status, message) = raw_results_state(&raw);
     let normalized_snapshot = if matches!(raw.phase.as_str(), "core" | "enrichment")
         && raw.session_state == "authenticated"
@@ -1630,6 +1673,7 @@ fn android_auth_collection_result(
             )?;
             return Err("The Android session controller is unavailable".into());
         }
+        state.auth_window_visible.store(false, Ordering::Release);
     } else if terminal_core_failure {
         if let Err(error) = dispatch_android_prepare_for_login(&collection_id) {
             eprintln!("[cavoti-auth] Android login preparation dispatch failed: {error}");
@@ -1674,6 +1718,28 @@ pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeActivityReady(
     };
     if let Ok(global_class_loader) = env.new_global_ref(class_loader) {
         let _ = ANDROID_ACTIVITY_CLASS_LOADER.set(global_class_loader);
+    }
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeActivityLifecycle(
+    mut env: JNIEnv,
+    _activity: JObject,
+    lifecycle: JString,
+) {
+    let Ok(lifecycle) = env.get_string(&lifecycle) else {
+        return;
+    };
+    let Some(app) = ANDROID_APP_HANDLE.get() else {
+        return;
+    };
+    let Some(state) = app.try_state::<AuthState>() else {
+        return;
+    };
+    let value = json!({ "state": lifecycle.to_string_lossy() });
+    if let Err(error) = apply_lifecycle_command(app, state.inner(), Some(&value)) {
+        eprintln!("[cavoti-lifecycle] native lifecycle dispatch failed: {error}");
     }
 }
 

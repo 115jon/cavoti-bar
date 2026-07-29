@@ -128,15 +128,7 @@ export function Status({
   if (!compact)
     return (
       <div className="flex w-full max-w-370 flex-col gap-6">
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-              Connection monitor
-            </span>
-            <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
-              Status
-            </h1>
-          </div>
+        <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={onOpenStatus}>
             Open monitor <ArrowSquareOut data-icon="inline-end" />
           </Button>
@@ -170,15 +162,7 @@ export function Status({
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex min-h-0 flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-              Connection monitor
-            </span>
-            <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">
-              Status
-            </h1>
-          </div>
+        <div className="flex items-center justify-end gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={onOpenStatus}>
               Open monitor <ArrowSquareOut data-icon="inline-end" />

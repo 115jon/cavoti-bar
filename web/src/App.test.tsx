@@ -49,6 +49,30 @@ describe("App", () => {
     expect(sent).toContainEqual({ action: "connect" });
   });
 
+  it("does not bootstrap again when the first live snapshot changes state", () => {
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        snapshot: liveSnapshot,
+        complete: true,
+      }),
+    );
+
+    expect(
+      sent.filter(
+        (message) =>
+          typeof message === "object" &&
+          message !== null &&
+          "action" in message &&
+          message.action === "bootstrap",
+      ),
+    ).toHaveLength(1);
+  });
+
   it("renders every destination from a host-delivered live snapshot", () => {
     const { bridge, dispatch } = createBridge();
     render(<App bridge={bridge} />);
@@ -68,15 +92,25 @@ describe("App", () => {
 
     expect(screen.getByText("Lite")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Usage" }));
-    expect(screen.getByRole("heading", { name: "Usage" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Usage" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     fireEvent.click(screen.getByRole("tab", { name: "Plans" }));
-    expect(screen.getByRole("heading", { name: "Plans" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Plans" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     fireEvent.click(screen.getByRole("tab", { name: "Status" }));
-    expect(screen.getByRole("heading", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Status" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
-    expect(
-      screen.getByRole("heading", { name: "Settings" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("posts a native drag command from the titlebar background", () => {
@@ -96,9 +130,10 @@ describe("App", () => {
 
     expect(sent).toContainEqual({ action: "refresh" });
     expect(sent).toContainEqual({ action: "exit" });
-    expect(
-      screen.getByRole("heading", { name: "Settings" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("shows the update restart command only when the host reports an update", () => {
@@ -287,7 +322,7 @@ describe("App", () => {
     expect(sent).toContainEqual({ action: "refresh" });
   });
 
-  it("opens compact navigation in an accessible sheet and closes after routing", () => {
+  it("opens compact secondary navigation and closes after routing", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 390,
@@ -310,14 +345,90 @@ describe("App", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    const navigation = screen.getByRole("dialog", { name: "Navigation" });
+    fireEvent.click(screen.getByRole("button", { name: "More navigation" }));
+    const navigation = screen.getByRole("dialog", { name: "More" });
     expect(navigation).toBeInTheDocument();
     expect(
-      within(navigation).getByRole("button", { name: "Usage" }),
+      within(navigation).getByRole("button", { name: "Settings" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(within(navigation).getByRole("button", { name: "Usage" }));
-    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
+    fireEvent.click(
+      within(navigation).getByRole("button", { name: "Settings" }),
+    );
+    expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
+  });
+
+  it("refreshes from the native pull event", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    );
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "snapshot",
+        snapshot: liveSnapshot,
+        complete: true,
+      }),
+    );
+
+    window.dispatchEvent(new Event("cavoti-refresh"));
+
+    expect(sent).toContainEqual({ action: "refresh" });
+  });
+
+  it("ignores native pull while the initial snapshot is loading", () => {
+    const { bridge, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    window.dispatchEvent(new Event("cavoti-refresh"));
+
+    expect(sent).not.toContainEqual({ action: "refresh" });
+  });
+
+  it("enables native pull only on live data views", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1280,
+    });
+    const enabled: boolean[] = [];
+    Object.defineProperty(window, "CavotiNativeRefresh", {
+      configurable: true,
+      value: { setEnabled: (value: boolean) => enabled.push(value) },
+    });
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "snapshot",
+        snapshot: liveSnapshot,
+        complete: true,
+      }),
+    );
+    expect(enabled.at(-1)).toBe(true);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(enabled.at(-1)).toBe(false);
+
+    delete (window as { CavotiNativeRefresh?: unknown }).CavotiNativeRefresh;
   });
 });
