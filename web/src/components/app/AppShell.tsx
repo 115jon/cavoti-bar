@@ -1,10 +1,11 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import {
   ChartBarIcon as ChartBar,
   CornersInIcon as CornersIn,
   CornersOutIcon as CornersOut,
   GearSixIcon as GearSix,
   HouseIcon as House,
+  ListIcon as List,
   MinusIcon as Minus,
   PulseIcon as Pulse,
   StackIcon as Stack,
@@ -20,6 +21,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "../ui/sheet";
 
 export const views: Array<{
   id: Exclude<View, "about">;
@@ -60,10 +69,18 @@ export function AppShell({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   return (
     <TooltipProvider delayDuration={300}>
       <div
-        className="group/app h-screen overflow-hidden bg-(--canvas)"
+        className="group/app flex h-[100dvh] min-h-full flex-col overflow-hidden bg-(--canvas)"
+        style={{
+          paddingTop: "var(--safe-area-top)",
+          paddingRight: "var(--safe-area-right)",
+          paddingBottom: "var(--safe-area-bottom)",
+          paddingLeft: "var(--safe-area-left)",
+        }}
         data-layout={compact ? "compact" : "wide"}
       >
         {/* biome-ignore lint/a11y/noStaticElementInteractions: The title bar drag surface is native window chrome, not an app interaction. */}
@@ -88,6 +105,50 @@ export function AppShell({
               </strong>
             </span>
           </button>
+          {compact ? (
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto text-(--ink-muted)"
+                  aria-label="Open navigation"
+                >
+                  <List weight="bold" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent
+                side="left"
+                aria-describedby="mobile-navigation-description"
+              >
+                <SheetHeader className="pr-8">
+                  <SheetTitle>Navigation</SheetTitle>
+                  <SheetDescription id="mobile-navigation-description">
+                    Move between Cavoti Bar views.
+                  </SheetDescription>
+                </SheetHeader>
+                <nav
+                  className="flex flex-col gap-1"
+                  aria-label="Mobile navigation"
+                >
+                  {views.map(({ id, label, icon: Icon }) => (
+                    <Button
+                      key={id}
+                      variant={view === id ? "secondary" : "ghost"}
+                      className="h-11 justify-start gap-3 px-3"
+                      onClick={() => {
+                        onViewChange(id);
+                        setMobileNavOpen(false);
+                      }}
+                    >
+                      <Icon weight={view === id ? "fill" : "regular"} />
+                      {label}
+                    </Button>
+                  ))}
+                </nav>
+              </SheetContent>
+            </Sheet>
+          ) : null}
           {capabilities.titlebarControls ? (
             <div className="ml-auto flex gap-px group-data-[layout=wide]/app:gap-1">
               <Button
@@ -120,7 +181,7 @@ export function AppShell({
             </div>
           ) : null}
         </header>
-        <div className="flex h-[calc(100vh-3rem)] min-h-0 group-data-[layout=wide]/app:h-[calc(100vh-3.5rem)] group-data-[layout=compact]/app:flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 group-data-[layout=compact]/app:flex-col">
           <nav
             className="flex w-12 basis-12 flex-col items-center gap-1 border-r border-(--line) bg-white/40 px-1.5 py-3 group-data-[layout=wide]/app:w-20 group-data-[layout=wide]/app:basis-20 group-data-[layout=wide]/app:gap-3 group-data-[layout=wide]/app:px-3 group-data-[layout=wide]/app:py-5 group-data-[layout=compact]/app:hidden"
             aria-label="Primary navigation"

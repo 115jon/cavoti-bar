@@ -61,11 +61,7 @@ if (-not (Test-Path -LiteralPath $installerOutput)) {
 
 $signature = "$installerOutput.sig"
 if (-not [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
-    $signArguments = @("run", "tauri", "signer", "sign", "-k", $env:TAURI_SIGNING_PRIVATE_KEY)
-    if (-not [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
-        $signArguments += @("-p", $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
-    }
-    $signArguments += $installerOutput
+    $signArguments = @("run", "tauri", "signer", "sign", $installerOutput)
     Invoke-TauriBun -Arguments $signArguments
     if (Test-Path -LiteralPath "$installerOutput.sig") { $signature = "$installerOutput.sig" }
 }

@@ -5,11 +5,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const AUTH_WINDOW_LABEL: &str = "auth";
+pub const MAX_AUTH_PAYLOAD_BYTES: usize = 1024 * 1024;
 pub const MAX_AUTH_RESULT_BYTES: usize = 64 * 1024;
 pub const AUTH_COLLECTION_TIMEOUT: Duration = Duration::from_secs(120);
 
+const MAX_COLLECTION_ID_BYTES: usize = 128;
+const MAX_PHASE_BYTES: usize = 32;
+const MAX_SESSION_STATE_BYTES: usize = 32;
 const REQUIRED_ENDPOINTS: [&str; 5] = ["me", "subscriptions", "stats", "models", "snapshot"];
-const KNOWN_ENDPOINTS: [&str; 14] = [
+const KNOWN_ENDPOINTS: [&str; 13] = [
     "me",
     "subscriptions",
     "stats",
@@ -23,21 +27,21 @@ const KNOWN_ENDPOINTS: [&str; 14] = [
     "announcements",
     "status",
     "groups",
-    "geo",
 ];
 static COLLECTION_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthEndpointResult {
     pub status: u16,
     pub ok: bool,
     pub text: String,
     pub timed_out: bool,
-    pub error: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthCollectionPayload {
     #[serde(rename = "type")]
@@ -130,6 +134,10 @@ impl AuthAdapter {
         Some(self.begin_collection_with_request(request))
     }
 
+    pub fn replace_collection_with_request(&mut self, request: AuthProbeRequest) -> String {
+        self.begin_collection_with_request(request)
+    }
+
     pub fn active_collection_id(&self) -> Option<&str> {
         self.active
             .as_ref()
@@ -167,6 +175,15 @@ impl AuthAdapter {
             )
         {
             return Err(AuthAcceptError::Invalid("invalid message"));
+        }
+        if payload.collection_id.is_empty()
+            || payload.collection_id.len() > MAX_COLLECTION_ID_BYTES
+            || payload.phase.len() > MAX_PHASE_BYTES
+            || payload.session_state.len() > MAX_SESSION_STATE_BYTES
+        {
+            return Err(AuthAcceptError::Invalid(
+                "session result metadata is too large",
+            ));
         }
         if payload.phase != active.phase {
             return Err(AuthAcceptError::Invalid("invalid phase"));
@@ -212,9 +229,7 @@ impl AuthAdapter {
                 if !payload.complete {
                     return Err(AuthAcceptError::Invalid("non-terminal core failure"));
                 }
-                if raw.session_state != "auth-required" {
-                    self.active = None;
-                }
+                self.active = None;
             } else {
                 if payload.complete {
                     return Err(AuthAcceptError::Invalid("core completed early"));
@@ -243,6 +258,26 @@ pub fn is_cavoti_origin(value: &str) -> bool {
         && url.port_or_known_default() == Some(443)
 }
 
+pub fn is_auth_probe_document(value: &str) -> bool {
+    let Ok(url) = url::Url::parse(value) else {
+        return false;
+    };
+    if !is_cavoti_origin(value) {
+        return false;
+    }
+    let path = url.path().trim_end_matches('/');
+    path != "/login" && path != "/auth/oauth/callback"
+}
+
+pub fn safe_navigation_url(value: &str) -> String {
+    let Ok(mut url) = url::Url::parse(value) else {
+        return "<invalid-url>".into();
+    };
+    url.set_query(None);
+    url.set_fragment(None);
+    url.to_string()
+}
+
 pub fn is_allowed_auth_navigation(value: &str) -> bool {
     let Ok(url) = url::Url::parse(value) else {
         return false;
@@ -254,6 +289,7 @@ pub fn is_allowed_auth_navigation(value: &str) -> bool {
         url.host_str().map(str::to_ascii_lowercase).as_deref(),
         Some("cavoti.com")
             | Some("accounts.google.com")
+            | Some("accounts.youtube.com")
             | Some("oauth2.googleapis.com")
             | Some("x.com")
             | Some("twitter.com")
@@ -289,7 +325,6 @@ pub fn auth_probe_script_with_request(
   const usagePage = {usage_page};
   const errorPage = {error_page};
   const CAVOTI_TIMEOUT_MS = 10000;
-  const GEO_TIMEOUT_MS = 5000;
   const internals = window.__TAURI_INTERNALS__;
   const invoke = (cmd, payload) => new Promise((resolve, reject) => {{
     if (typeof invokeKey !== 'string' || invokeKey.length === 0) {{
@@ -308,7 +343,7 @@ pub fn auth_probe_script_with_request(
   window.__cavotiAuthProbeId = collectionId;
   const controller = new AbortController();
   window.__cavotiAuthAbort = () => controller.abort();
-  const fetchResult = async (name, url, options, timeoutMilliseconds) => {{
+  const fetchResult = async (url, options, timeoutMilliseconds) => {{
     const requestController = new AbortController();
     const abortRequest = () => requestController.abort();
     controller.signal.addEventListener('abort', abortRequest, {{ once: true }});
@@ -316,20 +351,27 @@ pub fn auth_probe_script_with_request(
     try {{
       const operation = (async () => {{
         const response = await fetch(url, {{ ...options, signal: requestController.signal }});
-        return {{ name, status: response.status, ok: response.ok, text: (await response.text()).slice(0, {max_bytes}), timedOut: false, error: null }};
+        return {{ status: response.status, ok: response.ok, text: (await response.text()).slice(0, {max_bytes}), timedOut: false }};
       }})();
       const timeout = new Promise((resolve) => {{
-        timer = setTimeout(() => {{ requestController.abort(); resolve({{ name, status: 0, ok: false, text: '', timedOut: true, error: 'timeout' }}); }}, timeoutMilliseconds);
+        timer = setTimeout(() => {{ requestController.abort(); resolve({{ status: 0, ok: false, text: '', timedOut: true }}); }}, timeoutMilliseconds);
       }});
       return await Promise.race([operation, timeout]);
     }} catch {{
-      return {{ name, status: 0, ok: false, text: '', timedOut: false, error: 'request' }};
+      return {{ status: 0, ok: false, text: '', timedOut: false }};
     }} finally {{
       controller.signal.removeEventListener('abort', abortRequest);
       clearTimeout(timer);
     }}
   }};
-  const send = (phase, complete, sessionState, results) => invoke('auth_collection_result', {{ payload: {{ type: 'api-results', collectionId, phase, complete, sessionState, results }} }});
+  const send = (phase, complete, sessionState, results) => {{
+    const payload = {{ type: 'api-results', collectionId, phase, complete, sessionState, results }};
+    if (typeof window.CavotiAndroidResult?.postMessage === 'function') {{
+      window.CavotiAndroidResult.postMessage(JSON.stringify(payload));
+      return Promise.resolve();
+    }}
+    return invoke('auth_collection_result', {{ payload: JSON.stringify(payload) }});
+  }};
   (async () => {{
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const today = new Date();
@@ -364,7 +406,7 @@ pub fn auth_probe_script_with_request(
     const requiredResults = {{}};
     await Promise.all(requiredNames.map(async (name) => {{
       if (controller.signal.aborted) return;
-      requiredResults[name] = await fetchResult(name, urls[name], cavotiOptions, CAVOTI_TIMEOUT_MS);
+      requiredResults[name] = await fetchResult(urls[name], cavotiOptions, CAVOTI_TIMEOUT_MS);
     }}));
     if (controller.signal.aborted) return;
     const authenticated = requiredNames.every((name) => requiredResults[name]?.ok && requiredResults[name]?.status >= 200 && requiredResults[name]?.status < 300);
@@ -375,44 +417,14 @@ pub fn auth_probe_script_with_request(
     const optionalNames = ['usage', 'errors', 'keys', 'quota', 'banner', 'announcements', 'status', 'groups'];
     const optionalResults = {{}};
     await Promise.all(optionalNames.map(async (name) => {{
-      optionalResults[name] = await fetchResult(name, urls[name], cavotiOptions, CAVOTI_TIMEOUT_MS);
+      optionalResults[name] = await fetchResult(urls[name], cavotiOptions, CAVOTI_TIMEOUT_MS);
     }}));
     if (controller.signal.aborted) return;
 
-    const usageItems = (() => {{
-      try {{ return JSON.parse(optionalResults.usage?.text || '{{}}')?.data?.items || []; }} catch {{ return []; }}
-    }})();
-    const isPublicIpv4 = (value) => {{
-      if (typeof value !== 'string') return false;
-      const parts = value.split('.');
-      if (parts.length !== 4 || parts.some((part) => !/^[0-9]{{1,3}}$/.test(part) || (part.length > 1 && part[0] === '0'))) return false;
-      const numbers = parts.map(Number);
-      if (numbers.some((part) => part > 255)) return false;
-      const [first, second, third] = numbers;
-      return first > 0 && first < 224
-        && first !== 10
-        && first !== 127
-        && !(first === 100 && second >= 64 && second <= 127)
-        && !(first === 169 && second === 254)
-        && !(first === 172 && second >= 16 && second <= 31)
-        && !(first === 192 && second === 0)
-        && !(first === 192 && second === 168)
-        && !(first === 198 && (second === 18 || second === 19))
-        && !(first === 198 && second === 51 && third === 100)
-        && !(first === 203 && second === 0 && third === 113);
-    }};
-    const addresses = [...new Set((Array.isArray(usageItems) ? usageItems : []).map((item) => item.ip_address).filter(isPublicIpv4))].slice(0, 100);
-    const geo = {{}};
-    for (let index = 0; index < addresses.length; index += 6) {{
-      await Promise.all(addresses.slice(index, index + 6).map(async (ip) => {{
-        const result = await fetchResult('geo', `https://get.geojs.io/v1/ip/geo/${{encodeURIComponent(ip)}}.json`, {{ credentials: 'omit', mode: 'cors', headers: {{ accept: 'application/json' }} }}, GEO_TIMEOUT_MS);
-        if (result.ok) {{ try {{ geo[ip] = JSON.parse(result.text); }} catch {{}} }}
-      }}));
-    }}
     if (controller.signal.aborted) return;
-    const results = {{ ...requiredResults, ...optionalResults, geo: {{ name: 'geo', status: 200, ok: true, text: JSON.stringify(geo), timedOut: false, error: null }} }};
+    const results = {{ ...requiredResults, ...optionalResults }};
     await send('enrichment', true, sessionState, results);
-  }})().catch((error) => console.error('[cavoti-auth] probe failed', error));
+  }})().catch(() => console.error('[cavoti-auth] probe failed'));
 }})();"#,
         max_bytes = MAX_AUTH_RESULT_BYTES,
         filters = filters,
@@ -429,7 +441,6 @@ impl AuthCollectionPayload {
             ok: (200..300).contains(&status),
             text: "{}".into(),
             timed_out: false,
-            error: None,
         }
     }
 
@@ -477,5 +488,102 @@ mod tests {
         let script = auth_probe_script("collection", Some("runtime-key"));
         assert!(script.contains("__TAURI_INVOKE_KEY__: invokeKey"));
         assert!(script.contains("Tauri invoke key unavailable"));
+    }
+
+    #[test]
+    fn auth_payload_deserialization_rejects_unknown_fields() {
+        let payload = json!({
+            "type": "api-results",
+            "collectionId": "collection",
+            "phase": "core",
+            "complete": false,
+            "sessionState": "authenticated",
+            "results": {
+                "me": {
+                    "status": 200,
+                    "ok": true,
+                    "text": "{}",
+                    "timedOut": false,
+                    "diagnostics": "unexpected"
+                }
+            },
+            "diagnostics": "unexpected"
+        });
+
+        assert!(serde_json::from_value::<AuthCollectionPayload>(payload).is_err());
+    }
+
+    #[test]
+    fn auth_payload_metadata_bounds_are_enforced_after_deserialization() {
+        let mut adapter = AuthAdapter::default();
+        let collection_id = adapter.begin_collection();
+        let mut payload = AuthCollectionPayload::test_core(&collection_id, 200);
+        payload.phase = "x".repeat(MAX_PHASE_BYTES + 1);
+
+        assert!(matches!(
+            adapter.accept(payload),
+            Err(AuthAcceptError::Invalid(
+                "session result metadata is too large"
+            ))
+        ));
+    }
+
+    #[test]
+    fn auth_probe_waits_for_the_post_login_document() {
+        assert!(!is_auth_probe_document("https://cavoti.com/login"));
+        assert!(!is_auth_probe_document(
+            "https://cavoti.com/auth/oauth/callback#access_token=secret"
+        ));
+        assert!(is_auth_probe_document("https://cavoti.com/dashboard"));
+    }
+
+    #[test]
+    fn terminal_auth_failure_allows_a_new_collection() {
+        let mut adapter = AuthAdapter::default();
+        let collection_id = adapter.begin_collection();
+        let payload = AuthCollectionPayload::test_core(&collection_id, 401);
+
+        assert!(matches!(
+            adapter.accept(payload),
+            Ok(AuthAdapterEvent::RawResults(_))
+        ));
+        assert!(adapter.active_collection_id().is_none());
+        assert!(adapter
+            .try_begin_collection_with_request(AuthProbeRequest::default())
+            .is_some());
+    }
+
+    #[test]
+    fn cancelled_collection_results_are_stale() {
+        let mut adapter = AuthAdapter::default();
+        let collection_id = adapter.begin_collection();
+        assert!(adapter.abort(&collection_id));
+        assert!(matches!(
+            adapter.accept(AuthCollectionPayload::test_core(&collection_id, 200)),
+            Err(AuthAcceptError::Stale)
+        ));
+    }
+
+    #[test]
+    fn replacing_a_collection_makes_the_new_id_active_atomically() {
+        let mut adapter = AuthAdapter::default();
+        let previous = adapter.begin_collection();
+        let replacement = adapter.replace_collection_with_request(AuthProbeRequest::default());
+
+        assert_ne!(previous, replacement);
+        assert_eq!(adapter.active_collection_id(), Some(replacement.as_str()));
+        assert!(matches!(
+            adapter.accept(AuthCollectionPayload::test_core(&previous, 200)),
+            Err(AuthAcceptError::Stale)
+        ));
+    }
+
+    #[test]
+    fn safe_navigation_url_removes_query_and_fragment_credentials() {
+        let safe = safe_navigation_url(
+            "https://cavoti.com/auth/oauth/callback#access_token=secret&refresh_token=secret",
+        );
+        assert_eq!(safe, "https://cavoti.com/auth/oauth/callback");
+        assert!(!safe.contains("secret"));
     }
 }

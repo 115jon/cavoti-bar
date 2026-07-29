@@ -7,10 +7,11 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: state.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(() =>
-    new Promise<() => void>((resolve) => {
-      state.resolveListeners.push(() => resolve(() => undefined));
-    }),
+  listen: vi.fn(
+    () =>
+      new Promise<() => void>((resolve) => {
+        state.resolveListeners.push(() => resolve(() => undefined));
+      }),
   ),
 }));
 
@@ -23,9 +24,9 @@ describe("Tauri host bridge startup", () => {
   });
 
   it("waits for event listeners before sending bootstrap", async () => {
-    const bridge = createHostBridge(
-      { __TAURI_INTERNALS__: {} } as unknown as Window,
-    );
+    const bridge = createHostBridge({
+      __TAURI_INTERNALS__: {},
+    } as unknown as Window);
 
     bridge.subscribe(() => undefined);
     bridge.post({ action: "bootstrap" });

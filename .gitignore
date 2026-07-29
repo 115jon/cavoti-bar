@@ -13,3 +13,8 @@ obj/GeneratedUi/
 installer/Assets/payload.zip
 installer/bin/
 installer/obj/
+*.jks
+*.keystore
+*.p12
+*.pfx
+apps/tauri/src-tauri/gen/android/keystore.properties

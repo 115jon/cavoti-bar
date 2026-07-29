@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "./App";
 import type { HostBridge } from "./bridge/host";
@@ -142,7 +142,7 @@ describe("App", () => {
         },
       }),
     );
-    expect(screen.getByText("Waiting for first sync")).toBeInTheDocument();
+    expect(screen.getByText("Loading Cavoti snapshot")).toBeInTheDocument();
 
     act(() =>
       dispatch({
@@ -285,5 +285,39 @@ describe("App", () => {
     });
     fireEvent.keyDown(window, { key: "r", ctrlKey: true });
     expect(sent).toContainEqual({ action: "refresh" });
+  });
+
+  it("opens compact navigation in an accessible sheet and closes after routing", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    const navigation = screen.getByRole("dialog", { name: "Navigation" });
+    expect(navigation).toBeInTheDocument();
+    expect(
+      within(navigation).getByRole("button", { name: "Usage" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(navigation).getByRole("button", { name: "Usage" }));
+    expect(screen.queryByRole("dialog", { name: "Navigation" })).toBeNull();
   });
 });

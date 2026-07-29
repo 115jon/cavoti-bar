@@ -14,6 +14,27 @@ val tauriProperties = Properties().apply {
 }
 
 android {
+    // Keep debug and unit-test configuration usable without release credentials.
+    val cavotiKeystorePropertiesFile = rootProject.file("keystore.properties")
+    val cavotiReleaseSigningConfig = if (cavotiKeystorePropertiesFile.exists()) {
+        val cavotiKeystoreProperties = Properties().apply {
+            cavotiKeystorePropertiesFile.inputStream().use { load(it) }
+        }
+        signingConfigs.create("release") {
+            keyAlias = cavotiKeystoreProperties["keyAlias"]?.toString()
+                ?: error("Android signing keyAlias is missing")
+            keyPassword = cavotiKeystoreProperties["keyPassword"]?.toString()
+                ?: cavotiKeystoreProperties["password"]?.toString()
+                ?: error("Android signing keyPassword is missing")
+            storeFile = file(cavotiKeystoreProperties["storeFile"]?.toString()
+                ?: error("Android signing storeFile is missing"))
+            storePassword = cavotiKeystoreProperties["password"]?.toString()
+                ?: error("Android signing password is missing")
+        }
+    } else {
+        null
+    }
+
     compileSdk = 36
     namespace = "com.cavoti.bar"
     defaultConfig {
@@ -37,6 +58,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfig = cavotiReleaseSigningConfig
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
@@ -50,6 +72,26 @@ android {
     }
     buildFeatures {
         buildConfig = true
+    }
+}
+
+val releaseSigningTaskPrefixes = setOf(
+    "assemble",
+    "bundle",
+    "install",
+    "package",
+    "sign",
+    "validateSigning",
+)
+tasks.configureEach {
+    if (name.endsWith("Release") && releaseSigningTaskPrefixes.any(name::startsWith)) {
+        doFirst {
+            if (!rootProject.file("keystore.properties").exists()) {
+                throw GradleException(
+                    "Android release signing properties are missing; create keystore.properties before packaging a release",
+                )
+            }
+        }
     }
 }
 
@@ -69,3 +111,33 @@ dependencies {
 }
 
 apply(from = "tauri.build.gradle.kts")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

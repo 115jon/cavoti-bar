@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -27,12 +27,19 @@ mod updates;
 use auth::{
     is_allowed_auth_navigation, is_cavoti_origin, AuthAcceptError, AuthAdapter, AuthAdapterEvent,
     AuthCollectionPayload, AuthRawResults, AUTH_COLLECTION_TIMEOUT, AUTH_WINDOW_LABEL,
+    MAX_AUTH_PAYLOAD_BYTES,
 };
 use host::{resolve_external_command, ExternalCommand};
 use lifecycle::{parse_command, LifecycleCommand, LifecycleState};
 use navigation::{parse_route, HostRoute};
 use notifications::NativeNotifications;
 use snapshot::normalize_core_snapshot;
+
+#[cfg(target_os = "android")]
+use jni::{
+    objects::{GlobalRef, JClass, JObject, JString, JValue},
+    JNIEnv, JavaVM,
+};
 
 #[derive(Clone, Default)]
 struct AuthState {
@@ -44,7 +51,22 @@ struct AuthState {
     lifecycle: Arc<LifecycleState>,
     notifications: Arc<NativeNotifications>,
     navigation: Arc<Mutex<NavigationState>>,
+    latest_snapshot: Arc<Mutex<Option<Value>>>,
+    settings_update_guard: Arc<Mutex<()>>,
+    #[cfg(target_os = "android")]
+    android_auth_bridge_unavailable: Arc<AtomicBool>,
+    #[cfg(target_os = "android")]
+    android_probe_start_guard: Arc<Mutex<()>>,
 }
+
+#[cfg(target_os = "android")]
+static ANDROID_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
+#[cfg(target_os = "android")]
+static ANDROID_AUTH_BRIDGE_UNAVAILABLE_PENDING: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "android")]
+static ANDROID_JVM: OnceLock<JavaVM> = OnceLock::new();
+#[cfg(target_os = "android")]
+static ANDROID_ACTIVITY_CLASS_LOADER: OnceLock<GlobalRef> = OnceLock::new();
 
 #[derive(Default)]
 struct NavigationState {
@@ -71,6 +93,9 @@ mod tests {
         assert!(!is_cavoti_origin("https://cavoti.com:444/login"));
         assert!(is_allowed_auth_navigation(
             "https://accounts.google.com/oauth"
+        ));
+        assert!(is_allowed_auth_navigation(
+            "https://accounts.youtube.com/accounts/SetSID"
         ));
         assert!(!is_allowed_auth_navigation("https://evil.example/login"));
     }
@@ -149,7 +174,6 @@ mod tests {
                         ok: true,
                         text: r#"{"data":{"username":"daddy","status":"active"}}"#.into(),
                         timed_out: false,
-                        error: None,
                     },
                 ),
                 (
@@ -157,9 +181,8 @@ mod tests {
                     auth::AuthEndpointResult {
                         status: 200,
                         ok: true,
-                    text: r#"{"data":[{"plan_name":"usage_quota","billing_kind":"usage_quota","status":"active","daily_usage_usd":12,"daily_limit_usd":100,"weekly_limit_usd":100,"monthly_usage_usd":25,"monthly_window_start":"2026-07-26T00:00:00Z","expires_at":"2026-07-30T00:00:00Z","daily_window_start":"2026-07-26T00:00:00Z"}]}"#.into(),
+                        text: r#"{"data":[{"plan_name":"usage_quota","billing_kind":"usage_quota","status":"active","daily_usage_usd":12,"daily_limit_usd":100,"weekly_limit_usd":100,"monthly_usage_usd":25,"monthly_window_start":"2026-07-26T00:00:00Z","expires_at":"2026-07-30T00:00:00Z","daily_window_start":"2026-07-26T00:00:00Z"}]}"#.into(),
                         timed_out: false,
-                        error: None,
                     },
                 ),
                 (
@@ -169,7 +192,6 @@ mod tests {
                         ok: true,
                         text: r#"{"data":{"total_requests":3,"total_tokens":90,"endpoints":[{"endpoint":"chat","requests":3,"total_tokens":90}]}}"#.into(),
                         timed_out: false,
-                        error: None,
                     },
                 ),
                 (
@@ -179,7 +201,6 @@ mod tests {
                         ok: true,
                         text: r#"{"data":{"models":[{"model":"gpt","requests":3,"total_tokens":90}]}}"#.into(),
                         timed_out: false,
-                        error: None,
                     },
                 ),
                 (
@@ -189,7 +210,6 @@ mod tests {
                         ok: true,
                         text: r#"{"data":{"trend":[{"date":"2026-07-25","requests":3,"total_tokens":90}],"groups":[{"group_name":"Default","requests":3,"total_tokens":90}]}}"#.into(),
                         timed_out: false,
-                        error: None,
                     },
                 ),
             ]
@@ -274,7 +294,6 @@ mod tests {
                     ok: true,
                     text: text.into(),
                     timed_out: false,
-                    error: None,
                 },
             );
         }
@@ -299,6 +318,28 @@ mod tests {
         assert_eq!(snapshot["channelMonitors"][0]["latencyMs"], 42.0);
         assert_eq!(snapshot["apiKeys"][0]["name"], "prod");
         assert_eq!(snapshot["groupOptions"][0]["id"], 3.0);
+    }
+
+    #[test]
+    fn authenticated_enrichment_without_timeouts_is_live() {
+        let raw = AuthRawResults {
+            collection_id: "collection".into(),
+            phase: "enrichment".into(),
+            session_state: "authenticated".into(),
+            results: [(
+                "quota".into(),
+                auth::AuthEndpointResult {
+                    status: 200,
+                    ok: true,
+                    text: "{}".into(),
+                    timed_out: false,
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        assert_eq!(raw_results_state(&raw).0, "live");
     }
 }
 
@@ -502,8 +543,42 @@ fn emit_lifecycle<R: Runtime>(app: &AppHandle<R>, state: &str) -> Result<(), Str
 }
 
 fn emit_event<R: Runtime>(app: &AppHandle<R>, event: Value) -> Result<(), String> {
-    app.emit("host-event", event)
+    app.emit_to("main", "host-event", event)
         .map_err(|error| error.to_string())
+}
+
+fn cache_snapshot(state: &AuthState, snapshot: &Value) {
+    if let Ok(mut latest) = state.latest_snapshot.lock() {
+        *latest = Some(snapshot.clone());
+    }
+}
+
+fn emit_latest_snapshot<R: Runtime>(app: &AppHandle<R>, state: &AuthState) -> Result<(), String> {
+    let snapshot = state
+        .latest_snapshot
+        .lock()
+        .ok()
+        .and_then(|latest| latest.clone());
+    if let Some(snapshot) = snapshot {
+        emit_event(
+            app,
+            json!({
+                "protocol": 1,
+                "type": "snapshot",
+                "complete": true,
+                "snapshot": snapshot,
+            }),
+        )?;
+    }
+    Ok(())
+}
+
+fn has_cached_snapshot(state: &AuthState) -> bool {
+    state
+        .latest_snapshot
+        .lock()
+        .ok()
+        .is_some_and(|latest| latest.is_some())
 }
 
 fn emit_bridge_state<R: Runtime>(
@@ -578,13 +653,44 @@ fn flush_pending_navigation(app: &AppHandle, state: &AuthState) -> Result<(), St
 }
 
 fn emit_bootstrap(app: &AppHandle, state: &AuthState) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    state.notifications.ensure_permission(app);
     emit_capabilities(app)?;
     emit_settings(app, state)?;
+    emit_latest_snapshot(app, state)?;
+    #[cfg(target_os = "android")]
+    {
+        if state
+            .android_auth_bridge_unavailable
+            .load(Ordering::Acquire)
+        {
+            emit_bridge_state(
+                app,
+                "error",
+                0,
+                "The Android WebView provider does not support the Cavoti session bridge",
+            )?;
+            return Ok(());
+        }
+        start_android_session_probe(
+            app,
+            state,
+            auth::AuthProbeRequest::default(),
+            false,
+            false,
+            "Restoring Cavoti session",
+        )?;
+    }
+    #[cfg(not(target_os = "android"))]
     start_auth_session_probe(app, state);
     Ok(())
 }
 
 fn apply_setting(app: &AppHandle, state: &AuthState, value: Option<&Value>) -> Result<(), String> {
+    let _settings_update_guard = state
+        .settings_update_guard
+        .lock()
+        .map_err(|_| "Cavoti settings state is unavailable".to_string())?;
     let value = value
         .and_then(Value::as_object)
         .ok_or_else(|| "Setting payload is invalid".to_string())?;
@@ -685,19 +791,14 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-fn abort_auth_collection(app: &AppHandle, state: &AuthState) {
-    if let Ok(mut adapter) = state.adapter.lock() {
-        if let Some(collection_id) = adapter.active_collection_id().map(str::to_owned) {
-            let _ = adapter.abort(&collection_id);
-        }
-    }
-    if let Some(window) = app.get_webview_window(AUTH_WINDOW_LABEL) {
-        let _ = window.eval("window.__cavotiAuthAbort?.();");
-    }
-}
-
 fn start_foreground_refresh(app: &AppHandle, state: &AuthState) {
-    if !state.lifecycle.is_foreground()
+    let auth_collection_active = state
+        .adapter
+        .lock()
+        .map(|adapter| adapter.active_collection_id().is_some())
+        .unwrap_or(true);
+    if auth_collection_active
+        || !state.lifecycle.is_foreground()
         || state
             .foreground_refresh_started
             .swap(true, Ordering::AcqRel)
@@ -707,15 +808,34 @@ fn start_foreground_refresh(app: &AppHandle, state: &AuthState) {
     let app = app.clone();
     let state = state.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(error) = open_auth_window(
+        if !state.lifecycle.is_foreground() {
+            state
+                .foreground_refresh_started
+                .store(false, Ordering::Release);
+            return;
+        }
+        #[cfg(target_os = "android")]
+        let result = start_android_session_probe(
+            &app,
+            &state,
+            auth::AuthProbeRequest::default(),
+            false,
+            false,
+            "Refreshing Cavoti usage",
+        );
+        #[cfg(not(target_os = "android"))]
+        let result = open_auth_window(
             &app,
             &state,
             auth::AuthProbeRequest::default(),
             false,
             "Refreshing Cavoti usage",
         )
-        .await
-        {
+        .await;
+        if let Err(error) = result {
+            state
+                .foreground_refresh_started
+                .store(false, Ordering::Release);
             eprintln!("[cavoti-lifecycle] foreground refresh failed: {error}");
         }
     });
@@ -732,7 +852,6 @@ fn apply_lifecycle_command(
             state
                 .foreground_refresh_started
                 .store(false, Ordering::Release);
-            abort_auth_collection(app, state);
             emit_lifecycle(app, "paused")
         }
         LifecycleCommand::Foreground => {
@@ -755,6 +874,16 @@ fn spawn_auth_timeout(app: AppHandle, state: AuthState, collection_id: String) {
             .map(|mut adapter| adapter.abort(&collection_id))
             .unwrap_or(false);
         if expired {
+            #[cfg(target_os = "android")]
+            if let Err(error) = dispatch_android_abort_probe(&collection_id) {
+                eprintln!("[cavoti-auth] Android timeout abort dispatch failed: {error}");
+                let _ = emit_bridge_state(
+                    &app,
+                    "error",
+                    0,
+                    "The Android session controller is unavailable",
+                );
+            }
             let _ = emit_bridge_state(&app, "offline", 0, "Cavoti session probe timed out");
         }
     });
@@ -791,6 +920,9 @@ fn start_refresh_scheduler(app: &AppHandle, state: &AuthState) {
                 .ok()
                 .and_then(|adapter| adapter.active_collection_id().map(str::to_owned))
                 .is_some();
+            #[cfg(target_os = "android")]
+            let refreshable = app.get_webview_window("main").is_some();
+            #[cfg(not(target_os = "android"))]
             let refreshable = app
                 .get_webview_window(AUTH_WINDOW_LABEL)
                 .and_then(|window| window.url().ok())
@@ -803,6 +935,16 @@ fn start_refresh_scheduler(app: &AppHandle, state: &AuthState) {
             let app = app.clone();
             let state = state.clone();
             tauri::async_runtime::spawn(async move {
+                #[cfg(target_os = "android")]
+                let _ = start_android_session_probe(
+                    &app,
+                    &state,
+                    auth::AuthProbeRequest::default(),
+                    false,
+                    false,
+                    "Refreshing Cavoti usage",
+                );
+                #[cfg(not(target_os = "android"))]
                 let _ = open_auth_window(
                     &app,
                     &state,
@@ -856,6 +998,7 @@ fn probe_request(value: Option<&Value>) -> auth::AuthProbeRequest {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn start_auth_session_probe(app: &AppHandle, state: &AuthState) -> bool {
     if !state.lifecycle.is_foreground() {
         return false;
@@ -878,6 +1021,220 @@ fn start_auth_session_probe(app: &AppHandle, state: &AuthState) -> bool {
     true
 }
 
+#[cfg(target_os = "android")]
+fn android_dispatch_bool(
+    method: &str,
+    signature: &str,
+    collection_id: &str,
+    script: Option<&str>,
+    show: Option<bool>,
+) -> Result<bool, String> {
+    let jvm = ANDROID_JVM
+        .get()
+        .ok_or_else(|| "Android Activity JVM is unavailable".to_string())?;
+    let mut env = jvm
+        .attach_current_thread()
+        .map_err(|_| "Android Activity JVM could not be attached".to_string())?;
+    let class_loader = ANDROID_ACTIVITY_CLASS_LOADER
+        .get()
+        .ok_or_else(|| "Android Activity class loader is unavailable".to_string())?;
+    let class_name = env
+        .new_string("com.cavoti.bar.MainActivity")
+        .map_err(|_| "Android MainActivity name could not be created".to_string())?;
+    let class = JClass::from(
+        env.call_method(
+            class_loader.as_obj(),
+            "loadClass",
+            "(Ljava/lang/String;)Ljava/lang/Class;",
+            &[JValue::Object(class_name.as_ref())],
+        )
+        .map_err(|_| {
+            let _ = env.exception_clear();
+            "Android MainActivity is unavailable".to_string()
+        })?
+        .l()
+        .map_err(|_| "Android MainActivity class is invalid".to_string())?,
+    );
+    let collection_id = env
+        .new_string(collection_id)
+        .map_err(|_| "Android collection ID could not be passed to MainActivity".to_string())?;
+    let value = match (script, show) {
+        (Some(script), Some(show)) => {
+            let script = env.new_string(script).map_err(|_| {
+                "Android probe script could not be passed to MainActivity".to_string()
+            })?;
+            env.call_static_method(
+                class,
+                method,
+                signature,
+                &[
+                    JValue::Object(collection_id.as_ref()),
+                    JValue::Object(script.as_ref()),
+                    JValue::Bool(show as u8),
+                ],
+            )
+        }
+        (None, None) => env.call_static_method(
+            class,
+            method,
+            signature,
+            &[JValue::Object(collection_id.as_ref())],
+        ),
+        _ => return Err("Android MainActivity dispatch arguments are invalid".into()),
+    }
+    .map_err(|_| format!("Android MainActivity dispatch failed: {method}"))?;
+    value
+        .z()
+        .map_err(|_| format!("Android MainActivity dispatch returned an invalid result: {method}"))
+}
+
+#[cfg(target_os = "android")]
+fn dispatch_android_start_probe(
+    collection_id: &str,
+    script: &str,
+    show: bool,
+) -> Result<(), String> {
+    if android_dispatch_bool(
+        "dispatchStartProbe",
+        "(Ljava/lang/String;Ljava/lang/String;Z)Z",
+        collection_id,
+        Some(script),
+        Some(show),
+    )? {
+        Ok(())
+    } else {
+        Err("Android MainActivity session adapter is unavailable".into())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn dispatch_android_abort_probe(collection_id: &str) -> Result<(), String> {
+    if android_dispatch_bool(
+        "dispatchAbortProbe",
+        "(Ljava/lang/String;)Z",
+        collection_id,
+        None,
+        None,
+    )? {
+        Ok(())
+    } else {
+        Err("Android MainActivity session adapter is unavailable".into())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn dispatch_android_hide_session(collection_id: &str) -> Result<(), String> {
+    if android_dispatch_bool(
+        "dispatchHideSession",
+        "(Ljava/lang/String;)Z",
+        collection_id,
+        None,
+        None,
+    )? {
+        Ok(())
+    } else {
+        Err("Android MainActivity session adapter is unavailable".into())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn dispatch_android_prepare_for_login(collection_id: &str) -> Result<(), String> {
+    if android_dispatch_bool(
+        "dispatchPrepareForLogin",
+        "(Ljava/lang/String;)Z",
+        collection_id,
+        None,
+        None,
+    )? {
+        Ok(())
+    } else {
+        Err("Android MainActivity session adapter is unavailable".into())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn consume_android_auth_bridge_unavailable() -> bool {
+    if !ANDROID_AUTH_BRIDGE_UNAVAILABLE_PENDING.swap(false, Ordering::AcqRel) {
+        return false;
+    }
+    let Some(app) = ANDROID_APP_HANDLE.get().cloned() else {
+        ANDROID_AUTH_BRIDGE_UNAVAILABLE_PENDING.store(true, Ordering::Release);
+        return false;
+    };
+    let Some(state) = app.try_state::<AuthState>() else {
+        ANDROID_AUTH_BRIDGE_UNAVAILABLE_PENDING.store(true, Ordering::Release);
+        return false;
+    };
+    state
+        .android_auth_bridge_unavailable
+        .store(true, Ordering::Release);
+    abort_current_android_collection(&app, state.inner());
+    let _ = emit_bridge_state(
+        &app,
+        "error",
+        0,
+        "The Android WebView provider does not support the Cavoti session bridge",
+    );
+    true
+}
+
+#[cfg(target_os = "android")]
+fn start_android_session_probe(
+    app: &AppHandle,
+    state: &AuthState,
+    request: auth::AuthProbeRequest,
+    show: bool,
+    force: bool,
+    message: &'static str,
+) -> Result<(), String> {
+    if !show && !state.lifecycle.is_foreground() {
+        return Err("Cavoti session probe was skipped while the app is paused".into());
+    }
+    if state
+        .android_auth_bridge_unavailable
+        .load(Ordering::Acquire)
+    {
+        return Err(
+            "The Android WebView provider does not support the Cavoti session bridge".into(),
+        );
+    }
+    let _probe_start_guard = state
+        .android_probe_start_guard
+        .lock()
+        .map_err(|_| "Cavoti auth startup state is unavailable".to_string())?;
+    let collection_id = {
+        let mut adapter = state
+            .adapter
+            .lock()
+            .map_err(|_| "Cavoti auth state is unavailable".to_string())?;
+        if force {
+            adapter.replace_collection_with_request(request)
+        } else {
+            adapter
+                .try_begin_collection_with_request(request)
+                .ok_or_else(|| "Cavoti session probe is already running".to_string())?
+        }
+    };
+    let result = (|| {
+        emit_bridge_state(app, "loading", 0, message)?;
+        let script = active_probe_script(app, state)
+            .ok_or_else(|| "Cavoti session probe could not be prepared".to_string())?;
+        dispatch_android_start_probe(&collection_id, &script, show)
+            .map_err(|_| "The Cavoti session probe could not start".to_string())?;
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = result {
+        if let Ok(mut adapter) = state.adapter.lock() {
+            adapter.abort(&collection_id);
+        }
+        let _ = dispatch_android_abort_probe(&collection_id);
+        let _ = emit_bridge_state(app, "error", 0, "The Cavoti session probe could not start");
+        return Err(error);
+    }
+    spawn_auth_timeout(app.clone(), state.clone(), collection_id);
+    Ok(())
+}
+
 fn active_probe_script(app: &AppHandle, state: &AuthState) -> Option<String> {
     let (collection_id, request) = state
         .adapter
@@ -893,6 +1250,7 @@ fn active_probe_script(app: &AppHandle, state: &AuthState) -> Option<String> {
     ))
 }
 
+#[cfg(not(target_os = "android"))]
 async fn open_auth_window(
     app: &AppHandle,
     state: &AuthState,
@@ -918,6 +1276,9 @@ async fn open_auth_window(
     let login_url: url::Url = "https://cavoti.com/login"
         .parse::<url::Url>()
         .map_err(|error| error.to_string())?;
+    let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "The Cavoti main window is unavailable".to_string())?;
 
     if let Some(window) = app.get_webview_window("auth") {
         eprintln!("[cavoti-auth] reusing auth window show={show}");
@@ -933,6 +1294,8 @@ async fn open_auth_window(
             window.set_focus().map_err(|error| {
                 format!("The Cavoti sign-in window could not be focused: {error}")
             })?;
+        } else {
+            let _ = window.hide();
         }
         if show {
             window
@@ -965,11 +1328,13 @@ async fn open_auth_window(
             .app_data_dir()
             .map_err(|error| format!("The Cavoti auth profile could not start: {error}"))?
             .join("WebView2");
-        let builder = WebviewWindowBuilder::new(app, "auth", WebviewUrl::External(login_url))
-            .title("Sign in to Cavoti")
-            .data_directory(data_directory);
+        let builder =
+            WebviewWindowBuilder::new(&main_window, "auth", WebviewUrl::External(login_url))
+                .title("Sign in to Cavoti")
+                .data_directory(data_directory)
+                .visible(show);
         #[cfg(desktop)]
-        let builder = builder.visible(show).skip_taskbar(!show);
+        let builder = builder.skip_taskbar(!show);
         #[cfg(desktop)]
         let builder = builder
             .icon(cavoti_icon()?)
@@ -996,6 +1361,7 @@ async fn open_auth_window(
                     #[cfg(desktop)]
                     let _ = window.unminimize();
                     let _ = window.set_focus();
+                } else {
                 }
                 spawn_auth_timeout(app.clone(), state.clone(), collection_id.clone());
             })
@@ -1015,11 +1381,7 @@ fn raw_results_state(raw: &AuthRawResults) -> (&'static str, u16, &'static str) 
     if raw.collection_id.is_empty() || raw.phase != "core" && raw.phase != "enrichment" {
         return ("error", 0, "Cavoti returned an invalid session result");
     }
-    if raw
-        .results
-        .values()
-        .any(|result| result.timed_out || result.error.as_deref() == Some("timeout"))
-    {
+    if raw.results.values().any(|result| result.timed_out) {
         return ("offline", 0, "Cavoti session probe timed out");
     }
     if raw.session_state == "auth-required" {
@@ -1034,6 +1396,9 @@ fn raw_results_state(raw: &AuthRawResults) -> (&'static str, u16, &'static str) 
             "Sign in to Cavoti to load usage data",
         );
     }
+    if raw.phase == "core" && raw.results.values().any(|result| !result.ok) {
+        return ("offline", 0, "Cavoti could not verify the session");
+    }
     if let Some(status) = ["me", "subscriptions", "stats", "models", "snapshot"]
         .iter()
         .filter_map(|name| raw.results.get(*name).map(|result| result.status))
@@ -1045,6 +1410,9 @@ fn raw_results_state(raw: &AuthRawResults) -> (&'static str, u16, &'static str) 
             "Sign in to Cavoti to load usage data",
         );
     }
+    if raw.phase == "enrichment" && raw.session_state == "authenticated" {
+        return ("live", 0, "Cavoti session verified");
+    }
     (
         "loading",
         0,
@@ -1052,30 +1420,11 @@ fn raw_results_state(raw: &AuthRawResults) -> (&'static str, u16, &'static str) 
     )
 }
 
-#[tauri::command]
-fn auth_collection_result(
-    app: AppHandle,
-    window: WebviewWindow,
-    state: State<AuthState>,
+fn publish_auth_collection(
+    app: &AppHandle,
+    state: &AuthState,
     payload: AuthCollectionPayload,
-) -> Result<(), String> {
-    if window.label() != AUTH_WINDOW_LABEL {
-        return Err("Auth collection is restricted to the auth window".into());
-    }
-
-    let current_url = window.url().map_err(|error| error.to_string())?;
-    eprintln!(
-        "[cavoti-auth] result phase={} complete={} state={} results={} url={}",
-        payload.phase,
-        payload.complete,
-        payload.session_state,
-        payload.results.len(),
-        current_url
-    );
-    if !is_cavoti_origin(current_url.as_str()) {
-        return Err("Auth collection origin is not Cavoti".into());
-    }
-
+) -> Result<bool, String> {
     let event = match state
         .adapter
         .lock()
@@ -1095,6 +1444,7 @@ fn auth_collection_result(
         }
     };
     let AuthAdapterEvent::RawResults(raw) = event;
+    let (bridge_state, status, message) = raw_results_state(&raw);
     let normalized_snapshot = if matches!(raw.phase.as_str(), "core" | "enrichment")
         && raw.session_state == "authenticated"
     {
@@ -1110,34 +1460,290 @@ fn auth_collection_result(
         None
     };
     if let Some(snapshot) = normalized_snapshot.as_ref() {
+        if bridge_state == "live" {
+            cache_snapshot(&state, snapshot);
+        }
         emit_event(
             &app,
             json!({
                 "protocol": 1,
                 "type": "snapshot",
-                "complete": raw.phase == "enrichment",
+                "complete": bridge_state == "live",
                 "snapshot": snapshot,
             }),
         )?;
     }
-    let (bridge_state, status, message) = raw_results_state(&raw);
-    if raw.phase == "enrichment" && raw.session_state == "authenticated" {
-        state.notifications.notify_connection_state(&app, "live");
+    if bridge_state == "live" {
         if let Some(snapshot) = normalized_snapshot.as_ref() {
-            let thresholds = current_settings(state.inner()).quota_thresholds;
+            let thresholds = current_settings(state).quota_thresholds;
             state
                 .notifications
                 .notify_quota_alerts(&app, snapshot, &thresholds);
         }
     }
-    let result = emit_bridge_state(&app, bridge_state, status, message);
-    if raw.phase == "enrichment" && raw.session_state == "authenticated" {
+    emit_bridge_state(app, bridge_state, status, message)?;
+    Ok(raw.phase == "enrichment" && raw.session_state == "authenticated")
+}
+
+#[tauri::command]
+fn auth_collection_result(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<AuthState>,
+    payload: String,
+) -> Result<(), String> {
+    if window.label() != AUTH_WINDOW_LABEL {
+        return Err("Auth collection is restricted to the auth window".into());
+    }
+
+    if payload.as_bytes().len() > MAX_AUTH_PAYLOAD_BYTES {
+        return Err("Auth collection payload is too large".into());
+    }
+    let payload = serde_json::from_str::<AuthCollectionPayload>(&payload)
+        .map_err(|_| "Auth collection payload is invalid".to_string())?;
+
+    let current_url = window.url().map_err(|error| error.to_string())?;
+    eprintln!(
+        "[cavoti-auth] result phase={} complete={} state={} results={}",
+        payload.phase,
+        payload.complete,
+        payload.session_state,
+        payload.results.len()
+    );
+    if !is_cavoti_origin(current_url.as_str()) {
+        return Err("Auth collection origin is not Cavoti".into());
+    }
+
+    let terminal = publish_auth_collection(&app, &state, payload)?;
+    if terminal {
         window
             .hide()
             .map_err(|error| format!("The Cavoti sign-in window could not be hidden: {error}"))?;
         eprintln!("[cavoti-auth] authenticated enrichment complete; auth window hidden");
     }
-    result
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn abort_android_collection(app: &AppHandle, state: &AuthState, collection_id: &str) -> bool {
+    if collection_id.is_empty() {
+        return false;
+    }
+    let aborted = state
+        .adapter
+        .lock()
+        .map(|mut adapter| {
+            let Some(active) = adapter.active_collection_id().map(str::to_owned) else {
+                return false;
+            };
+            if collection_id.is_empty() || active == collection_id {
+                adapter.abort(&active)
+            } else {
+                false
+            }
+        })
+        .unwrap_or(false);
+    if aborted && !collection_id.is_empty() {
+        if let Err(error) = dispatch_android_abort_probe(collection_id) {
+            eprintln!("[cavoti-auth] Android abort dispatch failed: {error}");
+            let _ = emit_bridge_state(
+                app,
+                "error",
+                0,
+                "The Android session controller is unavailable",
+            );
+        }
+    }
+    aborted
+}
+
+#[cfg(target_os = "android")]
+fn abort_current_android_collection(app: &AppHandle, state: &AuthState) -> bool {
+    let collection_id = state
+        .adapter
+        .lock()
+        .ok()
+        .and_then(|adapter| adapter.active_collection_id().map(str::to_owned));
+    collection_id
+        .as_deref()
+        .is_some_and(|id| abort_android_collection(app, state, id))
+}
+
+#[cfg(target_os = "android")]
+fn android_auth_collection_result(
+    app: &AppHandle,
+    state: &AuthState,
+    value: Option<&Value>,
+) -> Result<(), String> {
+    let collection_id = value
+        .and_then(|value| value.get("collectionId"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let payload = match value
+        .cloned()
+        .ok_or_else(|| "Android auth collection payload is missing".to_string())
+        .and_then(|value| {
+            serde_json::from_value::<AuthCollectionPayload>(value)
+                .map_err(|_| "Android auth collection payload is invalid".to_string())
+        }) {
+        Ok(payload) => payload,
+        Err(error) => {
+            if let Some(collection_id) = collection_id.as_deref() {
+                abort_android_collection(app, state, collection_id);
+            }
+            return Err(error);
+        }
+    };
+    let collection_id = payload.collection_id.clone();
+    let terminal_core_failure =
+        payload.phase == "core" && payload.complete && payload.session_state != "authenticated";
+    let result = publish_auth_collection(app, state, payload);
+    let terminal = match result {
+        Ok(terminal) => terminal,
+        Err(error) => {
+            abort_android_collection(app, state, &collection_id);
+            return Err(error);
+        }
+    };
+    if terminal {
+        if let Err(error) = dispatch_android_hide_session(&collection_id) {
+            eprintln!("[cavoti-auth] Android hide dispatch failed: {error}");
+            abort_android_collection(app, state, &collection_id);
+            emit_bridge_state(
+                app,
+                "error",
+                0,
+                "The Android session controller is unavailable",
+            )?;
+            return Err("The Android session controller is unavailable".into());
+        }
+    } else if terminal_core_failure {
+        if let Err(error) = dispatch_android_prepare_for_login(&collection_id) {
+            eprintln!("[cavoti-auth] Android login preparation dispatch failed: {error}");
+            abort_android_collection(app, state, &collection_id);
+            emit_bridge_state(
+                app,
+                "error",
+                0,
+                "The Android session controller is unavailable",
+            )?;
+            return Err("The Android session controller is unavailable".into());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeActivityReady(
+    mut env: JNIEnv,
+    activity: JObject,
+) {
+    if let Ok(jvm) = env.get_java_vm() {
+        let _ = ANDROID_JVM.set(jvm);
+    }
+    let Ok(activity_class) = env
+        .call_method(&activity, "getClass", "()Ljava/lang/Class;", &[])
+        .and_then(|value| value.l())
+    else {
+        return;
+    };
+    let Ok(class_loader) = env
+        .call_method(
+            &activity_class,
+            "getClassLoader",
+            "()Ljava/lang/ClassLoader;",
+            &[],
+        )
+        .and_then(|value| value.l())
+    else {
+        return;
+    };
+    if let Ok(global_class_loader) = env.new_global_ref(class_loader) {
+        let _ = ANDROID_ACTIVITY_CLASS_LOADER.set(global_class_loader);
+    }
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeSubmitAuthResult(
+    mut env: JNIEnv,
+    _class: JClass,
+    payload: JString,
+) -> jni::sys::jboolean {
+    let Ok(payload) = env.get_string(&payload) else {
+        return 0;
+    };
+    let payload = payload.to_string_lossy();
+    if payload.len() > 1024 * 1024 {
+        return 0;
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&payload) else {
+        return 0;
+    };
+    let Some(app) = ANDROID_APP_HANDLE.get().cloned() else {
+        return 0;
+    };
+    let Some(state) = app.try_state::<AuthState>() else {
+        return 0;
+    };
+    if android_auth_collection_result(&app, state.inner(), Some(&value)).is_ok() {
+        1
+    } else {
+        0
+    }
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeAbortAuthCollection(
+    mut env: JNIEnv,
+    _class: JClass,
+    collection_id: JString,
+) {
+    let Ok(collection_id) = env.get_string(&collection_id) else {
+        return;
+    };
+    let collection_id = collection_id.to_string_lossy();
+    let Some(app) = ANDROID_APP_HANDLE.get().cloned() else {
+        return;
+    };
+    let Some(state) = app.try_state::<AuthState>() else {
+        return;
+    };
+    abort_android_collection(&app, state.inner(), &collection_id);
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeSessionDocumentReady(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    let Some(app) = ANDROID_APP_HANDLE.get().cloned() else {
+        return;
+    };
+    let Some(state) = app.try_state::<AuthState>() else {
+        return;
+    };
+    let _ = start_android_session_probe(
+        &app,
+        state.inner(),
+        auth::AuthProbeRequest::default(),
+        true,
+        true,
+        "Restoring Cavoti session",
+    );
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn Java_com_cavoti_bar_MainActivity_nativeAuthCollectionBridgeUnavailable(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    ANDROID_AUTH_BRIDGE_UNAVAILABLE_PENDING.store(true, Ordering::Release);
+    consume_android_auth_bridge_unavailable();
 }
 
 #[tauri::command]
@@ -1171,6 +1777,7 @@ async fn host_command(
             updates::spawn_startup_check(app.clone());
             flush_pending_navigation(&app, state.inner())
         }
+        "snapshot-received" | "snapshot-rejected" => Ok(()),
         "check-update" => {
             updates::check_for_update(app.clone(), app.state::<updates::PendingUpdate>(), state)
                 .await
@@ -1179,33 +1786,62 @@ async fn host_command(
         "install-update" => {
             updates::install_update(app.clone(), app.state::<updates::PendingUpdate>(), state).await
         }
-        "connect" | "refresh" => {
+        "connect" => {
             let request = probe_request(message.value.as_ref());
-            let result = open_auth_window(
-                &app,
-                state.inner(),
-                request,
-                message.action == "connect",
-                if message.action == "connect" {
-                    "Connecting to Cavoti session"
-                } else {
-                    "Refreshing Cavoti usage"
-                },
-            )
-            .await;
-            if let Err(error) = &result {
-                eprintln!("[cavoti-auth] host command failed: {error}");
-                let _ = emit_bridge_state(
+            #[cfg(target_os = "android")]
+            {
+                start_android_session_probe(
                     &app,
-                    "error",
-                    0,
-                    "The Cavoti connection window could not start",
-                );
+                    state.inner(),
+                    request,
+                    true,
+                    true,
+                    "Connecting to Cavoti session",
+                )
             }
-            result
+            #[cfg(not(target_os = "android"))]
+            {
+                open_auth_window(
+                    &app,
+                    state.inner(),
+                    request,
+                    true,
+                    "Connecting to Cavoti session",
+                )
+                .await
+            }
+        }
+        "refresh" => {
+            let request = probe_request(message.value.as_ref());
+            #[cfg(target_os = "android")]
+            {
+                start_android_session_probe(
+                    &app,
+                    state.inner(),
+                    request,
+                    false,
+                    false,
+                    "Refreshing Cavoti usage",
+                )
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                open_auth_window(
+                    &app,
+                    state.inner(),
+                    request,
+                    false,
+                    "Refreshing Cavoti usage",
+                )
+                .await
+            }
         }
         "setting" => apply_setting(&app, state.inner(), message.value.as_ref()),
         "clear" => {
+            let _settings_update_guard = state
+                .settings_update_guard
+                .lock()
+                .map_err(|_| "Cavoti settings state is unavailable".to_string())?;
             let defaults = HostSettings::default();
             #[cfg(desktop)]
             {
@@ -1247,6 +1883,10 @@ async fn host_command(
             Ok(())
         }
         "maximize" => {
+            let _settings_update_guard = state
+                .settings_update_guard
+                .lock()
+                .map_err(|_| "Cavoti settings state is unavailable".to_string())?;
             #[cfg(desktop)]
             if let Some(window) = app.get_webview_window("main") {
                 if window.is_maximized().unwrap_or(false) {
@@ -1376,24 +2016,49 @@ pub fn run() {
             if payload.event() != PageLoadEvent::Finished {
                 return;
             }
-            eprintln!(
-                "[cavoti-auth] page finished label={} url={}",
-                webview.label(),
-                payload.url()
-            );
-            let Some(state) = webview.app_handle().try_state::<AuthState>() else {
-                return;
-            };
-            if webview.label() == "main" {
-                start_auth_session_probe(webview.app_handle(), &state);
-                return;
-            }
-            if webview.label() != AUTH_WINDOW_LABEL || !is_cavoti_origin(payload.url().as_str()) {
-                return;
-            }
-            if let Some(script) = active_probe_script(webview.app_handle(), &state) {
-                if let Err(error) = webview.eval(&script) {
-                    eprintln!("[cavoti-auth] probe eval failed: {error}");
+            eprintln!("[cavoti-auth] page finished label={}", webview.label());
+                let Some(state) = webview.app_handle().try_state::<AuthState>() else {
+                    return;
+                };
+                if webview.label() == "main" {
+                    #[cfg(target_os = "android")]
+                    {
+                        return;
+                    }
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        start_auth_session_probe(webview.app_handle(), &state);
+                        return;
+                    }
+                }
+            #[cfg(not(target_os = "android"))]
+            {
+                if webview.label() != AUTH_WINDOW_LABEL
+                    || !auth::is_auth_probe_document(payload.url().as_str())
+                {
+                    return;
+                }
+                if let Some(script) = active_probe_script(webview.app_handle(), &state) {
+                    if let Err(error) = webview.eval(&script) {
+                        eprintln!("[cavoti-auth] probe eval failed: {error}");
+                    }
+                } else if !has_cached_snapshot(&state) {
+                    eprintln!("[cavoti-auth] auth document finished without an active probe; starting recovery probe");
+                    let app = webview.app_handle().clone();
+                    let state = state.inner().clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(error) = open_auth_window(
+                            &app,
+                            &state,
+                            auth::AuthProbeRequest::default(),
+                            false,
+                            "Restoring Cavoti session",
+                        )
+                        .await
+                        {
+                            eprintln!("[cavoti-auth] recovery probe failed: {error}");
+                        }
+                    });
                 }
             }
         })
@@ -1412,12 +2077,16 @@ pub fn run() {
                                 .filter(|collection_id| adapter.abort(collection_id))
                         })
                         .is_some();
-                    if aborted {
+                    if aborted && !has_cached_snapshot(&state) {
                         let _ = emit_bridge_state(
                             window.app_handle(),
                             "auth-required",
                             0,
                             "Sign in to Cavoti to load usage data",
+                        );
+                    } else if aborted {
+                        eprintln!(
+                            "[cavoti-auth] auth activity destroyed during refresh; retaining cached snapshot"
                         );
                     }
                 }
@@ -1439,6 +2108,10 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     let builder = builder.setup(|app| {
+        #[cfg(target_os = "android")]
+        {
+            let _ = ANDROID_APP_HANDLE.set(app.handle().clone());
+        }
         let persisted = load_settings(&app.handle());
         eprintln!(
             "[cavoti-settings] loaded interval={}s close_to_tray={} launch_at_startup={}",
@@ -1447,6 +2120,11 @@ pub fn run() {
             persisted.launch_at_startup
         );
         let state = app.state::<AuthState>();
+        #[cfg(target_os = "android")]
+        {
+            state.notifications.initialize(app.handle());
+            consume_android_auth_bridge_unavailable();
+        }
         if let Ok(mut settings) = state.settings.lock() {
             *settings = persisted.clone();
         }

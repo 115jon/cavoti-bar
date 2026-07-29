@@ -30,14 +30,18 @@ type TauriWindow = WebViewWindow & {
 };
 
 function isTauriRuntime(target: TauriWindow): boolean {
-  return target.__TAURI_INTERNALS__ !== undefined || target.__TAURI__ !== undefined;
+  return (
+    target.__TAURI_INTERNALS__ !== undefined || target.__TAURI__ !== undefined
+  );
 }
 
 function isTauriDevOrigin(target: TauriWindow): boolean {
-  return target.location?.hostname === "localhost" && target.location.port === "1420";
+  return (
+    target.location?.hostname === "localhost" && target.location.port === "1420"
+  );
 }
 
-function createTauriBridge(): HostBridge {
+function createTauriBridge(target: TauriWindow): HostBridge {
   let listenersReady = Promise.resolve();
   return {
     post: (message) => {
@@ -80,7 +84,7 @@ function createTauriBridge(): HostBridge {
 
 export function createHostBridge(target: WebViewWindow = window): HostBridge {
   const tauri = isTauriRuntime(target) || isTauriDevOrigin(target);
-  if (tauri) return createTauriBridge();
+  if (tauri) return createTauriBridge(target);
   const webview = target.chrome?.webview;
   return {
     post: (message) => webview?.postMessage(message),

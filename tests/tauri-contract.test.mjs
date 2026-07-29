@@ -108,6 +108,10 @@ test("auth probe never sends tokens or unbounded page data across the bridge", (
   assert.match(native, /Authorization/);
   assert.match(native, /MAX_AUTH_RESULT_BYTES/);
   assert.match(native, /auth-results-internal/);
+  assert.match(native, /CavotiAndroidResult/);
+  assert.match(native, /CavotiAndroidResult\.postMessage\(JSON\.stringify\(payload\)\)/);
+  assert.match(native, /invoke\('auth_collection_result', \{\{ payload: JSON\.stringify\(payload\) \}\}\)/);
+  assert.doesNotMatch(native, /postAuthCollectionResult/);
   assert.doesNotMatch(native, /emit_event\([^)]*auth-results-internal/);
   assert.match(native, /\.slice\(0,\s*\{max_bytes\}\)/);
   assert.match(native, /const send = \(phase, complete, sessionState, results\)/);
@@ -129,6 +133,16 @@ test("auth probe uses Tauri's runtime invoke key on postMessage", () => {
   assert.doesNotMatch(auth, /fetch\([^\n]*ipc/);
 });
 
+test("desktop auth command bounds raw JSON before deserialization", () => {
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const auth = read("apps/tauri/src-tauri/src/auth.rs");
+
+  assert.match(auth, /MAX_AUTH_PAYLOAD_BYTES/);
+  assert.match(native, /payload: String/);
+  assert.match(native, /payload\.as_bytes\(\)\.len\(\)/);
+  assert.match(native, /serde_json::from_str::<AuthCollectionPayload>/);
+});
+
 test("auth probe matches the optional endpoint contract", () => {
   const auth = read("apps/tauri/src-tauri/src/auth.rs");
 
@@ -141,7 +155,6 @@ test("auth probe matches the optional endpoint contract", () => {
     "announcements",
     "status",
     "groups",
-    "geo",
   ]) {
     assert.match(auth, new RegExp(`\\b${endpoint}\\b`));
   }
@@ -149,19 +162,103 @@ test("auth probe matches the optional endpoint contract", () => {
   assert.match(auth, /model_source=requested/);
   assert.match(auth, /include_group_stats=true/);
   assert.match(auth, /mode: 'same-origin'/);
-  assert.match(auth, /get\.geojs\.io\/v1\/ip\/geo/);
+  assert.doesNotMatch(auth, /get\.geojs\.io|const geo|error: null|error: ['"](?:timeout|request)/);
 });
 
-test("startup auth restore is hidden, persistent, and terminally hides the window", () => {
+test("startup and refresh route Android auth through the MainActivity session adapter", () => {
   const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const activity = read(
+    "apps/tauri/src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
+  );
+  const gateTest = read(
+    "apps/tauri/src-tauri/gen/android/app/src/test/java/com/cavoti/bar/SessionResultGateTest.kt",
+  );
+  const bridge = read("web/src/bridge/host.ts");
 
-  assert.match(native, /start_auth_session_probe/);
-  assert.match(native, /visible\(show\)/);
-  assert.match(native, /AuthProbeRequest::default\(\),\n\s+false/);
-  assert.match(native, /data_directory\(/);
-  assert.match(native, /startup_probe_started/);
-  assert.match(native, /window\.hide\(\)/);
-  assert.doesNotMatch(native, /raw\.phase == "enrichment"[\s\S]{0,160}window\.close\(\)/);
+  assert.match(native, /start_android_session_probe/);
+  assert.match(native, /emit_bootstrap[\s\S]*start_android_session_probe/);
+  assert.match(native, /"refresh"[\s\S]*start_android_session_probe/);
+  assert.match(native, /"connect"[\s\S]*start_android_session_probe/);
+  assert.match(native, /dispatch_android_start_probe/);
+  assert.match(native, /dispatch_android_abort_probe/);
+  assert.match(native, /dispatch_android_hide_session/);
+  assert.match(native, /dispatch_android_prepare_for_login/);
+  assert.match(native, /ANDROID_JVM/);
+  assert.match(native, /nativeActivityReady/);
+  assert.doesNotMatch(native, /CavotiAndroidController/);
+  assert.match(native, /nativeSubmitAuthResult/);
+  assert.match(native, /nativeAbortAuthCollection/);
+  assert.match(native, /collection_id\.is_empty\(\)/);
+  assert.match(native, /nativeSessionDocumentReady/);
+  assert.match(native, /replace_collection_with_request/);
+  assert.match(native, /ANDROID_APP_HANDLE/);
+  assert.match(native, /ANDROID_AUTH_BRIDGE_UNAVAILABLE_PENDING/);
+  assert.match(native, /swap\(false, Ordering::AcqRel\)/);
+  assert.match(native, /android_probe_start_guard/);
+  assert.match(native, /android_probe_start_guard[\s\S]*replace_collection_with_request/);
+  assert.doesNotMatch(native, /nativeSubmitAuthResult[\s\S]{0,900}async_runtime::spawn/);
+  assert.doesNotMatch(native, /android-auth-result/);
+  assert.doesNotMatch(native, /activity_name\("AuthActivity"\)/);
+  assert.doesNotMatch(native, /start_native_refresh|native_auth/);
+  assert.match(activity, /class WebViewSessionAdapter/);
+  assert.match(activity, /onWebViewCreate/);
+  assert.match(activity, /CavotiAndroidResult/);
+  assert.match(activity, /nativeActivityReady/);
+  assert.match(activity, /dispatchStartProbe/);
+  assert.match(activity, /dispatchAbortProbe/);
+  assert.match(activity, /dispatchHideSession/);
+  assert.match(activity, /dispatchPrepareForLogin/);
+  assert.doesNotMatch(activity, /CavotiAndroidController|ControllerBridge|JavascriptInterface/);
+  assert.doesNotMatch(activity, /addJavascriptInterface/);
+  assert.match(activity, /WebViewCompat\.addWebMessageListener/);
+  assert.match(activity, /WebViewFeature\.isFeatureSupported\([\s\S]*WebViewFeature\.WEB_MESSAGE_LISTENER/);
+  assert.match(activity, /authCollectionBridgeUnavailable/);
+  assert.match(native, /android_auth_bridge_unavailable/);
+  assert.match(activity, /https:\/\/cavoti\.com/);
+  assert.match(activity, /isMainFrame/);
+  assert.match(activity, /sourceOrigin/);
+  assert.doesNotMatch(activity, /sessionWebView\.addJavascriptInterface\(resultBridge/);
+  assert.doesNotMatch(activity, /class ResultBridge/);
+  assert.doesNotMatch(activity, /sessionWebView\.addJavascriptInterface\(this/);
+  assert.doesNotMatch(activity, /mainWebView\.evaluateJavascript/);
+  assert.match(activity, /activity\.submitAuthResult/);
+  assert.match(activity, /private fun sanitizePayload/);
+  assert.match(activity, /allowedTopLevel/);
+  assert.match(activity, /allowedEndpointFields/);
+  assert.match(activity, /MAX_COLLECTION_ID_BYTES/);
+  assert.match(activity, /MAX_PHASE_BYTES/);
+  assert.match(activity, /MAX_SESSION_STATE_BYTES/);
+  assert.match(activity, /sanitizedPayload/);
+  assert.doesNotMatch(activity, /submitAuthResult\(payload\)/);
+  assert.match(activity, /class SessionResultGate/);
+  assert.match(activity, /activeCollectionId/);
+  assert.match(activity, /acceptedCore/);
+  assert.match(activity, /acceptedEnrichment/);
+  assert.match(activity, /setSessionVisible\(false\)/);
+  assert.match(activity, /setSessionVisible\(show\)/);
+  assert.match(activity, /nativeSubmitAuthResult/);
+  assert.match(activity, /abortNativeCollection/);
+  assert.match(activity, /nativeAbortAuthCollection/);
+  assert.match(activity, /prepareForLogin/);
+  assert.match(activity, /sessionDocumentReady/);
+  assert.match(activity, /onDestroy\(\)[\s\S]*abortNativeCollection\(\)[\s\S]*destroy\(\)/);
+  assert.match(activity, /pendingNativeCollectionId/);
+  assert.doesNotMatch(activity, /abortAuthCollection\(""\)/);
+  assert.match(gateTest, /ignoresWrongIdAndDuplicateCoreResultsWithoutAbortingActiveCollection/);
+  assert.match(gateTest, /acceptsOnlyTerminalEnrichmentAfterCoreAndIgnoresLateResults/);
+  assert.match(activity, /Decision\.Ignored/);
+  assert.match(activity, /Decision\.Invalid/);
+  assert.match(gateTest, /clearsACollectionAfterTerminalCoreFailure/);
+  assert.match(gateTest, /abortClearsTheActiveCollection/);
+  assert.match(gateTest, /preservesTerminalGenerationUntilAnewProbeBegins/);
+  assert.match(gateTest, /rejectsStaleNativeCommandsAfterASecondProbeBegins/);
+  assert.match(activity, /onPostMessage/);
+  assert.match(activity, /abortProbe/);
+  assert.match(activity, /!show && current\.path == "\/login"/);
+  assert.match(activity, /shouldProbeCurrentDocument[\s\S]*sessionWebView\.evaluateJavascript\(script, null\)/);
+  assert.match(activity, /current == null \|\| current\.host != "cavoti\.com"[\s\S]*sessionWebView\.loadUrl\(LOGIN_URL\)/);
+  assert.doesNotMatch(bridge, /__cavotiAndroidAuthResult|android-auth-result/);
+  assert.doesNotMatch(bridge, /getCookieHeader|sessionCookie/);
 });
 
 test("auth window creation is reached through an async command path", () => {
@@ -179,6 +276,22 @@ test("manual connect restores and explicitly navigates the visible auth window",
   assert.match(native, /window\.unminimize\(\)/);
   assert.match(native, /window\.navigate\(login_url\.clone\(\)/);
   assert.match(native, /window\.set_focus\(\)/);
+  assert.match(native, /else \{\s*let _ = window\.hide\(\);/);
+  assert.match(native, /async fn open_auth_window[\s\S]{0,220}is_foreground\(\)/);
+});
+
+test("Android has no secondary auth activity or split embedding path", () => {
+  const manifest = read(
+    "apps/tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml",
+  );
+  const activity = read(
+    "apps/tauri/src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
+  );
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+
+  assert.doesNotMatch(manifest, /AuthActivity|SplitInitializer|PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED/);
+  assert.match(native, /#\[cfg\(not\(target_os = "android"\)\)\]\s*async fn open_auth_window/);
+  assert.doesNotMatch(activity, /getCookieHeader|auth_token/);
 });
 
 test("settings persist through the Tauri store and drive native refresh behavior", () => {
@@ -230,6 +343,9 @@ test("native notifications use normalized quota state without forwarding raw pay
   assert.match(native, /notify_connection_state/);
   assert.match(native, /notify_quota_alerts/);
   assert.match(notifications, /NotificationExt/);
+  assert.match(notifications, /create_channel/);
+  assert.match(notifications, /Channel::builder\("cavoti-monitor"/);
+  assert.match(notifications, /channel_ready/);
   assert.match(notifications, /Cavoti quota alert/);
   assert.match(notifications, /Usage monitoring is active/);
   assert.match(quota, /initialized/);
@@ -283,6 +399,7 @@ test("foreground lifecycle pauses collection and resumes one bounded probe", () 
   assert.match(native, /"lifecycle"/);
   assert.match(native, /__cavotiAuthAbort/);
   assert.match(native, /foreground_refresh_started/);
+  assert.match(native, /abort_auth_collection\(app, state\)/);
   assert.match(native, /AUTH_COLLECTION_TIMEOUT/);
   assert.match(native, /is_foreground/);
   assert.match(auth, /try_begin_collection/);
@@ -361,4 +478,98 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
   assert.match(workflow, /gh release create/);
   assert.match(packageJson.scripts["build:installer"], /build-tauri-installer\.ps1/);
   assert.match(gitignore, /^\.env$/m);
+});
+
+test("Cavoti packages a signed Android APK without repository keystores", () => {
+  const config = JSON.parse(read("apps/tauri/src-tauri/tauri.conf.json"));
+  const script = read("scripts/build-tauri-android-release.ps1");
+  const envExample = read(".env.example");
+  const gitignore = read(".gitignore");
+  const notifications = read("apps/tauri/src-tauri/src/notifications.rs");
+  const app = read("web/src/App.tsx");
+  const indexHtml = read("web/index.html");
+  const indexCss = read("web/src/index.css");
+  const appShell = read("web/src/components/app/AppShell.tsx");
+  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const androidGradle = read("apps/tauri/src-tauri/gen/android/app/build.gradle.kts");
+  const androidManifest = read("apps/tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml");
+  const activity = read(
+    "apps/tauri/src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
+  );
+
+  assert.equal(config.identifier, "com.cavoti.bar");
+  assert.ok(config.bundle.android.versionCode > 1000);
+  assert.match(script, /tauri.*android.*build.*--apk/);
+  assert.match(script, /\[string\]\$DeviceSerial\s*=\s*""/);
+  assert.match(script, /Import-CavotiAndroidEnv[\s\S]*DeviceSerial[\s\S]*ANDROID_DEVICE_SERIAL/);
+  assert.match(script, /PSBoundParameters\.ContainsKey\("DeviceSerial"\)/);
+  assert.match(script, /Remove-Item[\s\S]*apkOutputDirectory/);
+  assert.match(script, /apks\.Count -ne 1/);
+  assert.match(script, /keystore\.properties/);
+  assert.match(script, /apksigner/);
+  assert.match(script, /adb\.Source -s \$DeviceSerial install -r/);
+  assert.match(script, /CAVOTI_ANDROID_KEYSTORE_FILE/);
+  assert.doesNotMatch(script, /create\("release"\)/);
+  assert.match(envExample, /CAVOTI_ANDROID_KEYSTORE_FILE/);
+  assert.match(gitignore, /\*\.jks/);
+  assert.match(gitignore, /gen\/android\/keystore\.properties/);
+  assert.match(notifications, /channel_id\("cavoti-monitor"\)/);
+  assert.match(app, /createChannel/);
+  assert.match(app, /id: "cavoti-monitor"/);
+  assert.match(indexHtml, /viewport-fit=cover/);
+  assert.match(indexCss, /safe-area-inset-top/);
+  assert.match(appShell, /h-\[100dvh\]/);
+  assert.match(appShell, /var\(--safe-area-bottom\)/);
+  assert.match(native, /get_webview_window\("main"\)/);
+  assert.match(native, /emit_to\("main", "host-event"/);
+  assert.match(native, /latest_snapshot/);
+  assert.match(native, /emit_latest_snapshot/);
+  assert.match(native, /without an active probe; starting recovery probe/);
+  assert.match(native, /has_cached_snapshot/);
+  assert.match(native, /aborted && !has_cached_snapshot\(&state\)/);
+  assert.match(native, /ensure_permission\(app\)/);
+  assert.match(native, /notifications\.initialize\(app\.handle\(\)\)/);
+  assert.match(native, /android_auth_collection_result/);
+  assert.match(androidGradle, /name\.endsWith\("Release"\)/);
+  assert.match(androidGradle, /"package"/);
+  assert.match(native, /if terminal/);
+  assert.match(native, /raw\.phase == "enrichment" && raw\.session_state == "authenticated"[\s\S]*cache_snapshot/);
+  assert.match(native, /Stale auth collection result/);
+  assert.doesNotMatch(native, /activity_name\("AuthActivity"\)/);
+  assert.match(activity, /CookieManager\.getInstance\(\)/);
+  assert.match(activity, /setAcceptCookie\(true\)/);
+  assert.match(activity, /domStorageEnabled = true/);
+  assert.match(activity, /setSessionVisible\(false\)/);
+  assert.match(activity, /setSessionVisible\(show\)/);
+  assert.match(androidGradle, /androidx\.webkit:webkit/);
+  assert.doesNotMatch(androidGradle, /androidx\.window:window|androidx\.startup:startup-runtime/);
+  assert.doesNotMatch(androidManifest, /AuthActivity|SplitInitializer|PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED/);
+});
+
+test("Windows release signing is tag-scoped and version-checked before secrets", () => {
+  const workflow = read(".github/workflows/windows-release.yml");
+  assert.doesNotMatch(workflow, /workflow_dispatch/);
+  assert.match(workflow, /RELEASE_REF/);
+  assert.match(workflow, /refs\/tags\/v/);
+  assert.match(workflow, /tauri\.conf\.json/);
+  assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY:/);
+  assert.match(workflow, /Build custom Cavoti installer[\s\S]*TAURI_SIGNING_PRIVATE_KEY/);
+  assert.doesNotMatch(workflow, /github\.ref_name.*release create/);
+});
+
+test("Android release signing restores pre-existing keystore properties", () => {
+  const script = read("scripts/build-tauri-android-release.ps1");
+  assert.match(script, /keystorePropertiesExisted/);
+  assert.match(script, /ReadAllBytes/);
+  assert.match(script, /WriteAllBytes/);
+  assert.match(script, /keystorePropertiesExisted[\s\S]*finally/);
+  assert.match(script, /Remove-Item[\s\S]*keystorePropertiesFile/);
+});
+
+test("installer signing consumes exported environment secrets", () => {
+  const script = read("scripts/build-tauri-installer.ps1");
+  assert.match(script, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD/);
+  assert.match(script, /signArguments = @\("run", "tauri", "signer", "sign", \$installerOutput\)/);
+  assert.doesNotMatch(script, /signer", "sign", "-k"/);
+  assert.doesNotMatch(script, /signArguments.*-p/);
 });

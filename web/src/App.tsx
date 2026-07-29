@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import {
+  createChannel,
+  Importance,
+  Visibility,
+} from "@tauri-apps/plugin-notification";
+import {
   normalizeSnapshot,
   type SnapshotEnvelope,
   type UsageFilters as UsageFilterState,
@@ -103,7 +108,10 @@ export function App({ bridge }: AppProps) {
   useEffect(() => {
     const unsubscribe = bridge.subscribe((raw) => {
       const message = parseHostMessage(raw);
-      if (!message) return;
+      if (!message) {
+        console.warn("[cavoti-host] dropped host message");
+        return;
+      }
       if (message.type === "capabilities") {
         setCapabilities(message.capabilities);
       } else if (message.type === "lifecycle") {
@@ -111,11 +119,19 @@ export function App({ bridge }: AppProps) {
       } else if (message.type === "snapshot") {
         const next = normalizeSnapshot(message.snapshot);
         if (next) {
+          const hadSnapshot = hasSnapshot.current;
+          bridge.post({
+            action: "snapshot-received",
+            value: { complete: message.complete },
+          });
           hasSnapshot.current = true;
           setSnapshot(next);
-          if (message.complete !== false)
+          if (message.complete !== false) {
             setFreshnessCapturedAt(next.capturedAt);
-          setState("live");
+            setState("live");
+          } else if (!hadSnapshot) {
+            setState("loading");
+          }
           if (message.settings) {
             setTopmost(message.settings.topmost);
             setMaximized(message.settings.maximized);
@@ -127,6 +143,9 @@ export function App({ bridge }: AppProps) {
             setStartupError(message.settings.startupError);
             setQuotaThresholds(message.settings.quotaThresholds);
           }
+        } else {
+          bridge.post({ action: "snapshot-rejected" });
+          console.error("[cavoti-host] rejected snapshot");
         }
       } else if (message.type === "settings") {
         setTopmost(message.settings.topmost);
@@ -174,6 +193,18 @@ export function App({ bridge }: AppProps) {
       window.removeEventListener("cavoti-open-ip", openIp);
     };
   }, [bridge, openStatus, refresh]);
+
+  useEffect(() => {
+    if (capabilities.platform !== "mobile") return;
+    void createChannel({
+      id: "cavoti-monitor",
+      name: "Cavoti monitoring",
+      description: "Connection and quota alerts from Cavoti Bar.",
+      importance: Importance.Default,
+      visibility: Visibility.Private,
+      vibration: true,
+    }).catch(() => undefined);
+  }, [capabilities.platform]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
