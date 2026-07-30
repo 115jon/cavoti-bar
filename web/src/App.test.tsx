@@ -349,6 +349,19 @@ describe("App", () => {
   });
 
   it("opens compact secondary navigation and closes after routing", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        media: "",
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false,
+      }),
+    });
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 390,

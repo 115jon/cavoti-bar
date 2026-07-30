@@ -16,7 +16,7 @@ import type { ActionProps, View } from "../app/types";
 import {
   Badge,
   Empty,
-  PlanTabs,
+  PlanSelector,
   SignalNote,
   SourceStrip,
   UsageMeter,
@@ -361,7 +361,7 @@ function CompactOverview({
           </Badge>
         </div>
       ) : null}
-      <PlanTabs
+      <PlanSelector
         plans={snapshot.subscriptions}
         selected={plan}
         onSelect={onSelect}

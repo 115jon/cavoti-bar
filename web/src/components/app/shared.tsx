@@ -3,8 +3,6 @@ import type { ComponentProps } from "react";
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
   ArrowsClockwiseIcon as ArrowsClockwise,
-  CaretLeftIcon as CaretLeft,
-  CaretRightIcon as CaretRight,
   LockKeyOpenIcon as LockKeyOpen,
   StackIcon as Stack,
   WarningCircleIcon as WarningCircle,
@@ -29,6 +27,13 @@ import {
 } from "../ui/empty";
 import { Progress } from "../ui/progress";
 import { Skeleton } from "../ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { planVariant, resetLabel, usageAmount } from "../../app/formatters";
 import type { BridgeState } from "../../app/types";
@@ -80,51 +85,6 @@ export function useCompactTiles(): boolean {
   return compact;
 }
 
-export function TilePager({
-  page,
-  count,
-  onChange,
-  label = "Screen",
-}: {
-  page: number;
-  count: number;
-  onChange: (page: number) => void;
-  label?: string;
-}) {
-  const compact = useCompactTiles();
-  if (count <= 1 || !compact) return null;
-  return (
-    <fieldset
-      className="flex shrink-0 items-center gap-1"
-      aria-label={`${label} ${page + 1} of ${count}`}
-    >
-      <Button
-        className="size-7 text-(--ink-muted) [&_svg]:size-4"
-        variant="ghost"
-        size="icon"
-        aria-label={`Previous ${label.toLowerCase()}`}
-        disabled={page === 0}
-        onClick={() => onChange(page - 1)}
-      >
-        <CaretLeft />
-      </Button>
-      <span>
-        {page + 1} / {count}
-      </span>
-      <Button
-        className="size-7 text-(--ink-muted) [&_svg]:size-4"
-        variant="ghost"
-        size="icon"
-        aria-label={`Next ${label.toLowerCase()}`}
-        disabled={page === count - 1}
-        onClick={() => onChange(page + 1)}
-      >
-        <CaretRight />
-      </Button>
-    </fieldset>
-  );
-}
-
 export function SourceStrip({
   capturedAt,
   showSeconds,
@@ -153,7 +113,7 @@ export function SourceStrip({
   );
 }
 
-export function PlanTabs({
+export function PlanSelector({
   plans,
   selected,
   onSelect,
@@ -164,6 +124,25 @@ export function PlanTabs({
 }) {
   const compact = useCompactTiles();
   if (plans.length < 2) return null;
+  if (compact) {
+    return (
+      <Select value={selected?.name ?? ""} onValueChange={onSelect}>
+        <SelectTrigger className="h-12 w-full px-3 text-base" aria-label="Plan">
+          <SelectValue placeholder="Select plan" />
+        </SelectTrigger>
+        <SelectContent>
+          {plans.map((plan) => (
+            <SelectItem value={plan.name} key={plan.name}>
+              <span className="font-medium">{plan.name}</span>
+              <span className="ml-2 text-xs text-(--ink-muted)">
+                {plan.status}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
   return (
     <Tabs
       value={selected?.name ?? ""}
@@ -171,13 +150,7 @@ export function PlanTabs({
       className="flex h-auto w-full min-w-0 rounded-lg border border-(--line) bg-white/45 p-1"
       aria-label="Plans"
     >
-      <TabsList
-        className={
-          compact
-            ? "grid h-auto w-full min-w-0 grid-cols-2 gap-1 bg-transparent p-0"
-            : "grid h-auto w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-1 bg-transparent p-0"
-        }
-      >
+      <TabsList className="grid h-auto w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-1 bg-transparent p-0">
         {plans.map((plan) => {
           const windows = [
             { label: "5 hour", value: plan.usage.fiveHour },
@@ -189,7 +162,7 @@ export function PlanTabs({
               type="button"
               value={plan.name}
               key={plan.name}
-              className={`${compact ? "min-w-0 w-full" : "min-w-0 w-full flex-none"} grid min-h-20 grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-2 gap-y-0 overflow-hidden rounded-md px-2 py-2 text-left ${
+              className={`grid min-h-20 min-w-0 w-full flex-none grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-2 gap-y-0 overflow-hidden rounded-md px-2 py-2 text-left ${
                 plan.quotaState === "limited"
                   ? "border-[color-mix(in_srgb,var(--warning)_36%,transparent)] bg-(--warning-soft)"
                   : ""

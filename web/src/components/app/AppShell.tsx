@@ -23,13 +23,14 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "../ui/sheet";
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "../ui/drawer";
 
 type NativeRefreshWindow = Window & {
   CavotiNativeRefresh?: {
@@ -222,8 +223,8 @@ export function AppShell({
                   {label}
                 </Button>
               ))}
-              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-                <SheetTrigger asChild>
+              <Drawer open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                <DrawerTrigger asChild>
                   <Button
                     variant="ghost"
                     className="h-14 min-w-0 flex-1 flex-col gap-1 rounded-lg px-1 text-xs"
@@ -232,46 +233,40 @@ export function AppShell({
                     <DotsThree weight="bold" />
                     More
                   </Button>
-                </SheetTrigger>
-                <SheetContent
-                  side="bottom"
-                  className="pb-[calc(1rem+var(--safe-area-bottom))]"
-                  aria-describedby="mobile-more-description"
-                >
-                  <SheetHeader>
-                    <SheetTitle>More</SheetTitle>
-                    <SheetDescription id="mobile-more-description">
+                </DrawerTrigger>
+                <DrawerContent className="pb-[calc(1rem+var(--safe-area-bottom))]">
+                  <DrawerHeader>
+                    <DrawerTitle>More</DrawerTitle>
+                    <DrawerDescription>
                       App settings and information.
-                    </SheetDescription>
-                  </SheetHeader>
+                    </DrawerDescription>
+                  </DrawerHeader>
                   <div className="flex flex-col gap-1">
-                    <Button
-                      variant={view === "settings" ? "secondary" : "ghost"}
-                      className="h-11 justify-start gap-3 px-3"
-                      onClick={() => {
-                        onViewChange("settings");
-                        setMobileNavOpen(false);
-                      }}
-                    >
-                      <GearSix
-                        weight={view === "settings" ? "fill" : "regular"}
-                      />
-                      Settings
-                    </Button>
-                    <Button
-                      variant={view === "about" ? "secondary" : "ghost"}
-                      className="h-11 justify-start gap-3 px-3"
-                      onClick={() => {
-                        onViewChange("about");
-                        setMobileNavOpen(false);
-                      }}
-                    >
-                      <Info weight={view === "about" ? "fill" : "regular"} />
-                      About
-                    </Button>
+                    <DrawerClose asChild>
+                      <Button
+                        variant={view === "settings" ? "secondary" : "ghost"}
+                        className="h-11 justify-start gap-3 px-3"
+                        onClick={() => onViewChange("settings")}
+                      >
+                        <GearSix
+                          weight={view === "settings" ? "fill" : "regular"}
+                        />
+                        Settings
+                      </Button>
+                    </DrawerClose>
+                    <DrawerClose asChild>
+                      <Button
+                        variant={view === "about" ? "secondary" : "ghost"}
+                        className="h-11 justify-start gap-3 px-3"
+                        onClick={() => onViewChange("about")}
+                      >
+                        <Info weight={view === "about" ? "fill" : "regular"} />
+                        About
+                      </Button>
+                    </DrawerClose>
                   </div>
-                </SheetContent>
-              </Sheet>
+                </DrawerContent>
+              </Drawer>
             </nav>
           ) : null}
         </div>
