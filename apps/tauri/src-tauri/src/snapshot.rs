@@ -77,6 +77,17 @@ fn nullable_text(item: Option<&Map<String, Value>>, name: &str) -> Value {
         .map_or(Value::Null, |value| Value::String(value.to_owned()))
 }
 
+fn text_any(item: Option<&Map<String, Value>>, names: &[&str], fallback: &str) -> String {
+    names
+        .iter()
+        .find_map(|name| {
+            item.and_then(|value| value.get(*name))
+                .and_then(Value::as_str)
+        })
+        .unwrap_or(fallback)
+        .to_owned()
+}
+
 fn number(item: Option<&Map<String, Value>>, name: &str) -> f64 {
     item.and_then(|value| value.get(name))
         .and_then(Value::as_f64)
@@ -245,13 +256,23 @@ fn usage_log_rows(source: &[Value], geo: Option<&Map<String, Value>>) -> Value {
                 let api_key = item.get("api_key").and_then(object);
                 let group = item.get("group").and_then(object);
                 let ip = text(Some(item), "ip_address", "Unknown IP");
+                let cache_creation_tokens = item
+                    .get("cache_creation_tokens")
+                    .and_then(Value::as_f64)
+                    .map_or_else(
+                        || {
+                            number(Some(item), "cache_creation_5m_tokens")
+                                + number(Some(item), "cache_creation_1h_tokens")
+                        },
+                        |value| value.max(0.0),
+                    );
                 let location = geo
                     .and_then(|items| items.get(&ip))
                     .and_then(object)
                     .map_or(Value::Null, |value| location_row(Some(value)));
                 let total_tokens = number(Some(item), "input_tokens")
                     + number(Some(item), "output_tokens")
-                    + number(Some(item), "cache_creation_tokens")
+                    + cache_creation_tokens
                     + number(Some(item), "cache_read_tokens");
                 json!({
                     "id": number(Some(item), "id"),
@@ -259,15 +280,24 @@ fn usage_log_rows(source: &[Value], geo: Option<&Map<String, Value>>) -> Value {
                     "apiKeyName": text(api_key, "name", "Unknown key"),
                     "model": text(Some(item), "model", "Unknown model"),
                     "reasoningEffort": text(Some(item), "reasoning_effort", "default"),
-                    "endpoint": text(Some(item), "inbound_endpoint", "Unknown endpoint"),
+                     "endpoint": text(Some(item), "inbound_endpoint", "Unknown endpoint"),
+                     "requestType": text_any(Some(item), &["request_type", "requestType"], ""),
                     "groupName": text(group, "name", "Unknown group"),
                     "inputTokens": number(Some(item), "input_tokens"),
                     "outputTokens": number(Some(item), "output_tokens"),
-                    "cacheCreationTokens": number(Some(item), "cache_creation_tokens"),
+                    "cacheCreationTokens": cache_creation_tokens,
                     "cacheReadTokens": number(Some(item), "cache_read_tokens"),
                     "totalTokens": total_tokens,
                     "actualCost": number(Some(item), "actual_cost"),
                     "standardCost": number(Some(item), "total_cost"),
+                    "inputCost": number(Some(item), "input_cost"),
+                    "outputCost": number(Some(item), "output_cost"),
+                    "cacheCreationCost": number(Some(item), "cache_creation_cost"),
+                    "cacheReadCost": number(Some(item), "cache_read_cost"),
+                    "rateMultiplier": nullable_number(Some(item), "rate_multiplier"),
+                    "subscriptionCost": number(Some(item), "subscription_cost"),
+                    "balanceCost": number(Some(item), "balance_cost"),
+                    "unchargedCost": number(Some(item), "uncharged_cost"),
                     "timeToFirstTokenMs": number(Some(item), "first_token_ms"),
                     "durationMs": number(Some(item), "duration_ms"),
                     "ipAddress": ip,
@@ -296,7 +326,8 @@ fn error_rows(source: &[Value]) -> Value {
                     "platform": text(Some(item), "platform", "Unknown"),
                     "message": text(Some(item), "message", "No error message"),
                     "keyName": text(Some(item), "key_name", "Unknown key"),
-                    "keyDeleted": item.get("key_deleted").and_then(Value::as_bool).unwrap_or(false),
+                     "keyDeleted": item.get("key_deleted").and_then(Value::as_bool).unwrap_or(false),
+                     "errorBody": text_any(Some(item), &["error_body", "errorBody", "response_body"], ""),
                 })
             })
             .collect(),
@@ -364,12 +395,59 @@ fn nullable_number(item: Option<&Map<String, Value>>, name: &str) -> Value {
         .unwrap_or(Value::Null)
 }
 
+fn nullable_number_any(item: Option<&Map<String, Value>>, names: &[&str]) -> Value {
+    names
+        .iter()
+        .find_map(|name| {
+            item.and_then(|value| value.get(*name))
+                .and_then(Value::as_f64)
+                .filter(|value| value.is_finite())
+                .map(|value| Value::from(value.max(0.0)))
+        })
+        .unwrap_or(Value::Null)
+}
+
 fn status_rows(source: &[Value]) -> Value {
     Value::Array(
         source
             .iter()
             .filter_map(object)
             .map(|item| {
+                let timeline = item
+                    .get("timeline")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(object)
+                            .map(|entry| {
+                                json!({
+                                    "status": text(Some(entry), "status", "unknown"),
+                                    "latencyMs": nullable_number_any(Some(entry), &["latency_ms", "latencyMs"]),
+                                    "pingLatencyMs": nullable_number_any(Some(entry), &["ping_latency_ms", "pingLatencyMs"]),
+                                    "checkedAt": nullable_text(Some(entry), "checked_at"),
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let extra_models = item
+                    .get("models")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(object)
+                            .map(|entry| {
+                                json!({
+                                    "name": text_any(Some(entry), &["model", "name"], "Unknown model"),
+                                    "status": text(Some(entry), "status", "unknown"),
+                                    "latencyMs": nullable_number_any(Some(entry), &["latency_ms", "latencyMs"]),
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
                 let checked_at = item
                     .get("timeline")
                     .and_then(Value::as_array)
@@ -379,13 +457,18 @@ fn status_rows(source: &[Value]) -> Value {
                         nullable_text(Some(latest), "checked_at")
                     });
                 json!({
+                    "id": number(Some(item), "id"),
                     "name": text(Some(item), "name", "Unknown channel"),
                     "provider": text(Some(item), "provider", "unknown"),
+                    "groupName": text_any(Some(item), &["group_name", "groupName"], ""),
                     "model": text(Some(item), "primary_model", ""),
                     "status": text(Some(item), "primary_status", "unknown"),
                     "latencyMs": nullable_number(Some(item), "primary_latency_ms"),
+                    "pingLatencyMs": nullable_number_any(Some(item), &["primary_ping_latency_ms", "ping_latency_ms"]),
                     "availability7d": nullable_number(Some(item), "availability_7d"),
                     "checkedAt": checked_at,
+                    "extraModels": extra_models,
+                    "timeline": timeline,
                 })
             })
             .collect(),
@@ -407,6 +490,108 @@ fn option_rows(source: &[Value]) -> Value {
     )
 }
 
+fn api_key_rows(source: &[Value]) -> Value {
+    Value::Array(
+        source
+            .iter()
+            .filter_map(object)
+            .map(|item| {
+                let group = item.get("group").and_then(object);
+                json!({
+                    "id": number(Some(item), "id"),
+                    "name": text(Some(item), "name", "Unknown"),
+                    "groupId": number(Some(item), "group_id"),
+                    "status": text(Some(item), "status", "unknown"),
+                    "groupName": text_any(group, &["name", "group_name"], ""),
+                    "quota": nullable_number_any(Some(item), &["quota", "quota_limit", "quota_limit_usd"]),
+                    "quotaUsed": nullable_number_any(Some(item), &["quota_used", "quota_usage", "usage_usd"]),
+                    "expiresAt": nullable_text(Some(item), "expires_at"),
+                    "rateLimit5h": nullable_number_any(Some(item), &["rate_limit_5h", "rate_limit_5h_usd"]),
+                    "rateLimit1d": nullable_number_any(Some(item), &["rate_limit_1d", "rate_limit_1d_usd"]),
+                    "rateLimit7d": nullable_number_any(Some(item), &["rate_limit_7d", "rate_limit_7d_usd"]),
+                    "usage5h": nullable_number_any(Some(item), &["usage_5h", "usage_5h_usd"]),
+                    "usage1d": nullable_number_any(Some(item), &["usage_1d", "usage_1d_usd"]),
+                    "usage7d": nullable_number_any(Some(item), &["usage_7d", "usage_7d_usd"]),
+                    "reset5hAt": reset_at(Some(item), "window_5h_start", 5),
+                    "reset1dAt": reset_at(Some(item), "window_1d_start", 24),
+                    "reset7dAt": reset_at(Some(item), "window_7d_start", 168),
+                    "rateMultiplier": nullable_number_any(group, &["rate_multiplier"]),
+                    "rpmLimit": nullable_number_any(group, &["rpm_limit"]),
+                })
+            })
+            .collect(),
+    )
+}
+
+fn pricing_rows(source: Option<&Value>) -> Value {
+    let platforms = source
+        .and_then(object)
+        .map(|value| array_at(value, "platforms"))
+        .unwrap_or(&[]);
+    Value::Array(
+        platforms
+            .iter()
+            .filter_map(object)
+            .flat_map(|platform| {
+                let platform_name = text_any(Some(platform), &["platform", "name"], "unknown");
+                array_at(platform, "models")
+                    .iter()
+                    .filter_map(object)
+                    .flat_map(move |model| {
+                        let model_name = text_any(Some(model), &["model", "model_name", "name"], "Unknown model");
+                        let source_name = text_any(Some(model), &["source", "model_source"], &platform_name);
+                        let price_platform = platform_name.clone();
+                        let price_source = source_name.clone();
+                        let price_model = model_name.clone();
+                        array_at(model, "group_prices")
+                            .iter()
+                            .filter_map(object)
+                            .map(move |price| {
+                                let pricing = price.get("pricing").and_then(object).unwrap_or(price);
+                                let group_name = array_at(platform, "groups")
+                                    .iter()
+                                    .filter_map(object)
+                                    .find(|group| {
+                                        group.get("id").and_then(Value::as_i64)
+                                            == price.get("group_id").and_then(Value::as_i64)
+                                    })
+                                    .map(|group| text(Some(group), "name", ""));
+                                let rate_multiplier = array_at(platform, "groups")
+                                    .iter()
+                                    .filter_map(object)
+                                    .find(|group| {
+                                        group.get("id").and_then(Value::as_i64)
+                                            == price.get("group_id").and_then(Value::as_i64)
+                                    })
+                                    .and_then(|group| group.get("rate_multiplier"))
+                                    .cloned()
+                                    .unwrap_or(Value::Null);
+                                json!({
+                                    "name": price_model.clone(),
+                                    "platform": price_platform.clone(),
+                                    "source": price_source.clone(),
+                                    "groupId": number(Some(price), "group_id"),
+                                    "groupName": group_name,
+                                    "rateMultiplier": rate_multiplier,
+                                    "billingMode": text_any(Some(pricing), &["billing_mode", "billingMode"], "token"),
+                                    "inputPrice": nullable_number_any(Some(pricing), &["input_price", "inputPrice"]),
+                                    "outputPrice": nullable_number_any(Some(pricing), &["output_price", "outputPrice"]),
+                                    "cacheWritePrice": nullable_number_any(Some(pricing), &["cache_write_price", "cacheWritePrice"]),
+                                    "cacheReadPrice": nullable_number_any(Some(pricing), &["cache_read_price", "cacheReadPrice"]),
+                                    "imageOutputPrice": nullable_number_any(Some(pricing), &["image_output_price", "imageOutputPrice"]),
+                                    "perRequestPrice": nullable_number_any(Some(pricing), &["per_request_price", "perRequestPrice"]),
+                                    "pointPrice": nullable_number_any(Some(pricing), &["point_price", "pointPrice"]),
+                                    "intervals": pricing.get("intervals").cloned().unwrap_or_else(|| json!([])),
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect(),
+    )
+}
+
 pub fn normalize_core_snapshot(raw: &AuthRawResults) -> Option<Value> {
     let me = data_for(raw, "me")?;
     let subscriptions = data_for(raw, "subscriptions")?;
@@ -419,6 +604,7 @@ pub fn normalize_core_snapshot(raw: &AuthRawResults) -> Option<Value> {
     let announcements_data = data_for(raw, "announcements").unwrap_or_else(|| json!([]));
     let status_data = data_for(raw, "status").unwrap_or_else(|| json!({}));
     let groups_available = data_for(raw, "groups").unwrap_or_else(|| json!([]));
+    let pricing_data = data_for(raw, "pricing");
     let usage_data = data_for(raw, "usage").unwrap_or_else(|| json!({}));
     let errors_data = data_for(raw, "errors").unwrap_or_else(|| json!({}));
     let geo_data = data_for(raw, "geo").unwrap_or_else(|| json!({}));
@@ -479,8 +665,9 @@ pub fn normalize_core_snapshot(raw: &AuthRawResults) -> Option<Value> {
             "quotaResetCards": quota_rows(quota_data.map_or(&[][..], |value| array_at(value, "cards"))),
             "banner": banner_row(banner_data),
             "announcements": announcement_rows(announcements_data.map_or(&[][..], Vec::as_slice)),
-            "channelMonitors": status_rows(status_data.map_or(&[][..], |value| array_at(value, "items"))),
-            "apiKeys": option_rows(key_items),
-            "groupOptions": option_rows(groups_available.map_or(&[][..], Vec::as_slice)),
+             "channelMonitors": status_rows(status_data.map_or(&[][..], |value| array_at(value, "items"))),
+             "apiKeys": api_key_rows(key_items),
+             "groupOptions": option_rows(groups_available.map_or(&[][..], Vec::as_slice)),
+             "modelPricing": pricing_rows(pricing_data.as_ref()),
     }))
 }

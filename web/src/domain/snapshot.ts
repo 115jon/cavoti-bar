@@ -48,6 +48,7 @@ export type UsageLog = {
   model: string;
   reasoningEffort: string;
   endpoint: string;
+  requestType?: string;
   groupName: string;
   inputTokens: number;
   outputTokens: number;
@@ -56,6 +57,14 @@ export type UsageLog = {
   totalTokens: number;
   actualCost: number;
   standardCost: number;
+  inputCost: number;
+  outputCost: number;
+  cacheCreationCost: number;
+  cacheReadCost: number;
+  rateMultiplier: number | null;
+  subscriptionCost: number;
+  balanceCost: number;
+  unchargedCost: number;
   timeToFirstTokenMs: number;
   durationMs: number;
   ipAddress: string;
@@ -74,6 +83,7 @@ export type UsageError = {
   message: string;
   keyName: string;
   keyDeleted: boolean;
+  errorBody?: string;
 };
 export type PageInfo = {
   page: number;
@@ -82,15 +92,67 @@ export type PageInfo = {
   pages: number;
 };
 export type ChannelMonitor = {
+  id?: number;
   name: string;
   provider: string;
+  groupName?: string;
   model: string;
   status: string;
   latencyMs: number | null;
+  pingLatencyMs?: number | null;
   availability7d: number | null;
   checkedAt: string | null;
+  extraModels?: Array<{
+    name: string;
+    status: string;
+    latencyMs: number | null;
+  }>;
+  timeline?: Array<{
+    status: string;
+    latencyMs: number | null;
+    pingLatencyMs: number | null;
+    checkedAt: string | null;
+  }>;
+};
+export type ApiKey = {
+  id: number;
+  name: string;
+  groupId?: number;
+  status?: string;
+  groupName?: string;
+  quota?: number;
+  quotaUsed?: number;
+  expiresAt?: string | null;
+  rateLimit5h?: number;
+  rateLimit1d?: number;
+  rateLimit7d?: number;
+  usage5h?: number;
+  usage1d?: number;
+  usage7d?: number;
+  reset5hAt?: string | null;
+  reset1dAt?: string | null;
+  reset7dAt?: string | null;
+  rateMultiplier?: number;
+  rpmLimit?: number;
 };
 export type OptionItem = { id: number; name: string };
+export type ModelPricing = {
+  name: string;
+  platform: string;
+  source: string;
+  groupId: number;
+  groupName?: string;
+  rateMultiplier?: number;
+  billingMode: string;
+  inputPrice: number | null;
+  outputPrice: number | null;
+  cacheWritePrice: number | null;
+  cacheReadPrice: number | null;
+  imageOutputPrice: number | null;
+  perRequestPrice: number | null;
+  pointPrice: number | null;
+  intervals: unknown[];
+};
 export type UsageFilters = {
   startDate: string;
   endDate: string;
@@ -100,6 +162,9 @@ export type UsageFilters = {
   requestType: string;
   billingType: number | null;
   billingMode: string;
+  sortBy: "created_at" | "model";
+  sortOrder: "asc" | "desc";
+  granularity: "day" | "hour";
 };
 
 export type SnapshotEnvelope = {
@@ -140,10 +205,11 @@ export type SnapshotEnvelope = {
   errorPageInfo: PageInfo;
   keys: { total: number; active: number; expiringSoon: number };
   quotaResetCards: Array<{ label: string; resetAt: string | null }>;
+  modelPricing: ModelPricing[];
   banner: { title: string; message: string } | null;
   announcements: Array<{ title: string; message: string }>;
   channelMonitors: ChannelMonitor[];
-  apiKeys: OptionItem[];
+  apiKeys: ApiKey[];
   groupOptions: OptionItem[];
 };
 
@@ -257,9 +323,20 @@ function location(value: unknown): IpLocation | null {
 
 function usageLog(value: unknown): UsageLog {
   const source = record(value);
+  const rawCacheCreation =
+    source.cacheCreationTokens ?? source.cache_creation_tokens;
+  const cacheCreationTokens =
+    rawCacheCreation === undefined
+      ? numberValue(source.cache_creation_5m_tokens) +
+        numberValue(source.cache_creation_1h_tokens)
+      : numberValue(rawCacheCreation);
   const createdAt = stringValue(
     source.createdAt,
     stringValue(source.created_at),
+  );
+  const requestType = stringValue(
+    source.requestType,
+    stringValue(source.request_type),
   );
   return {
     id: numberValue(source.id),
@@ -277,15 +354,14 @@ function usageLog(value: unknown): UsageLog {
       source.endpoint,
       stringValue(source.inbound_endpoint, "Unknown endpoint"),
     ),
+    ...(requestType ? { requestType } : {}),
     groupName: stringValue(
       source.groupName,
       stringValue(source.group_name, "Unknown group"),
     ),
     inputTokens: numberValue(source.inputTokens ?? source.input_tokens),
     outputTokens: numberValue(source.outputTokens ?? source.output_tokens),
-    cacheCreationTokens: numberValue(
-      source.cacheCreationTokens ?? source.cache_creation_tokens,
-    ),
+    cacheCreationTokens,
     cacheReadTokens: numberValue(
       source.cacheReadTokens ?? source.cache_read_tokens,
     ),
@@ -294,6 +370,20 @@ function usageLog(value: unknown): UsageLog {
     standardCost: numberValue(
       source.standardCost ?? source.cost ?? source.total_cost,
     ),
+    inputCost: numberValue(source.inputCost ?? source.input_cost),
+    outputCost: numberValue(source.outputCost ?? source.output_cost),
+    cacheCreationCost: numberValue(
+      source.cacheCreationCost ?? source.cache_creation_cost,
+    ),
+    cacheReadCost: numberValue(source.cacheReadCost ?? source.cache_read_cost),
+    rateMultiplier: nullableNumber(
+      source.rateMultiplier ?? source.rate_multiplier,
+    ),
+    subscriptionCost: numberValue(
+      source.subscriptionCost ?? source.subscription_cost,
+    ),
+    balanceCost: numberValue(source.balanceCost ?? source.balance_cost),
+    unchargedCost: numberValue(source.unchargedCost ?? source.uncharged_cost),
     timeToFirstTokenMs: numberValue(
       source.timeToFirstTokenMs ?? source.first_token_ms,
     ),
@@ -334,6 +424,61 @@ function usageError(value: unknown): UsageError {
       stringValue(source.key_name, "Unknown key"),
     ),
     keyDeleted: source.keyDeleted === true || source.key_deleted === true,
+    errorBody: stringValue(source.errorBody, stringValue(source.error_body)),
+  };
+}
+
+function apiKey(value: unknown): ApiKey {
+  const source = record(value);
+  const optional = (candidate: unknown) =>
+    typeof candidate === "number" && Number.isFinite(candidate)
+      ? Math.max(0, candidate)
+      : undefined;
+  const optionalDate = (candidate: unknown) =>
+    typeof candidate === "string" && !Number.isNaN(Date.parse(candidate))
+      ? candidate
+      : null;
+  return {
+    id: numberValue(source.id),
+    name: stringValue(source.name, "Unknown key"),
+    groupId: numberValue(source.groupId) || undefined,
+    status: stringValue(source.status, "unknown"),
+    groupName: stringValue(source.groupName, ""),
+    quota: optional(source.quota),
+    quotaUsed: optional(source.quotaUsed),
+    expiresAt: optionalDate(source.expiresAt),
+    rateLimit5h: optional(source.rateLimit5h),
+    rateLimit1d: optional(source.rateLimit1d),
+    rateLimit7d: optional(source.rateLimit7d),
+    usage5h: optional(source.usage5h),
+    usage1d: optional(source.usage1d),
+    usage7d: optional(source.usage7d),
+    reset5hAt: optionalDate(source.reset5hAt),
+    reset1dAt: optionalDate(source.reset1dAt),
+    reset7dAt: optionalDate(source.reset7dAt),
+    rateMultiplier: optional(source.rateMultiplier),
+    rpmLimit: optional(source.rpmLimit),
+  };
+}
+
+function modelPricing(value: unknown): ModelPricing {
+  const source = record(value);
+  return {
+    name: stringValue(source.name, "Unknown model"),
+    platform: stringValue(source.platform, "unknown"),
+    source: stringValue(source.source, "unknown"),
+    groupId: numberValue(source.groupId),
+    groupName: stringValue(source.groupName),
+    rateMultiplier: nullableNumber(source.rateMultiplier) ?? undefined,
+    billingMode: stringValue(source.billingMode, "token"),
+    inputPrice: nullableNumber(source.inputPrice),
+    outputPrice: nullableNumber(source.outputPrice),
+    cacheWritePrice: nullableNumber(source.cacheWritePrice),
+    cacheReadPrice: nullableNumber(source.cacheReadPrice),
+    imageOutputPrice: nullableNumber(source.imageOutputPrice),
+    perRequestPrice: nullableNumber(source.perRequestPrice),
+    pointPrice: nullableNumber(source.pointPrice),
+    intervals: arrayValue(source.intervals),
   };
 }
 
@@ -407,18 +552,44 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
     .filter((item) => Object.keys(record(item)).length > 0)
     .map((item) => {
       const monitor = record(item);
+      const timeline = arrayValue(monitor.timeline).map((entry) => {
+        const item = record(entry);
+        return {
+          status: stringValue(item.status, "unknown"),
+          latencyMs: nullableNumber(item.latencyMs),
+          pingLatencyMs: nullableNumber(item.pingLatencyMs),
+          checkedAt:
+            typeof item.checkedAt === "string" &&
+            !Number.isNaN(Date.parse(item.checkedAt))
+              ? item.checkedAt
+              : null,
+        };
+      });
+      const extraModels = arrayValue(monitor.extraModels).map((entry) => {
+        const item = record(entry);
+        return {
+          name: stringValue(item.name, "Unknown model"),
+          status: stringValue(item.status, "unknown"),
+          latencyMs: nullableNumber(item.latencyMs),
+        };
+      });
       return {
+        id: numberValue(monitor.id) || undefined,
         name: stringValue(monitor.name, "Unknown channel"),
         provider: stringValue(monitor.provider, "unknown"),
+        groupName: stringValue(monitor.groupName),
         model: stringValue(monitor.model),
         status: stringValue(monitor.status, "unknown"),
         latencyMs: nullableNumber(monitor.latencyMs),
+        pingLatencyMs: nullableNumber(monitor.pingLatencyMs),
         availability7d: nullableNumber(monitor.availability7d),
         checkedAt:
           typeof monitor.checkedAt === "string" &&
           !Number.isNaN(Date.parse(monitor.checkedAt))
             ? monitor.checkedAt
             : null,
+        extraModels,
+        timeline,
       };
     });
   return {
@@ -504,7 +675,8 @@ export function normalizeSnapshot(payload: unknown): SnapshotEnvelope | null {
         };
       }),
     channelMonitors,
-    apiKeys: optionRows(source.apiKeys),
+    apiKeys: arrayValue(source.apiKeys).map(apiKey),
+    modelPricing: arrayValue(source.modelPricing).map(modelPricing),
     groupOptions: optionRows(source.groupOptions),
   };
 }

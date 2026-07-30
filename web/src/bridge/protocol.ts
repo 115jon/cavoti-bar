@@ -34,6 +34,7 @@ export type HostMessage =
   | {
       type: "snapshot";
       complete?: boolean;
+      scope?: string;
       snapshot: SnapshotEnvelope;
       settings?: HostSettings;
     }
@@ -149,6 +150,7 @@ export function parseHostMessage(value: unknown): HostMessage | null {
     return {
       type: "snapshot",
       complete: value.complete !== false,
+      scope: typeof value.scope === "string" ? value.scope : undefined,
       snapshot: value.snapshot as unknown as SnapshotEnvelope,
       settings,
     };

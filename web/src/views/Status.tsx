@@ -1,10 +1,18 @@
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
+  ArrowsClockwiseIcon as ArrowsClockwise,
   CheckCircleIcon as CheckCircle,
   InfoIcon as Info,
   WarningCircleIcon as WarningCircle,
 } from "@phosphor-icons/react";
+import { memo, useState } from "react";
 import type { SnapshotEnvelope } from "../domain/snapshot";
+import {
+  modelBrand,
+  modelFamily,
+  modelFamilyTone,
+  modelLogoUrl,
+} from "../domain/model-logos";
 import { date, monitorVariant } from "../app/formatters";
 import type { BridgeState } from "../app/types";
 import {
@@ -15,6 +23,15 @@ import {
 } from "../components/app/shared";
 import { Button } from "../components/ui/button";
 import { Card, CardTitle } from "../components/ui/card";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "../components/ui/drawer";
 import {
   Table,
   TableBody,
@@ -27,24 +44,39 @@ import {
 function MonitorRows({
   monitors,
   compact,
+  onSelect,
 }: {
   monitors: SnapshotEnvelope["channelMonitors"];
   compact: boolean;
+  onSelect: (monitor: SnapshotEnvelope["channelMonitors"][number]) => void;
 }) {
   if (!monitors.length) return null;
   if (compact) {
     return (
       <div className="flex flex-col gap-2">
         {monitors.map((monitor) => (
-          <article
-            className="rounded-lg border border-(--line) bg-white/70 p-3"
+          <button
+            type="button"
+            className="rounded-lg border border-(--line) bg-white/70 p-3 text-left"
             key={`${monitor.provider}-${monitor.name}`}
+            onClick={() => onSelect(monitor)}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <strong className="block truncate text-sm font-semibold">
-                  {monitor.name}
-                </strong>
+                <div className="flex min-w-0 items-center gap-2">
+                  <MonitorLogo monitor={monitor} />
+                  <strong className="block truncate text-sm font-semibold">
+                    {monitor.name}
+                  </strong>
+                  <span
+                    className={`shrink-0 rounded-md border px-1 py-0.5 text-[9px] font-medium ${modelFamilyTone(modelFamily(monitor.model || monitor.name, monitor.provider))}`}
+                  >
+                    {modelFamily(
+                      monitor.model || monitor.name,
+                      monitor.provider,
+                    )}
+                  </span>
+                </div>
                 <small className="mt-0.5 block truncate text-[10px] text-(--ink-muted)">
                   {monitor.provider}
                   {monitor.model ? ` | ${monitor.model}` : ""}
@@ -79,7 +111,7 @@ function MonitorRows({
                 </strong>
               </div>
             </div>
-          </article>
+          </button>
         ))}
       </div>
     );
@@ -98,11 +130,30 @@ function MonitorRows({
         {monitors.map((monitor) => (
           <TableRow key={`${monitor.provider}-${monitor.name}`}>
             <TableCell>
-              <strong className="block font-semibold">{monitor.name}</strong>
-              <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
-                {monitor.provider}
-                {monitor.model ? ` | ${monitor.model}` : ""}
-              </small>
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => onSelect(monitor)}
+              >
+                <span className="flex items-center gap-2">
+                  <MonitorLogo monitor={monitor} />
+                  <strong className="block font-semibold">
+                    {monitor.name}
+                  </strong>
+                  <span
+                    className={`rounded-md border px-1 py-0.5 text-[9px] font-medium ${modelFamilyTone(modelFamily(monitor.model || monitor.name, monitor.provider))}`}
+                  >
+                    {modelFamily(
+                      monitor.model || monitor.name,
+                      monitor.provider,
+                    )}
+                  </span>
+                </span>
+                <small className="mt-0.5 block text-[10px] text-(--ink-muted)">
+                  {monitor.provider}
+                  {monitor.model ? ` | ${monitor.model}` : ""}
+                </small>
+              </button>
             </TableCell>
             <TableCell>
               <Badge
@@ -129,6 +180,141 @@ function MonitorRows({
   );
 }
 
+function MonitorLogo({
+  monitor,
+}: {
+  monitor: SnapshotEnvelope["channelMonitors"][number];
+}) {
+  const src = modelLogoUrl(monitor.model || monitor.name, monitor.provider);
+  return src ? (
+    <img
+      className="size-6 object-contain"
+      src={src}
+      alt={`${modelBrand(monitor.model, monitor.provider)} logo`}
+    />
+  ) : (
+    <span className="grid size-6 place-items-center rounded-md border border-(--line) text-[9px] font-bold text-(--accent-ink)">
+      {modelBrand(monitor.model, monitor.provider).slice(0, 1)}
+    </span>
+  );
+}
+
+function MonitorDrawer({
+  monitor,
+  open,
+  onOpenChange,
+}: {
+  monitor: SnapshotEnvelope["channelMonitors"][number] | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{monitor?.name ?? "Channel details"}</DrawerTitle>
+          <DrawerDescription>
+            {monitor
+              ? `${monitor.provider} | ${monitor.model || "No primary model"}`
+              : ""}
+          </DrawerDescription>
+        </DrawerHeader>
+        {monitor ? (
+          <div className="grid max-h-[58vh] grid-cols-2 gap-2 overflow-y-auto px-4 text-xs">
+            <MonitorMetric label="Status" value={monitor.status} />
+            <MonitorMetric
+              label="Group"
+              value={monitor.groupName || "No group"}
+            />
+            <MonitorMetric
+              label="Primary latency"
+              value={
+                monitor.latencyMs === null
+                  ? "-"
+                  : `${Math.round(monitor.latencyMs)} ms`
+              }
+            />
+            <MonitorMetric
+              label="Ping latency"
+              value={
+                monitor.pingLatencyMs == null
+                  ? "-"
+                  : `${Math.round(monitor.pingLatencyMs)} ms`
+              }
+            />
+            <MonitorMetric
+              label="Availability"
+              value={
+                monitor.availability7d === null
+                  ? "-"
+                  : `${monitor.availability7d.toFixed(1)}% / 7d`
+              }
+            />
+            <MonitorMetric
+              label="Last checked"
+              value={monitor.checkedAt ? date(monitor.checkedAt) : "-"}
+            />
+            <div className="col-span-2 rounded-md border border-(--line) p-2">
+              <strong className="block text-xs">Model checks</strong>
+              <div className="mt-1 divide-y divide-(--line)">
+                {(monitor.extraModels ?? []).map((model) => (
+                  <div
+                    className="flex items-center justify-between gap-2 py-1 text-[10px]"
+                    key={model.name}
+                  >
+                    <span className="truncate">{model.name}</span>
+                    <span className="shrink-0 text-(--ink-muted)">
+                      {model.status} |{" "}
+                      {model.latencyMs === null
+                        ? "-"
+                        : `${Math.round(model.latencyMs)} ms`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-2 rounded-md border border-(--line) p-2">
+              <strong className="block text-xs">Recent timeline</strong>
+              <div className="mt-1 divide-y divide-(--line)">
+                {(monitor.timeline ?? []).slice(0, 24).map((entry) => (
+                  <div
+                    className="flex items-center justify-between gap-2 py-1 text-[10px]"
+                    key={`${entry.checkedAt}-${entry.status}-${entry.latencyMs}`}
+                  >
+                    <span>
+                      {entry.checkedAt ? date(entry.checkedAt) : "Unknown time"}
+                    </span>
+                    <span className="text-(--ink-muted)">
+                      {entry.status} |{" "}
+                      {entry.latencyMs === null
+                        ? "-"
+                        : `${Math.round(entry.latencyMs)} ms`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <DrawerFooter>
+          <DrawerClose asChild>
+            <Button className="w-full">Close</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function MonitorMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md bg-(--panel) px-2 py-1.5">
+      <span className="block text-[10px] text-(--ink-muted)">{label}</span>
+      <strong className="block truncate font-semibold">{value}</strong>
+    </div>
+  );
+}
+
 function CheckRow({
   label,
   value,
@@ -149,7 +335,7 @@ function CheckRow({
   );
 }
 
-export function Status({
+export const Status = memo(function Status({
   snapshot,
   state,
   onConnect,
@@ -162,6 +348,9 @@ export function Status({
   onOpenStatus?: () => void;
 }) {
   const compact = useCompactTiles();
+  const [selectedMonitor, setSelectedMonitor] = useState<
+    SnapshotEnvelope["channelMonitors"][number] | null
+  >(null);
   const monitors = snapshot?.channelMonitors ?? [];
   const healthy =
     monitors.length > 0 &&
@@ -194,7 +383,17 @@ export function Status({
 
   return (
     <div className="flex w-full max-w-370 flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Refresh channel status"
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("cavoti-refresh"))
+          }
+        >
+          <ArrowsClockwise />
+        </Button>
         <Button variant="outline" size="sm" onClick={onOpenStatus}>
           Open monitor <ArrowSquareOut data-icon="inline-end" />
         </Button>
@@ -243,7 +442,18 @@ export function Status({
           onAction={onConnect}
         />
       )}
-      <MonitorRows monitors={monitors} compact={compact} />
+      <MonitorRows
+        monitors={monitors}
+        compact={compact}
+        onSelect={setSelectedMonitor}
+      />
+      <MonitorDrawer
+        monitor={selectedMonitor}
+        open={selectedMonitor !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedMonitor(null);
+        }}
+      />
       {snapshot?.announcements.length ? (
         <SignalNote
           icon={<Info />}
@@ -253,4 +463,4 @@ export function Status({
       ) : null}
     </div>
   );
-}
+});

@@ -90,7 +90,7 @@ describe("App", () => {
       }),
     );
 
-    expect(screen.getByText("Lite")).toBeInTheDocument();
+    expect(screen.getAllByText("Lite").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("tab", { name: "Usage" }));
     expect(screen.getByRole("tab", { name: "Usage" })).toHaveAttribute(
       "aria-selected",
@@ -98,6 +98,16 @@ describe("App", () => {
     );
     fireEvent.click(screen.getByRole("tab", { name: "Plans" }));
     expect(screen.getByRole("tab", { name: "Plans" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Pricing" }));
+    expect(screen.getByRole("tab", { name: "Pricing" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "API keys" }));
+    expect(screen.getByRole("tab", { name: "API keys" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -111,6 +121,116 @@ describe("App", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("keeps stable view data while a background snapshot arrives", () => {
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: true,
+        snapshot: liveSnapshot,
+      }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Status" }));
+    expect(document.body.textContent).toContain("gpt-5.6-sol");
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: true,
+        scope: "background",
+        snapshot: { ...liveSnapshot, channelMonitors: [] },
+      }),
+    );
+
+    expect(document.body.textContent).toContain("gpt-5.6-sol");
+  });
+
+  it("reuses loaded scopes when switching between destinations", () => {
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: true,
+        scope: "full",
+        snapshot: liveSnapshot,
+      }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Usage" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Pricing" }));
+    fireEvent.click(screen.getByRole("tab", { name: "API keys" }));
+
+    expect(
+      sent.filter(
+        (message) =>
+          typeof message === "object" &&
+          message !== null &&
+          "action" in message &&
+          message.action === "view",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("preserves the selected overview plan while switching tabs and applying background data", () => {
+    const { bridge, dispatch } = createBridge();
+    const maxPlan = {
+      ...liveSnapshot.subscriptions[0],
+      name: "Max",
+    };
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: true,
+        scope: "full",
+        snapshot: {
+          ...liveSnapshot,
+          subscriptions: [...liveSnapshot.subscriptions, maxPlan],
+        },
+      }),
+    );
+    const maxPlanButton = () =>
+      screen
+        .getAllByRole("button", { name: /\bMax\b/ })
+        .find((button) => button.hasAttribute("aria-pressed"));
+    fireEvent.click(maxPlanButton() as HTMLElement);
+    expect(maxPlanButton()).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "Usage" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    expect(maxPlanButton()).toHaveAttribute("aria-pressed", "true");
+
+    act(() =>
+      dispatch({
+        type: "snapshot",
+        protocol: 1,
+        complete: true,
+        scope: "background",
+        snapshot: {
+          ...liveSnapshot,
+          subscriptions: [
+            {
+              ...maxPlan,
+              usage: {
+                ...maxPlan.usage,
+                fiveHour: { ...maxPlan.usage.fiveHour, used: 500 },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    expect(maxPlanButton()).toHaveAttribute("aria-pressed", "true");
+    expect(document.body.textContent).toContain("500 pts");
   });
 
   it("posts a native drag command from the titlebar background", () => {
@@ -128,7 +248,10 @@ describe("App", () => {
     fireEvent.keyDown(window, { key: ",", ctrlKey: true });
     fireEvent.keyDown(window, { key: "q", ctrlKey: true });
 
-    expect(sent).toContainEqual({ action: "refresh" });
+    expect(sent).toContainEqual({
+      action: "refresh",
+      value: { scope: "full" },
+    });
     expect(sent).toContainEqual({ action: "exit" });
     expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute(
       "aria-selected",
@@ -430,7 +553,10 @@ describe("App", () => {
 
     window.dispatchEvent(new Event("cavoti-refresh"));
 
-    expect(sent).toContainEqual({ action: "refresh" });
+    expect(sent).toContainEqual({
+      action: "refresh",
+      value: { scope: "overview" },
+    });
   });
 
   it("ignores native pull while the initial snapshot is loading", () => {

@@ -8,10 +8,10 @@ export function TooltipContent({ children }: { children: React.ReactNode }) {
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         sideOffset={6}
-        className="z-50 rounded-md bg-(--ink) px-2 py-1 text-[10px] text-white shadow-lg animate-in fade-in zoom-in-95"
+        className="z-50 max-w-72 rounded-lg border border-(--line-strong) bg-white px-3 py-2 text-[11px] leading-4 text-(--ink) shadow-xl animate-in fade-in zoom-in-95 [&_span]:text-(--ink-muted)"
       >
         {children}
-        <TooltipPrimitive.Arrow className="fill-(--ink)" />
+        <TooltipPrimitive.Arrow className="fill-white" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

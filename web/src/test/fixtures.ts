@@ -98,6 +98,7 @@ export const liveSnapshot: SnapshotEnvelope = {
   errorPageInfo: { page: 1, pageSize: 100, total: 0, pages: 1 },
   keys: { total: 2, active: 2, expiringSoon: 0 },
   quotaResetCards: [],
+  modelPricing: [],
   banner: null,
   announcements: [],
   channelMonitors: [

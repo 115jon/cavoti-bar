@@ -1,9 +1,12 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowsClockwiseIcon as ArrowsClockwise,
   CaretLeftIcon as CaretLeft,
+  CaretDownIcon as CaretDown,
   CaretRightIcon as CaretRight,
+  CaretUpIcon as CaretUp,
   ChartBarIcon as ChartBar,
+  CaretUpDownIcon as CaretUpDown,
   FunnelSimpleIcon as FunnelSimple,
   StackIcon as Stack,
   UsersThreeIcon as UsersThree,
@@ -28,6 +31,12 @@ import type {
   UsageLog,
   UsageRow,
 } from "../domain/snapshot";
+import {
+  modelFamily,
+  modelFamilyTone,
+  modelLogoUrl,
+  multiplierTone,
+} from "../domain/model-logos";
 import {
   dateRangeForPreset,
   dateRangeOptions,
@@ -64,6 +73,11 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import {
+  Tooltip as HoverTooltip,
+  TooltipContent as HoverTooltipContent,
+  TooltipTrigger as HoverTooltipTrigger,
+} from "../components/ui/tooltip";
 import {
   Drawer,
   DrawerClose,
@@ -130,7 +144,7 @@ function StatRail({ snapshot }: { snapshot: SnapshotEnvelope }) {
         </span>
         <strong className="block border-l border-(--line) px-2 pb-2 text-base font-semibold tabular-nums">
           {snapshot.stats.averageDurationMs
-            ? `${(snapshot.stats.averageDurationMs / 1000).toFixed(1)} s`
+            ? `${(snapshot.stats.averageDurationMs / 1000).toFixed(2)} s`
             : "-"}
         </strong>
       </div>
@@ -191,7 +205,10 @@ function DateRangeSelect({
   compact = false,
 }: {
   filters: UsageFilterState;
-  onChange: (filters: Pick<UsageFilterState, "startDate" | "endDate">) => void;
+  onChange: (
+    filters: Pick<UsageFilterState, "startDate" | "endDate"> &
+      Partial<Pick<UsageFilterState, "granularity">>,
+  ) => void;
   compact?: boolean;
 }) {
   const preset = dateRangeOptions.find(({ value }) => {
@@ -200,14 +217,24 @@ function DateRangeSelect({
       range.startDate === filters.startDate && range.endDate === filters.endDate
     );
   })?.value;
-  const value = preset ?? "custom";
+  const [customRange, setCustomRange] = useState(preset === undefined);
+  useEffect(() => setCustomRange(preset === undefined), [preset]);
+  const value = customRange ? "custom" : (preset ?? "custom");
   return (
     <>
       <Select
         value={value}
         onValueChange={(next) => {
-          if (next !== "custom")
-            onChange(dateRangeForPreset(next as DateRangePreset));
+          if (next === "custom") {
+            setCustomRange(true);
+            return;
+          }
+          setCustomRange(false);
+          onChange({
+            ...dateRangeForPreset(next as DateRangePreset),
+            granularity:
+              next === "today" || next === "yesterday" ? "hour" : "day",
+          });
         }}
       >
         <SelectTrigger
@@ -497,6 +524,44 @@ function UsageFilterFields({
         onChange={(billingMode) => update({ billingMode })}
         compact={compact}
       />
+      <FilterSelect
+        label="Granularity"
+        value={filters.granularity}
+        options={[
+          { value: "day", label: "Daily" },
+          { value: "hour", label: "Hourly" },
+        ]}
+        onChange={(granularity) =>
+          update({
+            granularity: granularity as UsageFilterState["granularity"],
+          })
+        }
+        compact={compact}
+      />
+      <FilterSelect
+        label="Sort by"
+        value={filters.sortBy}
+        options={[
+          { value: "created_at", label: "Time" },
+          { value: "model", label: "Model" },
+        ]}
+        onChange={(sortBy) =>
+          update({ sortBy: sortBy as UsageFilterState["sortBy"] })
+        }
+        compact={compact}
+      />
+      <FilterSelect
+        label="Order"
+        value={filters.sortOrder}
+        options={[
+          { value: "desc", label: "Descending" },
+          { value: "asc", label: "Ascending" },
+        ]}
+        onChange={(sortOrder) =>
+          update({ sortOrder: sortOrder as UsageFilterState["sortOrder"] })
+        }
+        compact={compact}
+      />
     </div>
   );
 }
@@ -584,8 +649,20 @@ function DistributionChart({
           {points.map((row) => (
             <div className="min-w-0" key={row.name}>
               <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-                <span className="min-w-0 truncate text-(--ink-muted)">
-                  {row.name}
+                <span className="flex min-w-0 items-center gap-1.5 truncate text-(--ink-muted)">
+                  {modelLogoUrl(row.name, "") ? (
+                    <img
+                      className="size-4 object-contain"
+                      src={modelLogoUrl(row.name, "") ?? undefined}
+                      alt=""
+                    />
+                  ) : null}
+                  <span
+                    className={`shrink-0 rounded-md border px-1 py-0.5 text-[9px] font-medium ${modelFamilyTone(modelFamily(row.name, ""))}`}
+                  >
+                    {modelFamily(row.name, "")}
+                  </span>
+                  <span className="truncate">{row.name}</span>
                 </span>
                 <strong className="shrink-0 font-semibold tabular-nums">
                   {metric === "cost"
@@ -655,8 +732,20 @@ function DistributionChart({
             key={row.name}
           >
             <i className="size-2 rounded-sm" style={{ background: row.fill }} />
-            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-(--ink-muted)">
-              {row.name}
+            <span className="flex min-w-0 items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-(--ink-muted)">
+              {modelLogoUrl(row.name, "") ? (
+                <img
+                  className="size-4 object-contain"
+                  src={modelLogoUrl(row.name, "") ?? undefined}
+                  alt=""
+                />
+              ) : null}
+              <span
+                className={`shrink-0 rounded-md border px-1 py-0.5 text-[9px] font-medium ${modelFamilyTone(modelFamily(row.name, ""))}`}
+              >
+                {modelFamily(row.name, "")}
+              </span>
+              <span className="truncate">{row.name}</span>
             </span>
             <strong className="font-semibold tabular-nums">
               {metric === "cost"
@@ -692,27 +781,58 @@ function ModelDistribution({ rows }: { rows: UsageRow[] }) {
   );
 }
 
+type TrendTooltipPayload = {
+  dataKey?: string;
+  name?: string;
+  value?: number;
+  color?: string;
+  payload?: {
+    actualCost?: number;
+    standardCost?: number;
+  };
+};
+
+const trendTooltipKeys: Record<string, string> = {
+  "Input tokens": "inputTokens",
+  "Output tokens": "outputTokens",
+  "Cache created": "cacheCreationTokens",
+  "Cache read": "cacheReadTokens",
+  "Total tokens": "totalTokens",
+};
+
+export function trendTooltipData(
+  payload: ReadonlyArray<TrendTooltipPayload>,
+): Record<string, number> {
+  return payload.reduce<Record<string, number>>((result, item) => {
+    const key =
+      item.dataKey ?? (item.name ? trendTooltipKeys[item.name] : null);
+    if (key && typeof item.value === "number") result[key] = item.value;
+    return result;
+  }, {});
+}
+
 function TrendTooltip({
   active,
   payload,
   label,
 }: {
   active?: boolean;
-  payload?: ReadonlyArray<{ name?: string; value?: number; color?: string }>;
+  payload?: ReadonlyArray<TrendTooltipPayload>;
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
-  const point = payload.reduce<Record<string, number>>((result, item) => {
-    if (item.name && typeof item.value === "number")
-      result[item.name] = item.value;
-    return result;
-  }, {});
-  const names: Array<[string, string]> = [
+  const point = trendTooltipData(payload);
+  const allNames: Array<[string, string]> = [
     ["inputTokens", "Input"],
     ["outputTokens", "Output"],
     ["cacheCreationTokens", "Cache creation"],
     ["cacheReadTokens", "Cache read"],
   ];
+  const names: Array<[string, string]> =
+    point.totalTokens !== undefined
+      ? [["totalTokens", "Total tokens"]]
+      : allNames.filter(([key]) => point[key] !== undefined);
+  const row = payload[0]?.payload;
   const cacheRequests = (point.cacheReadTokens ?? 0) + (point.inputTokens ?? 0);
   const cacheHitRate = cacheRequests
     ? ((point.cacheReadTokens ?? 0) / cacheRequests) * 100
@@ -733,11 +853,11 @@ function TrendTooltip({
       <div className="mt-1 border-t border-(--line) pt-1">
         <div className="flex justify-between gap-4">
           <span className="text-(--ink-muted)">Actual cost</span>
-          <strong>{money(point.actualCost ?? 0)}</strong>
+          <strong>{money(row?.actualCost ?? 0)}</strong>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-(--ink-muted)">Standard cost</span>
-          <strong>{money(point.standardCost ?? 0)}</strong>
+          <strong>{money(row?.standardCost ?? row?.actualCost ?? 0)}</strong>
         </div>
       </div>
     </div>
@@ -763,7 +883,13 @@ export function trendChartData(rows: SnapshotEnvelope["dailyTrend"]) {
   }));
 }
 
-function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
+function TrendChart({
+  rows,
+  granularity,
+}: {
+  rows: SnapshotEnvelope["dailyTrend"];
+  granularity: UsageFilterState["granularity"];
+}) {
   const compact = useCompactTiles();
   if (!rows.length)
     return (
@@ -789,7 +915,11 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
           { label: "Cache read", color: "var(--chart-4)" },
         ];
   return (
-    <div className="min-w-0" role="img" aria-label="Daily token usage trend">
+    <div
+      className="min-w-0"
+      role="img"
+      aria-label={`${granularity === "hour" ? "Hourly" : "Daily"} token usage trend`}
+    >
       <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-(--ink-muted)">
         {series.map(({ label, color }) => (
           <span className="inline-flex items-center gap-1" key={label}>
@@ -828,16 +958,13 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
               tickFormatter={(value) => tokens(Number(value))}
             />
             <Tooltip
+              allowEscapeViewBox={{ x: true, y: true }}
               wrapperStyle={{ zIndex: 50 }}
               content={(props) => (
                 <TrendTooltip
                   active={props.active}
                   payload={
-                    props.payload as unknown as ReadonlyArray<{
-                      name?: string;
-                      value?: number;
-                      color?: string;
-                    }>
+                    props.payload as unknown as ReadonlyArray<TrendTooltipPayload>
                   }
                   label={String(props.label ?? "")}
                 />
@@ -927,22 +1054,236 @@ function timestamp(value: string) {
   }).format(new Date(value));
 }
 
+function preserveMainScroll(action: () => void) {
+  const main = document.querySelector<HTMLElement>("main");
+  const scrollTop = main?.scrollTop;
+  action();
+  if (!main || scrollTop === undefined) return;
+  const restore = () => {
+    main.scrollTop = scrollTop;
+  };
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(restore);
+  } else {
+    restore();
+  }
+}
+
+function TokenBreakdown({ log }: { log: UsageLog }) {
+  const parts = [
+    { label: "Input tokens", value: log.inputTokens },
+    { label: "Output tokens", value: log.outputTokens },
+    { label: "Cache created", value: log.cacheCreationTokens },
+    { label: "Cache read", value: log.cacheReadTokens },
+  ].filter((part) => part.value > 0);
+  return (
+    <HoverTooltip>
+      <HoverTooltipTrigger asChild>
+        <button
+          type="button"
+          className="font-semibold tabular-nums underline decoration-dotted underline-offset-2 hover:text-accent"
+          aria-label={`Token breakdown for ${log.model}`}
+        >
+          {tokens(log.totalTokens)}
+        </button>
+      </HoverTooltipTrigger>
+      <HoverTooltipContent>
+        <div className="grid min-w-44 grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-xs">
+          {parts.map((part) => (
+            <Fragment key={part.label}>
+              <span className="text-(--ink-muted)">{part.label}</span>
+              <strong>{tokens(part.value)}</strong>
+            </Fragment>
+          ))}
+          <div className="col-span-2 mt-1 flex items-center justify-between gap-4 border-t border-current/20 pt-1">
+            <span className="text-(--ink-muted)">Total tokens</span>
+            <strong>{tokens(log.totalTokens)}</strong>
+          </div>
+        </div>
+      </HoverTooltipContent>
+    </HoverTooltip>
+  );
+}
+
+function CostBreakdown({ log }: { log: UsageLog }) {
+  const costs = [
+    { label: "Input cost", value: log.inputCost },
+    { label: "Output cost", value: log.outputCost },
+    { label: "Cache creation cost", value: log.cacheCreationCost },
+    { label: "Cache read cost", value: log.cacheReadCost },
+  ].filter((cost) => cost.value > 0);
+  return (
+    <HoverTooltip>
+      <HoverTooltipTrigger asChild>
+        <button
+          type="button"
+          className="font-semibold tabular-nums underline decoration-dotted underline-offset-2 hover:text-accent"
+          aria-label={`Cost breakdown for ${log.model}`}
+        >
+          {money(log.actualCost)}
+        </button>
+      </HoverTooltipTrigger>
+      <HoverTooltipContent>
+        <div className="grid min-w-52 grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-xs">
+          {costs.map((cost) => (
+            <Fragment key={cost.label}>
+              <span className="text-(--ink-muted)">{cost.label}</span>
+              <strong>{money(cost.value)}</strong>
+            </Fragment>
+          ))}
+          {log.groupName ? (
+            <>
+              <span className="text-(--ink-muted)">Service tier</span>
+              <strong className="max-w-32 truncate text-right">
+                {log.groupName}
+              </strong>
+            </>
+          ) : null}
+          {typeof log.rateMultiplier === "number" && log.rateMultiplier > 0 ? (
+            <>
+              <span className="text-(--ink-muted)">Rate multiplier</span>
+              <strong className={multiplierTone(log.rateMultiplier)}>
+                {log.rateMultiplier.toFixed(2)}x
+              </strong>
+            </>
+          ) : null}
+          {log.subscriptionCost > 0 ? (
+            <>
+              <span className="text-(--ink-muted)">Subscription billed</span>
+              <strong>{money(log.subscriptionCost)}</strong>
+            </>
+          ) : null}
+          {log.balanceCost > 0 ? (
+            <>
+              <span className="text-(--ink-muted)">Balance billed</span>
+              <strong>{money(log.balanceCost)}</strong>
+            </>
+          ) : null}
+          {log.unchargedCost > 0 ? (
+            <>
+              <span className="text-(--ink-muted)">Uncharged</span>
+              <strong>{money(log.unchargedCost)}</strong>
+            </>
+          ) : null}
+          <div className="col-span-2 mt-1 flex items-center justify-between gap-4 border-t border-current/20 pt-1">
+            <span className="text-(--ink-muted)">Original cost</span>
+            <strong className="text-(--ink-muted)">
+              {money(log.standardCost)}
+            </strong>
+          </div>
+          <div className="col-span-2 flex items-center justify-between gap-4">
+            <span className="text-(--ink-muted)">Billed cost</span>
+            <strong className="text-accent">{money(log.actualCost)}</strong>
+          </div>
+        </div>
+      </HoverTooltipContent>
+    </HoverTooltip>
+  );
+}
+
+function PerformanceCell({ log }: { log: UsageLog }) {
+  const ttft = log.timeToFirstTokenMs;
+  const duration = log.durationMs;
+  if (!ttft && !duration) return <span>-</span>;
+  const ratio =
+    duration > 0 ? Math.min(100, Math.max(0, (ttft / duration) * 100)) : 0;
+  const tone =
+    ttft >= 30_000
+      ? "bg-(--bad)"
+      : ttft >= 10_000
+        ? "bg-(--warning)"
+        : "bg-(--good)";
+  const toneText =
+    ttft >= 30_000
+      ? "text-(--bad)"
+      : ttft >= 10_000
+        ? "text-(--warning)"
+        : "text-(--good)";
+  return (
+    <div
+      className="min-w-0 w-full"
+      title={`Time to first token ${integer(ttft)} ms; total duration ${(duration / 1000).toFixed(2)} s; TTFT is ${ratio.toFixed(1)}% of total duration`}
+    >
+      <div className="flex items-center justify-between gap-2 whitespace-nowrap text-[10px] tabular-nums">
+        <span className={toneText}>
+          TTFT {ttft ? `${(ttft / 1000).toFixed(2)} s` : "-"}
+        </span>
+        <strong>
+          Total {duration ? `${(duration / 1000).toFixed(2)} s` : "-"}
+        </strong>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-(--line)">
+        <div
+          className={`h-full rounded-full ${tone}`}
+          style={{ width: `${ratio}%` }}
+        />
+      </div>
+      <span className="mt-1 block text-[9px] text-(--ink-muted)">
+        TTFT share of duration: {ratio.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+function SortableTableHead({
+  label,
+  column,
+  sortBy,
+  sortOrder,
+  onSort,
+}: {
+  label: string;
+  column: UsageFilterState["sortBy"];
+  sortBy: UsageFilterState["sortBy"];
+  sortOrder: UsageFilterState["sortOrder"];
+  onSort: (column: UsageFilterState["sortBy"]) => void;
+}) {
+  const active = sortBy === column;
+  return (
+    <TableHead>
+      <button
+        type="button"
+        className={`inline-flex items-center gap-1 font-medium ${active ? "text-(--ink)" : "text-(--ink-muted)"}`}
+        aria-label={`${label}, ${active ? (sortOrder === "desc" ? "descending" : "ascending") : "not sorted"}`}
+        onClick={() => onSort(column)}
+      >
+        {label}
+        {active ? (
+          <span aria-hidden="true">
+            {sortOrder === "desc" ? <CaretDown /> : <CaretUp />}
+          </span>
+        ) : (
+          <CaretUpDown className="size-3" aria-hidden="true" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
+
 function UsageLogTable({
   logs,
   pageInfo,
   onPageChange,
+  sortBy,
+  sortOrder,
+  onSort,
+  onSelect,
   compact = false,
 }: {
   logs: UsageLog[];
   pageInfo: PageInfo;
   onPageChange: (page: number) => void;
+  sortBy: UsageFilterState["sortBy"];
+  sortOrder: UsageFilterState["sortOrder"];
+  onSort: (column: UsageFilterState["sortBy"]) => void;
+  onSelect: (log: UsageLog) => void;
   compact?: boolean;
 }) {
   if (compact) {
     return logs.length ? (
       <div className="flex flex-col gap-2">
         {logs.map((log) => (
-          <UsageLogCard log={log} key={log.id} />
+          <UsageLogCard log={log} key={log.id} onSelect={onSelect} />
         ))}
         <ActivityPagination pageInfo={pageInfo} onPageChange={onPageChange} />
       </div>
@@ -960,15 +1301,26 @@ function UsageLogTable({
         <Table className="min-w-295 text-[10px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Model</TableHead>
+              <SortableTableHead
+                label="Time"
+                column="created_at"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={onSort}
+              />
+              <SortableTableHead
+                label="Model"
+                column="model"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={onSort}
+              />
               <TableHead>API key</TableHead>
               <TableHead>Reasoning</TableHead>
               <TableHead>Location / IP</TableHead>
               <TableHead>Tokens</TableHead>
               <TableHead>Cost</TableHead>
-              <TableHead>TTFT</TableHead>
-              <TableHead>Duration</TableHead>
+              <TableHead>Performance</TableHead>
               <TableHead>User agent</TableHead>
             </TableRow>
           </TableHeader>
@@ -979,7 +1331,13 @@ function UsageLogTable({
                   {timestamp(log.createdAt)}
                 </TableCell>
                 <TableCell className="max-w-40 truncate font-medium">
-                  {log.model}
+                  <button
+                    type="button"
+                    className="truncate text-left hover:text-accent"
+                    onClick={() => onSelect(log)}
+                  >
+                    {log.model}
+                  </button>
                 </TableCell>
                 <TableCell>{log.apiKeyName}</TableCell>
                 <TableCell>{log.reasoningEffort}</TableCell>
@@ -994,28 +1352,13 @@ function UsageLogTable({
                   </button>
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {tokens(log.totalTokens)}{" "}
-                  <span className="text-(--ink-faint)">
-                    ({tokens(log.inputTokens)} in / {tokens(log.outputTokens)}{" "}
-                    out / {tokens(log.cacheCreationTokens)} created /{" "}
-                    {tokens(log.cacheReadTokens)} read)
-                  </span>
+                  <TokenBreakdown log={log} />
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  <strong>{money(log.actualCost)}</strong>
-                  <span className="block text-(--ink-faint)">
-                    std {money(log.standardCost)}
-                  </span>
+                  <CostBreakdown log={log} />
                 </TableCell>
                 <TableCell>
-                  {log.timeToFirstTokenMs
-                    ? `${integer(log.timeToFirstTokenMs)} ms`
-                    : "-"}
-                </TableCell>
-                <TableCell>
-                  {log.durationMs
-                    ? `${(log.durationMs / 1000).toFixed(1)} s`
-                    : "-"}
+                  <PerformanceCell log={log} />
                 </TableCell>
                 <TableCell className="max-w-52 truncate" title={log.userAgent}>
                   {log.userAgent}
@@ -1039,24 +1382,30 @@ function UsageLogTable({
 function ActivityPagination({
   pageInfo,
   onPageChange,
+  label = "usage",
 }: {
   pageInfo: PageInfo;
   onPageChange: (page: number) => void;
+  label?: string;
 }) {
+  const start = pageInfo.total
+    ? (pageInfo.page - 1) * pageInfo.pageSize + 1
+    : 0;
+  const end = Math.min(pageInfo.total, pageInfo.page * pageInfo.pageSize);
   return (
     <div className="flex items-center justify-between gap-2 border-t border-(--line) pt-2 text-xs text-(--ink-muted)">
       <span>
-        Showing {(pageInfo.page - 1) * pageInfo.pageSize + 1}-
-        {Math.min(pageInfo.total, pageInfo.page * pageInfo.pageSize)} of{" "}
-        {integer(pageInfo.total)}
+        Showing {start}-{end} of {integer(pageInfo.total)}
       </span>
       <div className="flex items-center gap-1">
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Previous usage page"
+          aria-label={`Previous ${label} page`}
           disabled={pageInfo.page <= 1}
-          onClick={() => onPageChange(pageInfo.page - 1)}
+          onClick={() =>
+            preserveMainScroll(() => onPageChange(pageInfo.page - 1))
+          }
         >
           <CaretLeft />
         </Button>
@@ -1066,9 +1415,11 @@ function ActivityPagination({
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Next usage page"
+          aria-label={`Next ${label} page`}
           disabled={pageInfo.page >= pageInfo.pages}
-          onClick={() => onPageChange(pageInfo.page + 1)}
+          onClick={() =>
+            preserveMainScroll(() => onPageChange(pageInfo.page + 1))
+          }
         >
           <CaretRight />
         </Button>
@@ -1077,30 +1428,39 @@ function ActivityPagination({
   );
 }
 
-function UsageLogCard({ log }: { log: UsageLog }) {
+function UsageLogCard({
+  log,
+  onSelect,
+}: {
+  log: UsageLog;
+  onSelect: (log: UsageLog) => void;
+}) {
   return (
     <article className="rounded-lg border border-(--line) bg-white/70 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <strong className="block truncate text-sm font-semibold">
-            {log.model}
+            <button
+              type="button"
+              className="block truncate text-left text-sm font-semibold hover:text-accent"
+              onClick={() => onSelect(log)}
+            >
+              {log.model}
+            </button>
           </strong>
           <span className="mt-0.5 block text-xs text-(--ink-muted)">
             {timestamp(log.createdAt)} · {log.endpoint}
           </span>
         </div>
-        <Badge variant="outline">{money(log.actualCost)}</Badge>
+        <CostBreakdown log={log} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <Metric label="Tokens" value={tokens(log.totalTokens)} />
-        <Metric
-          label="Duration"
-          value={
-            log.durationMs ? `${(log.durationMs / 1000).toFixed(1)} s` : "-"
-          }
-        />
+        <Metric label="Tokens" value={<TokenBreakdown log={log} />} />
+        <Metric label="Performance" value={<PerformanceCell log={log} />} />
         <Metric label="API key" value={log.apiKeyName || "Unknown"} />
+        <Metric label="Endpoint" value={log.endpoint || "-"} />
         <Metric label="Reasoning" value={log.reasoningEffort || "-"} />
+        <Metric label="Type" value={log.requestType || "-"} />
       </div>
       <button
         type="button"
@@ -1114,13 +1474,25 @@ function UsageLogCard({ log }: { log: UsageLog }) {
   );
 }
 
-function UsageErrorCard({ error }: { error: UsageError }) {
+function UsageErrorCard({
+  error,
+  onSelect,
+}: {
+  error: UsageError;
+  onSelect: (error: UsageError) => void;
+}) {
   return (
     <article className="rounded-lg border border-(--line) bg-white/70 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <strong className="block truncate text-sm font-semibold">
-            {error.model || error.endpoint}
+            <button
+              type="button"
+              className="block truncate text-left text-sm font-semibold hover:text-accent"
+              onClick={() => onSelect(error)}
+            >
+              {error.model || error.endpoint}
+            </button>
           </strong>
           <span className="mt-0.5 block text-xs text-(--ink-muted)">
             {timestamp(error.createdAt)} · {error.category || "Error"}
@@ -1139,7 +1511,7 @@ function UsageErrorCard({ error }: { error: UsageError }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0 rounded-md bg-(--panel) px-2 py-1.5">
       <span className="block text-[10px] text-(--ink-muted)">{label}</span>
@@ -1150,16 +1522,102 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function UsageDetailDrawer({
+  log,
+  error,
+  open,
+  onOpenChange,
+}: {
+  log: UsageLog | null;
+  error: UsageError | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>
+            {log?.model ?? error?.model ?? "Request detail"}
+          </DrawerTitle>
+          <DrawerDescription>
+            {log
+              ? `${timestamp(log.createdAt)} | ${log.requestId || "No request ID"}`
+              : error
+                ? `${timestamp(error.createdAt)} | ${error.category}`
+                : ""}
+          </DrawerDescription>
+        </DrawerHeader>
+        {log ? (
+          <div className="grid max-h-[58vh] grid-cols-2 gap-2 overflow-y-auto px-4 text-xs">
+            <Metric label="Endpoint" value={log.endpoint} />
+            <Metric label="Request type" value={log.requestType || "-"} />
+            <Metric label="API key" value={log.apiKeyName} />
+            <Metric label="Service tier" value={log.groupName} />
+            <Metric label="Tokens" value={tokens(log.totalTokens)} />
+            <Metric label="Billed cost" value={money(log.actualCost)} />
+            <Metric label="Original cost" value={money(log.standardCost)} />
+            <Metric label="Performance" value={<PerformanceCell log={log} />} />
+            <Metric label="Location" value={formatLocation(log)} />
+            <div className="col-span-2 rounded-md border border-(--line) p-2">
+              <strong className="block text-xs">User agent</strong>
+              <p className="mt-1 break-words text-[10px] text-(--ink-muted)">
+                {log.userAgent}
+              </p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="grid max-h-[58vh] grid-cols-2 gap-2 overflow-y-auto px-4 text-xs">
+            <Metric label="Status" value={integer(error.statusCode)} />
+            <Metric label="Platform" value={error.platform} />
+            <Metric label="Endpoint" value={error.endpoint} />
+            <Metric label="API key" value={error.keyName} />
+            <div className="col-span-2 rounded-md border border-(--line) p-2">
+              <strong className="block text-xs">Message</strong>
+              <p className="mt-1 whitespace-pre-wrap break-words text-[10px] text-(--ink-muted)">
+                {error.message}
+              </p>
+            </div>
+            {error.errorBody ? (
+              <div className="col-span-2 rounded-md border border-(--line) p-2">
+                <strong className="block text-xs">Response body</strong>
+                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-(--ink-muted)">
+                  {error.errorBody}
+                </pre>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <DrawerFooter>
+          <DrawerClose asChild>
+            <Button className="w-full">Close</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 function ActivityPanel({
   snapshot,
-  onPageChange,
+  onUsagePageChange,
+  onErrorPageChange,
+  sortBy,
+  sortOrder,
+  onSort,
   compact = false,
 }: {
   snapshot: SnapshotEnvelope;
-  onPageChange: (page: number) => void;
+  onUsagePageChange: (page: number) => void;
+  onErrorPageChange: (page: number) => void;
+  sortBy: UsageFilterState["sortBy"];
+  sortOrder: UsageFilterState["sortOrder"];
+  onSort: (column: UsageFilterState["sortBy"]) => void;
   compact?: boolean;
 }) {
   const [tab, setTab] = useState<"usage" | "errors">("usage");
+  const [selectedLog, setSelectedLog] = useState<UsageLog | null>(null);
+  const [selectedError, setSelectedError] = useState<UsageError | null>(null);
   return (
     <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
       <CardHeader className="mb-3 flex items-center justify-between gap-3 p-0">
@@ -1173,14 +1631,16 @@ function ActivityPanel({
         </div>
         <Tabs
           value={tab}
-          onValueChange={(value) => setTab(value as "usage" | "errors")}
+          onValueChange={(value) =>
+            preserveMainScroll(() => setTab(value as "usage" | "errors"))
+          }
         >
           <TabsList aria-label="Usage activity type">
             <TabsTrigger value="usage">
-              Usage ({snapshot.usageLogs.length})
+              Usage ({integer(snapshot.usagePageInfo.total)})
             </TabsTrigger>
             <TabsTrigger value="errors">
-              Errors ({snapshot.errors.length})
+              Errors ({integer(snapshot.errorPageInfo.total)})
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1190,54 +1650,82 @@ function ActivityPanel({
           <UsageLogTable
             logs={snapshot.usageLogs}
             pageInfo={snapshot.usagePageInfo}
-            onPageChange={onPageChange}
+            onPageChange={onUsagePageChange}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSort={onSort}
+            onSelect={setSelectedLog}
             compact={compact}
           />
         ) : compact && snapshot.errors.length ? (
           <div className="flex flex-col gap-2">
             {snapshot.errors.map((error) => (
-              <UsageErrorCard error={error} key={error.id} />
+              <UsageErrorCard
+                error={error}
+                key={error.id}
+                onSelect={setSelectedError}
+              />
             ))}
+            <ActivityPagination
+              pageInfo={snapshot.errorPageInfo}
+              onPageChange={onErrorPageChange}
+              label="error"
+            />
           </div>
         ) : snapshot.errors.length ? (
-          <div className="overflow-x-auto">
-            <Table className="min-w-205 text-[10px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Endpoint</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Key</TableHead>
-                  <TableHead>Message</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {snapshot.errors.map((error) => (
-                  <TableRow key={error.id}>
-                    <TableCell className="whitespace-nowrap">
-                      {timestamp(error.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="warning">
-                        {integer(error.statusCode)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{error.model}</TableCell>
-                    <TableCell>{error.endpoint}</TableCell>
-                    <TableCell>{error.category}</TableCell>
-                    <TableCell>{error.keyName}</TableCell>
-                    <TableCell
-                      className="max-w-80 truncate"
-                      title={error.message}
-                    >
-                      {error.message}
-                    </TableCell>
+          <div className="flex flex-col gap-2">
+            <div className="overflow-x-auto">
+              <Table className="min-w-205 text-[10px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Endpoint</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Key</TableHead>
+                    <TableHead>Message</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {snapshot.errors.map((error) => (
+                    <TableRow key={error.id}>
+                      <TableCell className="whitespace-nowrap">
+                        {timestamp(error.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="warning">
+                          {integer(error.statusCode)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className="text-left hover:text-accent"
+                          onClick={() => setSelectedError(error)}
+                        >
+                          {error.model}
+                        </button>
+                      </TableCell>
+                      <TableCell>{error.endpoint}</TableCell>
+                      <TableCell>{error.category}</TableCell>
+                      <TableCell>{error.keyName}</TableCell>
+                      <TableCell
+                        className="max-w-80 truncate"
+                        title={error.message}
+                      >
+                        {error.message}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <ActivityPagination
+              pageInfo={snapshot.errorPageInfo}
+              onPageChange={onErrorPageChange}
+              label="error"
+            />
           </div>
         ) : (
           <Empty
@@ -1246,6 +1734,17 @@ function ActivityPanel({
             compact
           />
         )}
+        <UsageDetailDrawer
+          log={selectedLog}
+          error={selectedError}
+          open={selectedLog !== null || selectedError !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedLog(null);
+              setSelectedError(null);
+            }
+          }}
+        />
       </CardContent>
     </Card>
   );
@@ -1288,14 +1787,22 @@ function UsageWide({
   onChange,
   onRefresh,
   onReset,
-  onPageChange,
+  onUsagePageChange,
+  onErrorPageChange,
+  sortBy,
+  sortOrder,
+  onSort,
 }: {
   snapshot: SnapshotEnvelope;
   filters: UsageFilterState;
   onChange: (filters: UsageFilterState) => void;
   onRefresh: () => void;
   onReset: () => void;
-  onPageChange: (page: number) => void;
+  onUsagePageChange: (page: number) => void;
+  onErrorPageChange: (page: number) => void;
+  sortBy: UsageFilterState["sortBy"];
+  sortOrder: UsageFilterState["sortOrder"];
+  onSort: (column: UsageFilterState["sortBy"]) => void;
 }) {
   return (
     <div className="flex w-full max-w-370 flex-col gap-6">
@@ -1307,20 +1814,25 @@ function UsageWide({
         onReset={onReset}
       />
       <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(240px,.85fr)]">
-        <Card className="min-w-0 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
+        <Card className="min-w-0 overflow-visible rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
           <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
                 Token volume
               </span>
               <CardTitle className="text-lg font-semibold leading-7">
-                Daily trend
+                {filters.granularity === "hour"
+                  ? "Hourly trend"
+                  : "Daily trend"}
               </CardTitle>
             </div>
             <ChartBar className="size-5 text-accent" />
           </CardHeader>
           <CardContent className="min-w-0 p-0">
-            <TrendChart rows={snapshot.dailyTrend} />
+            <TrendChart
+              rows={snapshot.dailyTrend}
+              granularity={filters.granularity}
+            />
           </CardContent>
         </Card>
         <Card className="min-w-0 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
@@ -1355,30 +1867,71 @@ function UsageWide({
           rows={snapshot.groups}
         />
       </div>
-      <ActivityPanel snapshot={snapshot} onPageChange={onPageChange} />
+      <ActivityPanel
+        snapshot={snapshot}
+        onUsagePageChange={onUsagePageChange}
+        onErrorPageChange={onErrorPageChange}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={onSort}
+      />
     </div>
   );
 }
 
-export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
+export const Usage = memo(function Usage({
+  snapshot,
+}: {
+  snapshot: SnapshotEnvelope;
+}) {
   const [filters, setFilters] = useState(defaultUsageFilterState);
   const [usagePage, setUsagePage] = useState(1);
+  const [errorPage, setErrorPage] = useState(1);
   const compact = useCompactTiles();
-  const refresh = (next: UsageFilterState, page = 1) => {
+  const refresh = (
+    next: UsageFilterState,
+    page = 1,
+    nextErrorPage = 1,
+    scope: "full" | "usage" | "activity" = "full",
+  ) => {
+    console.info("[cavoti-usage] dispatching refresh", {
+      startDate: next.startDate,
+      endDate: next.endDate,
+      usagePage: page,
+      errorPage: nextErrorPage,
+      scope,
+    });
     setFilters(next);
     setUsagePage(page);
+    setErrorPage(nextErrorPage);
     window.dispatchEvent(
       new CustomEvent("cavoti-usage-refresh", {
-        detail: { filters: next, usagePage: page },
+        detail: {
+          filters: next,
+          usagePage: page,
+          errorPage: nextErrorPage,
+          scope,
+        },
       }),
     );
   };
-  const apply = () => refresh(filters, usagePage);
-  const changeFilters = (next: UsageFilterState) => refresh(next);
-  const changeUsagePage = (page: number) => refresh(filters, page);
+  const apply = () => refresh(filters, usagePage, errorPage, "usage");
+  const changeFilters = (next: UsageFilterState) =>
+    refresh(next, 1, 1, "usage");
+  const changeUsagePage = (page: number) =>
+    refresh(filters, page, errorPage, "activity");
+  const changeErrorPage = (page: number) =>
+    refresh(filters, usagePage, page, "activity");
+  const changeSort = (column: UsageFilterState["sortBy"]) => {
+    const sortOrder =
+      filters.sortBy === column && filters.sortOrder === "desc"
+        ? "asc"
+        : "desc";
+    refresh({ ...filters, sortBy: column, sortOrder }, 1, errorPage, "usage");
+  };
   const reset = () => {
     const next = defaultUsageFilterState();
-    refresh(next);
+    refresh(next, 1, 1, "usage");
   };
   if (!compact)
     return (
@@ -1388,7 +1941,11 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
         onChange={changeFilters}
         onRefresh={apply}
         onReset={reset}
-        onPageChange={changeUsagePage}
+        onUsagePageChange={changeUsagePage}
+        onErrorPageChange={changeErrorPage}
+        sortBy={filters.sortBy}
+        sortOrder={filters.sortOrder}
+        onSort={changeSort}
       />
     );
   return (
@@ -1401,20 +1958,23 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
         onReset={reset}
       />
       <StatRail snapshot={snapshot} />
-      <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
+      <Card className="overflow-visible rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
         <CardHeader className="mb-3 flex items-start justify-between gap-3 p-0">
           <div>
             <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
               Token volume
             </span>
             <CardTitle className="text-lg font-semibold leading-7">
-              Daily trend
+              {filters.granularity === "hour" ? "Hourly trend" : "Daily trend"}
             </CardTitle>
           </div>
           <ChartBar className="size-5 text-accent" />
         </CardHeader>
         <CardContent className="min-w-0 p-0">
-          <TrendChart rows={snapshot.dailyTrend} />
+          <TrendChart
+            rows={snapshot.dailyTrend}
+            granularity={filters.granularity}
+          />
         </CardContent>
       </Card>
       <Card className="rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
@@ -1441,9 +2001,13 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
       />
       <ActivityPanel
         snapshot={snapshot}
-        onPageChange={changeUsagePage}
+        onUsagePageChange={changeUsagePage}
+        onErrorPageChange={changeErrorPage}
+        sortBy={filters.sortBy}
+        sortOrder={filters.sortOrder}
+        onSort={changeSort}
         compact
       />
     </div>
   );
-}
+});

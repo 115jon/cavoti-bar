@@ -1,9 +1,10 @@
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
+  ArrowsClockwiseIcon as ArrowsClockwise,
   CaretDownIcon as CaretDown,
   TimerIcon as Timer,
 } from "@phosphor-icons/react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useCompactTiles } from "../components/app/shared";
 import type { SnapshotEnvelope, Subscription } from "../domain/snapshot";
 import { date, planVariant, resetLabel } from "../app/formatters";
@@ -15,7 +16,6 @@ import {
   CardFooter,
   CardHeader,
 } from "../components/ui/card";
-
 function PlanIdentity({ plan }: { plan: Subscription }) {
   return (
     <div className="min-w-0">
@@ -136,7 +136,7 @@ function PlanCard({
   );
 }
 
-export function Plans({
+export const Plans = memo(function Plans({
   snapshot,
   onConnect,
 }: {
@@ -146,7 +146,17 @@ export function Plans({
   const compact = useCompactTiles();
   return (
     <div className="flex w-full max-w-370 flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Refresh plans"
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("cavoti-refresh"))
+          }
+        >
+          <ArrowsClockwise />
+        </Button>
         <Button variant="outline" size="sm" onClick={onConnect}>
           Manage on Cavoti <ArrowSquareOut data-icon="inline-end" />
         </Button>
@@ -189,4 +199,4 @@ export function Plans({
       ) : null}
     </div>
   );
-}
+});

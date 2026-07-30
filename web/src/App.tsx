@@ -21,6 +21,8 @@ import { Boundary, Loading, useCompactTiles } from "./components/app/shared";
 import { Overview } from "./views/Overview";
 import { Usage } from "./views/Usage";
 import { Plans } from "./views/Plans";
+import { Pricing } from "./views/Pricing";
+import { Keys } from "./views/Keys";
 import { Status } from "./views/Status";
 import { Settings } from "./views/Settings";
 import { About } from "./views/About";
@@ -48,9 +50,27 @@ function setNativeRefreshGestureLocked(locked: boolean) {
   );
 }
 
+function probeScopeForView(view: View) {
+  if (
+    view === "overview" ||
+    view === "usage" ||
+    view === "plans" ||
+    view === "status" ||
+    view === "pricing" ||
+    view === "keys"
+  ) {
+    return view === "pricing" || view === "keys" ? "plans" : view;
+  }
+  return null;
+}
+
 export function App({ bridge }: AppProps) {
   const [state, setState] = useState<BridgeState>("loading");
   const [snapshot, setSnapshot] = useState<SnapshotEnvelope>();
+  const [backgroundSnapshot, setBackgroundSnapshot] =
+    useState<
+      Pick<SnapshotEnvelope, "subscriptions" | "quotaResetCards" | "capturedAt">
+    >();
   const [view, setView] = useState<View>("overview");
   const [topmost, setTopmost] = useState(false);
   const [maximized, setMaximized] = useState(false);
@@ -70,15 +90,39 @@ export function App({ bridge }: AppProps) {
   const [, setRefreshing] = useState(false);
   const compact = useCompactTiles();
   const hasSnapshot = useRef(false);
+  const loadedScopes = useRef(new Set<string>());
   const currentState = useRef(state);
+  const currentView = useRef(view);
   currentState.current = state;
+  currentView.current = view;
   const foreground = useRef(document.visibilityState !== "hidden");
-  const connect = () => bridge.post({ action: "connect" });
-  const refresh = useCallback(() => {
-    if (!foreground.current) return;
-    setRefreshing(true);
-    bridge.post({ action: "refresh" });
-  }, [bridge]);
+  const connect = useCallback(
+    () => bridge.post({ action: "connect" }),
+    [bridge],
+  );
+  const quit = useCallback(() => bridge.post({ action: "exit" }), [bridge]);
+  const restart = useCallback(
+    () => bridge.post({ action: updateReady ? "install-update" : "restart" }),
+    [bridge, updateReady],
+  );
+  const refresh = useCallback(
+    (scope: string = "full") => {
+      if (!foreground.current) return;
+      setRefreshing(true);
+      bridge.post({ action: "refresh", value: { scope } });
+    },
+    [bridge],
+  );
+  const changeView = useCallback(
+    (next: View) => {
+      setView(next);
+      const scope = probeScopeForView(next);
+      if (scope && !loadedScopes.current.has(scope)) {
+        bridge.post({ action: "view", value: { scope } });
+      }
+    },
+    [bridge],
+  );
   const openStatus = useCallback(
     () => bridge.post({ action: "open-status" }),
     [bridge],
@@ -147,13 +191,49 @@ export function App({ bridge }: AppProps) {
       } else if (message.type === "snapshot") {
         const next = normalizeSnapshot(message.snapshot);
         if (next) {
+          const isBackground = message.scope === "background";
+          if (!isBackground && message.complete !== false) {
+            if (!message.scope || message.scope === "full") {
+              loadedScopes.current.add("overview");
+              loadedScopes.current.add("usage");
+              loadedScopes.current.add("plans");
+              loadedScopes.current.add("status");
+            } else {
+              loadedScopes.current.add(message.scope);
+            }
+            if (
+              !message.scope ||
+              message.scope === "full" ||
+              message.scope === "plans"
+            ) {
+              setBackgroundSnapshot(undefined);
+            }
+          }
           const hadSnapshot = hasSnapshot.current;
           bridge.post({
             action: "snapshot-received",
             value: { complete: message.complete },
           });
           hasSnapshot.current = true;
-          setSnapshot(next);
+          if (isBackground) {
+            setBackgroundSnapshot({
+              subscriptions: next.subscriptions,
+              quotaResetCards: next.quotaResetCards,
+              capturedAt: next.capturedAt,
+            });
+            setRefreshing(false);
+            completeNativeRefresh();
+            return;
+          }
+          setSnapshot((previous) =>
+            isBackground && previous
+              ? {
+                  ...previous,
+                  subscriptions: next.subscriptions,
+                  quotaResetCards: next.quotaResetCards,
+                }
+              : next,
+          );
           if (message.complete !== false) {
             setFreshnessCapturedAt(next.capturedAt);
             setRefreshing(false);
@@ -204,7 +284,7 @@ export function App({ bridge }: AppProps) {
         completeNativeRefresh();
         return;
       }
-      refresh();
+      refresh(probeScopeForView(currentView.current) ?? "full");
     };
     bridge.post({ action: "bootstrap" });
     const usageRefresh = (event: Event) => {
@@ -215,10 +295,18 @@ export function App({ bridge }: AppProps) {
               filters: UsageFilterState;
               usagePage?: number;
               errorPage?: number;
+              scope?: "full" | "usage" | "activity";
             }
         >
       ).detail;
       const value = "filters" in detail ? detail : { filters: detail };
+      console.info("[cavoti-usage] refresh requested", {
+        startDate: value.filters.startDate,
+        endDate: value.filters.endDate,
+        usagePage: "usagePage" in value ? value.usagePage : 1,
+        errorPage: "errorPage" in value ? value.errorPage : 1,
+        scope: "scope" in value ? value.scope : "full",
+      });
       if (foreground.current) {
         setRefreshing(true);
         bridge.post({ action: "refresh", value });
@@ -315,9 +403,20 @@ export function App({ bridge }: AppProps) {
         : (views.find((item) => item.id === view)?.label ?? "Overview"),
     [view],
   );
-  const displayedSnapshot = snapshot
-    ? { ...snapshot, capturedAt: freshnessCapturedAt }
-    : snapshot;
+  const displayedSnapshot = useMemo(
+    () =>
+      snapshot ? { ...snapshot, capturedAt: freshnessCapturedAt } : snapshot,
+    [freshnessCapturedAt, snapshot],
+  );
+  const overviewSnapshot = useMemo(() => {
+    if (!displayedSnapshot || !backgroundSnapshot) return displayedSnapshot;
+    return {
+      ...displayedSnapshot,
+      subscriptions: backgroundSnapshot.subscriptions,
+      quotaResetCards: backgroundSnapshot.quotaResetCards,
+      capturedAt: backgroundSnapshot.capturedAt,
+    };
+  }, [backgroundSnapshot, displayedSnapshot]);
   const beginDrag = (event: MouseEvent<HTMLElement>) => {
     if (!capabilities.titlebarControls) return;
     if (event.button !== 0 || (event.target as HTMLElement).closest("button"))
@@ -333,7 +432,7 @@ export function App({ bridge }: AppProps) {
       state={state}
       capabilities={capabilities}
       maximized={maximized}
-      onViewChange={setView}
+      onViewChange={changeView}
       onBeginDrag={beginDrag}
       onMaximize={() => bridge.post({ action: "maximize" })}
       onMinimize={() => bridge.post({ action: "minimize" })}
@@ -356,45 +455,66 @@ export function App({ bridge }: AppProps) {
         <Loading />
       ) : state !== "live" || !displayedSnapshot ? (
         <Boundary state={state} onConnect={connect} />
-      ) : view === "overview" ? (
-        <Overview
-          snapshot={displayedSnapshot}
-          onNavigate={setView}
-          onConnect={connect}
-          onOpenStatus={openStatus}
-          onQuit={() => bridge.post({ action: "exit" })}
-          onRestart={() =>
-            bridge.post({ action: updateReady ? "install-update" : "restart" })
-          }
-          updateReady={updateReady}
-          showSeconds={showFreshnessSeconds}
-          showShortcuts={capabilities.platform !== "mobile"}
-        />
-      ) : view === "usage" ? (
-        <Usage snapshot={displayedSnapshot} />
-      ) : view === "plans" ? (
-        <Plans snapshot={displayedSnapshot} onConnect={connect} />
-      ) : view === "status" ? (
-        <Status
-          snapshot={displayedSnapshot}
-          state={state}
-          onConnect={connect}
-        />
-      ) : view === "about" ? (
-        <About />
       ) : (
-        <Settings
-          topmost={topmost}
-          onTopmost={setWindowTopmost}
-          onClear={() => bridge.post({ action: "clear" })}
-          onConnect={connect}
-          capabilities={capabilities}
-          {...settingsProps}
-          refreshIntervalSeconds={refreshIntervalSeconds}
-          onRefreshInterval={setRefreshInterval}
-          showFreshnessSeconds={showFreshnessSeconds}
-          onShowFreshnessSeconds={setFreshnessSeconds}
-        />
+        <div className="contents">
+          <div hidden={view !== "overview"}>
+            <Overview
+              snapshot={
+                view === "overview"
+                  ? (overviewSnapshot ?? displayedSnapshot)
+                  : displayedSnapshot
+              }
+              onNavigate={changeView}
+              onConnect={connect}
+              onOpenStatus={openStatus}
+              onQuit={quit}
+              onRestart={restart}
+              updateReady={updateReady}
+              showSeconds={showFreshnessSeconds}
+              showShortcuts={capabilities.platform !== "mobile"}
+            />
+          </div>
+          <div hidden={view !== "usage"}>
+            <Usage snapshot={displayedSnapshot} />
+          </div>
+          <div hidden={view !== "plans"}>
+            <Plans snapshot={displayedSnapshot} onConnect={connect} />
+          </div>
+          <div hidden={view !== "pricing"}>
+            <Pricing snapshot={displayedSnapshot} />
+          </div>
+          <div hidden={view !== "keys"}>
+            <Keys snapshot={displayedSnapshot} />
+          </div>
+          <div hidden={view !== "status"}>
+            <Status
+              snapshot={
+                view === "plans"
+                  ? (overviewSnapshot ?? displayedSnapshot)
+                  : displayedSnapshot
+              }
+              state={state}
+              onConnect={connect}
+            />
+          </div>
+          <div hidden={view !== "about"}>
+            <About />
+          </div>
+          <div hidden={view !== "settings"}>
+            <Settings
+              topmost={topmost}
+              onTopmost={setWindowTopmost}
+              onClear={() => bridge.post({ action: "clear" })}
+              onConnect={connect}
+              capabilities={capabilities}
+              {...settingsProps}
+              refreshIntervalSeconds={refreshIntervalSeconds}
+              onRefreshInterval={setRefreshInterval}
+              showFreshnessSeconds={showFreshnessSeconds}
+              onShowFreshnessSeconds={setFreshnessSeconds}
+            />
+          </div>
+        </div>
       )}
     </AppShell>
   );

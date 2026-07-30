@@ -6,14 +6,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const AUTH_WINDOW_LABEL: &str = "auth";
 pub const MAX_AUTH_PAYLOAD_BYTES: usize = 1024 * 1024;
-pub const MAX_AUTH_RESULT_BYTES: usize = 64 * 1024;
+pub const MAX_AUTH_RESULT_BYTES: usize = 512 * 1024;
 pub const AUTH_COLLECTION_TIMEOUT: Duration = Duration::from_secs(120);
 
 const MAX_COLLECTION_ID_BYTES: usize = 128;
 const MAX_PHASE_BYTES: usize = 32;
 const MAX_SESSION_STATE_BYTES: usize = 32;
 const REQUIRED_ENDPOINTS: [&str; 5] = ["me", "subscriptions", "stats", "models", "snapshot"];
-const KNOWN_ENDPOINTS: [&str; 13] = [
+const KNOWN_ENDPOINTS: [&str; 14] = [
     "me",
     "subscriptions",
     "stats",
@@ -27,6 +27,7 @@ const KNOWN_ENDPOINTS: [&str; 13] = [
     "announcements",
     "status",
     "groups",
+    "pricing",
 ];
 static COLLECTION_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -58,7 +59,19 @@ pub struct AuthRawResults {
     pub collection_id: String,
     pub phase: String,
     pub session_state: String,
+    pub scope: AuthProbeScope,
     pub results: BTreeMap<String, AuthEndpointResult>,
+}
+
+#[derive(Debug, Clone)]
+pub enum AuthProbeScope {
+    Full,
+    Background,
+    Overview,
+    Usage,
+    Plans,
+    Status,
+    Activity,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +79,21 @@ pub struct AuthProbeRequest {
     pub filters: Value,
     pub usage_page: u32,
     pub error_page: u32,
+    pub scope: AuthProbeScope,
+}
+
+impl AuthProbeScope {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Background => "background",
+            Self::Overview => "overview",
+            Self::Usage => "usage",
+            Self::Plans => "plans",
+            Self::Status => "status",
+            Self::Activity => "activity",
+        }
+    }
 }
 
 impl Default for AuthProbeRequest {
@@ -74,6 +102,7 @@ impl Default for AuthProbeRequest {
             filters: json!({}),
             usage_page: 1,
             error_page: 1,
+            scope: AuthProbeScope::Full,
         }
     }
 }
@@ -118,7 +147,11 @@ impl AuthAdapter {
         let id = format!("{timestamp:x}-{sequence:x}");
         self.active = Some(ActiveCollection {
             id: id.clone(),
-            phase: "core",
+            phase: if matches!(request.scope, AuthProbeScope::Full) {
+                "core"
+            } else {
+                "enrichment"
+            },
             request,
         });
         id
@@ -210,6 +243,7 @@ impl AuthAdapter {
             collection_id: payload.collection_id.clone(),
             phase: payload.phase.clone(),
             session_state: payload.session_state,
+            scope: active.request.scope.clone(),
             results: payload.results,
         };
 
@@ -324,11 +358,13 @@ pub fn auth_probe_script_with_request(
         serde_json::to_string(collection_id).unwrap_or_else(|_| "\"invalid\"".into());
     let invoke_key = serialize_invoke_key(invoke_key);
     let filters = serde_json::to_string(&request.filters).unwrap_or_else(|_| "{}".into());
+    let scope = serde_json::to_string(request.scope.name()).unwrap_or_else(|_| "\"full\"".into());
     format!(
         r#"(() => {{
   const collectionId = {collection_id};
   const invokeKey = {invoke_key};
   const filters = {filters};
+  const scope = {scope};
   const usagePage = {usage_page};
   const errorPage = {error_page};
   const CAVOTI_TIMEOUT_MS = 10000;
@@ -411,14 +447,16 @@ pub fn auth_probe_script_with_request(
     await waitForAuthenticatedNavigation();
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const today = new Date();
-    const start = new Date(today.getTime() - 29 * 86400000);
-    const iso = (value) => value.toISOString().slice(0, 10);
+     const start = new Date(today.getTime() - 6 * 86400000);
+     const iso = (value) => `${{value.getFullYear()}}-${{String(value.getMonth() + 1).padStart(2, '0')}}-${{String(value.getDate()).padStart(2, '0')}}`;
     const params = new URLSearchParams({{ start_date: filters.startDate || iso(start), end_date: filters.endDate || iso(today), timezone: zone }});
     const optionalFilters = {{ api_key_id: filters.apiKeyId, model: filters.model, group_id: filters.groupId, billing_type: filters.billingType, billing_mode: filters.billingMode }};
     for (const [key, value] of Object.entries(optionalFilters)) if (value !== null && value !== undefined && value !== '') params.set(key, String(value));
-    const streamByType = {{ sync: 1, stream: 2, ws_v2: 3 }};
-    if (filters.requestType && streamByType[filters.requestType]) params.set('stream', String(streamByType[filters.requestType]));
-    const query = params.toString();
+     if (filters.requestType && ['sync', 'stream', 'ws_v2'].includes(filters.requestType)) params.set('request_type', filters.requestType);
+     const query = params.toString();
+     const sortBy = filters.sortBy === 'model' ? 'model' : 'created_at';
+     const sortOrder = filters.sortOrder === 'asc' ? 'asc' : 'desc';
+     const granularity = filters.granularity === 'hour' ? 'hour' : 'day';
     const authToken = localStorage.getItem('auth_token');
     const headers = {{ accept: 'application/json' }};
     if (authToken) headers.Authorization = `Bearer ${{authToken}}`;
@@ -428,17 +466,35 @@ pub fn auth_probe_script_with_request(
       subscriptions: `https://cavoti.com/api/v1/subscriptions/active?timezone=${{encodeURIComponent(zone)}}`,
       stats: `https://cavoti.com/api/v1/usage/stats?${{query}}`,
       models: `https://cavoti.com/api/v1/usage/dashboard/models?${{query}}&model_source=requested`,
-      snapshot: `https://cavoti.com/api/v1/usage/dashboard/snapshot-v2?${{query}}&granularity=day&include_trend=true&include_model_stats=false&include_group_stats=true`,
-      usage: `https://cavoti.com/api/v1/usage?page=${{usagePage}}&page_size=100&${{query}}`,
-      errors: `https://cavoti.com/api/v1/usage/errors?page=${{errorPage}}&page_size=100&${{query}}`,
+       snapshot: `https://cavoti.com/api/v1/usage/dashboard/snapshot-v2?${{query}}&granularity=${{granularity}}&include_trend=true&include_model_stats=false&include_group_stats=true`,
+        usage: `https://cavoti.com/api/v1/usage?page=${{usagePage}}&page_size=100&${{query}}&sort_by=${{sortBy}}&sort_order=${{sortOrder}}`,
+        errors: `https://cavoti.com/api/v1/usage/errors?page=${{errorPage}}&page_size=20&${{query}}&sort_by=${{sortBy}}&sort_order=${{sortOrder}}`,
       keys: `https://cavoti.com/api/v1/keys?page=1&page_size=100&timezone=${{encodeURIComponent(zone)}}`,
       quota: `https://cavoti.com/api/v1/subscriptions/quota-reset-cards?timezone=${{encodeURIComponent(zone)}}`,
       banner: `https://cavoti.com/api/v1/settings/banner?timezone=${{encodeURIComponent(zone)}}`,
       announcements: `https://cavoti.com/api/v1/announcements?timezone=${{encodeURIComponent(zone)}}`,
       status: `https://cavoti.com/api/v1/channel-monitors?timezone=${{encodeURIComponent(zone)}}`,
-      groups: `https://cavoti.com/api/v1/groups/available?timezone=${{encodeURIComponent(zone)}}`
-    }};
-    const requiredNames = ['me', 'subscriptions', 'stats', 'models', 'snapshot'];
+       groups: `https://cavoti.com/api/v1/groups/available?timezone=${{encodeURIComponent(zone)}}`,
+       pricing: `https://cavoti.com/api/v1/public/model-pricing?timezone=${{encodeURIComponent(zone)}}`
+     }};
+    const scopedNames = {{
+      activity: ['usage', 'errors'],
+      background: ['subscriptions', 'quota'],
+      overview: ['me', 'subscriptions', 'stats', 'models', 'snapshot', 'groups', 'quota', 'banner'],
+      usage: ['stats', 'models', 'snapshot', 'usage', 'errors', 'groups'],
+       plans: ['subscriptions', 'quota', 'keys', 'pricing'],
+      status: ['me', 'subscriptions', 'stats', 'models', 'status', 'announcements'],
+    }}[scope];
+    if (scopedNames) {{
+      const scopedResults = {{}};
+      await Promise.all(scopedNames.map(async (name) => {{
+        scopedResults[name] = await fetchResult(urls[name], cavotiOptions, CAVOTI_TIMEOUT_MS);
+      }}));
+      if (controller.signal.aborted) return;
+      await send('enrichment', true, 'authenticated', scopedResults);
+      return;
+    }}
+     const requiredNames = ['me', 'subscriptions', 'stats', 'models', 'snapshot'];
     const requiredResults = {{}};
     await Promise.all(requiredNames.map(async (name) => {{
       if (controller.signal.aborted) return;
@@ -450,7 +506,7 @@ pub fn auth_probe_script_with_request(
     await send('core', !authenticated, sessionState, requiredResults);
     if (!authenticated || controller.signal.aborted) return;
 
-    const optionalNames = ['usage', 'errors', 'keys', 'quota', 'banner', 'announcements', 'status', 'groups'];
+    const optionalNames = ['usage', 'errors', 'keys', 'quota', 'banner', 'announcements', 'status', 'groups', 'pricing'];
     const optionalResults = {{}};
     await Promise.all(optionalNames.map(async (name) => {{
       optionalResults[name] = await fetchResult(urls[name], cavotiOptions, CAVOTI_TIMEOUT_MS);
@@ -464,6 +520,7 @@ pub fn auth_probe_script_with_request(
 }})();"#,
         max_bytes = MAX_AUTH_RESULT_BYTES,
         filters = filters,
+        scope = scope,
         usage_page = request.usage_page.max(1),
         error_page = request.error_page.max(1),
     )
@@ -524,6 +581,12 @@ mod tests {
         let script = auth_probe_script("collection", Some("runtime-key"));
         assert!(script.contains("__TAURI_INVOKE_KEY__: invokeKey"));
         assert!(script.contains("Tauri invoke key unavailable"));
+        assert!(script.contains("today.getTime() - 6 * 86400000"));
+        assert!(script.contains("value.getFullYear()"));
+        assert!(script.contains("const sortBy = filters.sortBy === 'model'"));
+        assert!(script.contains("const sortOrder = filters.sortOrder === 'asc'"));
+        assert!(script.contains("const granularity = filters.granularity === 'hour'"));
+        assert!(script.contains("usage/errors?page=${errorPage}&page_size=20"));
     }
 
     #[test]

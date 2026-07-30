@@ -5,6 +5,8 @@ export type View =
   | "overview"
   | "usage"
   | "plans"
+  | "pricing"
+  | "keys"
   | "status"
   | "settings"
   | "about";

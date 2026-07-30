@@ -11,13 +11,15 @@ export const integer = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 export const quantity = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
+const compactTokens = (value: number, unit: string) =>
+  `${value.toFixed(2).replace(/\.?0+$/, "")}${unit}`;
 export const tokens = (value: number) =>
   value >= 1e9
-    ? `${(value / 1e9).toFixed(2).replace(/\.00$/, "")}B`
+    ? compactTokens(value / 1e9, "B")
     : value >= 1e6
-      ? `${(value / 1e6).toFixed(1).replace(/\.0$/, "")}M`
+      ? compactTokens(value / 1e6, "M")
       : value >= 1e3
-        ? `${(value / 1e3).toFixed(1).replace(/\.0$/, "")}K`
+        ? compactTokens(value / 1e3, "K")
         : integer(value);
 export const date = (value: string | null) =>
   value && !Number.isNaN(Date.parse(value))
@@ -32,13 +34,14 @@ export const usageAmount = (value: number, unit: UsageUnit) =>
   unit === "points" ? `${quantity(value)} pts` : money(value);
 
 export type DateRangePreset =
+  | "last-24-hours"
   | "today"
   | "yesterday"
-  | "this-week"
-  | "last-week"
+  | "last-7-days"
+  | "last-14-days"
+  | "last-30-days"
   | "this-month"
-  | "last-month"
-  | "last-30-days";
+  | "last-month";
 
 export const dateRangeOptions: Array<{
   value: DateRangePreset;
@@ -46,11 +49,12 @@ export const dateRangeOptions: Array<{
 }> = [
   { value: "today", label: "Today" },
   { value: "yesterday", label: "Yesterday" },
-  { value: "this-week", label: "This week" },
-  { value: "last-week", label: "Last week" },
+  { value: "last-24-hours", label: "Last 24 hours" },
+  { value: "last-7-days", label: "Last 7 days" },
+  { value: "last-14-days", label: "Last 14 days" },
+  { value: "last-30-days", label: "Last 30 days" },
   { value: "this-month", label: "This month" },
   { value: "last-month", label: "Last month" },
-  { value: "last-30-days", label: "Last 30 days" },
 ];
 
 export function resetLabel(value: string | null): string {
@@ -79,18 +83,19 @@ export function dateRangeForPreset(
 ): Pick<UsageFilters, "startDate" | "endDate"> {
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const start = new Date(end);
-  const day = end.getDay();
   switch (preset) {
+    case "last-24-hours":
+      start.setDate(start.getDate() - 1);
+      break;
     case "yesterday":
       start.setDate(start.getDate() - 1);
       end.setDate(end.getDate() - 1);
       break;
-    case "this-week":
-      start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+    case "last-7-days":
+      start.setDate(start.getDate() - 6);
       break;
-    case "last-week":
-      start.setDate(start.getDate() - (day === 0 ? 13 : day + 6));
-      end.setDate(end.getDate() - (day === 0 ? 7 : day));
+    case "last-14-days":
+      start.setDate(start.getDate() - 13);
       break;
     case "this-month":
       start.setDate(1);
@@ -108,8 +113,8 @@ export function dateRangeForPreset(
   return { startDate: localDateInput(start), endDate: localDateInput(end) };
 }
 
-export function defaultUsageFilterState(): UsageFilters {
-  const range = dateRangeForPreset("last-30-days");
+export function defaultUsageFilterState(now = new Date()): UsageFilters {
+  const range = dateRangeForPreset("last-7-days", now);
   return {
     ...range,
     apiKeyId: null,
@@ -118,6 +123,9 @@ export function defaultUsageFilterState(): UsageFilters {
     requestType: "",
     billingType: null,
     billingMode: "",
+    sortBy: "created_at",
+    sortOrder: "desc",
+    granularity: "day",
   };
 }
 

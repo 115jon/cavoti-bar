@@ -53,6 +53,8 @@ struct AuthState {
     notifications: Arc<NativeNotifications>,
     navigation: Arc<Mutex<NavigationState>>,
     latest_snapshot: Arc<Mutex<Option<Value>>>,
+    latest_raw_results: Arc<Mutex<Option<auth::AuthRawResults>>>,
+    latest_probe_request: Arc<Mutex<auth::AuthProbeRequest>>,
     settings_update_guard: Arc<Mutex<()>>,
     #[cfg(target_os = "android")]
     android_auth_bridge_unavailable: Arc<AtomicBool>,
@@ -176,6 +178,7 @@ mod tests {
             collection_id: "test".into(),
             phase: "core".into(),
             session_state: "authenticated".into(),
+            scope: auth::AuthProbeScope::Full,
             results: [
                 (
                     "me".into(),
@@ -264,7 +267,7 @@ mod tests {
         let optional = [
             (
                 "usage",
-                r#"{"data":{"items":[{"id":7,"request_id":"req-7","api_key":{"name":"prod"},"model":"gpt","reasoning_effort":"high","inbound_endpoint":"chat","group":{"name":"Default"},"input_tokens":2,"output_tokens":3,"cache_creation_tokens":4,"cache_read_tokens":5,"actual_cost":0.4,"total_cost":0.6,"first_token_ms":12,"duration_ms":80,"ip_address":"8.8.8.8","user_agent":"client","created_at":"2026-07-26T00:00:00Z"}],"page":2,"page_size":100,"total":101,"pages":2}}"#,
+                r#"{"data":{"items":[{"id":7,"request_id":"req-7","api_key":{"name":"prod"},"model":"gpt","reasoning_effort":"high","inbound_endpoint":"chat","group":{"name":"Default"},"input_tokens":2,"output_tokens":3,"cache_creation_5m_tokens":1,"cache_creation_1h_tokens":3,"cache_read_tokens":5,"actual_cost":0.4,"total_cost":0.6,"first_token_ms":12,"duration_ms":80,"ip_address":"8.8.8.8","user_agent":"client","created_at":"2026-07-26T00:00:00Z"}],"page":2,"page_size":100,"total":101,"pages":2}}"#,
             ),
             (
                 "errors",
@@ -272,7 +275,7 @@ mod tests {
             ),
             (
                 "keys",
-                r#"{"data":{"items":[{"id":1,"name":"prod","status":"active"},{"id":2,"name":"old","status":"inactive"}]}}"#,
+                r#"{"data":{"items":[{"id":1,"name":"prod","status":"active","quota":0,"quota_used":12.5,"window_5h_start":"2026-07-26T00:00:00Z","rate_limit_5h":0,"usage_5h":12.5,"group":{"name":"Default","rate_multiplier":1.2,"rpm_limit":30}},{"id":2,"name":"old","status":"inactive"}]}}"#,
             ),
             (
                 "quota",
@@ -291,6 +294,10 @@ mod tests {
                 r#"{"data":{"items":[{"name":"Cavoti","provider":"openai","primary_model":"gpt","primary_status":"operational","primary_latency_ms":42,"availability_7d":99.5,"timeline":[{"checked_at":"2026-07-26T00:00:00Z"}]}]}}"#,
             ),
             ("groups", r#"{"data":[{"id":3,"name":"Default"}]}"#),
+            (
+                "pricing",
+                r#"{"data":{"platforms":[{"platform":"openai","groups":[{"id":3,"name":"Default"}],"models":[{"name":"gpt","platform":"openai","source":"override","group_prices":[{"group_id":3,"pricing":{"billing_mode":"token","input_price":0.00000008,"output_price":0.0000004,"cache_write_price":null,"cache_read_price":0.000000008,"point_price":4,"intervals":[]}}]}]}]}}"#,
+            ),
             (
                 "geo",
                 r#"{"8.8.8.8":{"city":"Mountain View","region":"CA","country":"United States","country_code":"US","organization_name":"Google","timezone":"America/Los_Angeles"}}"#,
@@ -312,11 +319,13 @@ mod tests {
             collection_id: "test".into(),
             phase: "enrichment".into(),
             session_state: "authenticated".into(),
+            scope: auth::AuthProbeScope::Full,
             results,
         })
         .expect("valid enriched snapshot");
 
         assert_eq!(snapshot["usageLogs"][0]["totalTokens"], 14.0);
+        assert_eq!(snapshot["usageLogs"][0]["cacheCreationTokens"], 4.0);
         assert_eq!(snapshot["usageLogs"][0]["location"]["countryCode"], "US");
         assert_eq!(snapshot["usagePageInfo"]["page"], 2.0);
         assert_eq!(snapshot["errors"][0]["statusCode"], 429.0);
@@ -327,6 +336,11 @@ mod tests {
         assert_eq!(snapshot["announcements"][0]["title"], "Update");
         assert_eq!(snapshot["channelMonitors"][0]["latencyMs"], 42.0);
         assert_eq!(snapshot["apiKeys"][0]["name"], "prod");
+        assert_eq!(snapshot["apiKeys"][0]["quota"], 0.0);
+        assert_eq!(snapshot["apiKeys"][0]["reset5hAt"], "2026-07-26T05:00:00Z");
+        assert_eq!(snapshot["apiKeys"][0]["rpmLimit"], 30.0);
+        assert_eq!(snapshot["modelPricing"][0]["inputPrice"], 0.00000008);
+        assert_eq!(snapshot["modelPricing"][0]["groupName"], "Default");
         assert_eq!(snapshot["groupOptions"][0]["id"], 3.0);
     }
 
@@ -571,6 +585,43 @@ fn cache_snapshot(state: &AuthState, snapshot: &Value) {
     if let Ok(mut latest) = state.latest_snapshot.lock() {
         *latest = Some(snapshot.clone());
     }
+}
+
+fn merge_raw_results(state: &AuthState, raw: &auth::AuthRawResults) -> auth::AuthRawResults {
+    let previous = state
+        .latest_raw_results
+        .lock()
+        .ok()
+        .and_then(|latest| latest.clone());
+    let mut merged = match (&raw.scope, raw.phase.as_str(), previous) {
+        (auth::AuthProbeScope::Full, "core", _) => raw.clone(),
+        (_, _, Some(previous)) => previous,
+        (_, _, None) => raw.clone(),
+    };
+    merged.collection_id = raw.collection_id.clone();
+    merged.phase = raw.phase.clone();
+    merged.session_state = raw.session_state.clone();
+    merged.scope = raw.scope.clone();
+    merged.results.extend(raw.results.clone());
+    if let Ok(mut latest) = state.latest_raw_results.lock() {
+        *latest = Some(merged.clone());
+    }
+    merged
+}
+
+fn remember_probe_request(state: &AuthState, request: &auth::AuthProbeRequest) {
+    if let Ok(mut latest) = state.latest_probe_request.lock() {
+        *latest = request.clone();
+    }
+}
+
+fn current_probe_request(state: &AuthState) -> auth::AuthProbeRequest {
+    state
+        .latest_probe_request
+        .lock()
+        .ok()
+        .map(|request| request.clone())
+        .unwrap_or_default()
 }
 
 fn emit_latest_snapshot<R: Runtime>(app: &AppHandle<R>, state: &AuthState) -> Result<(), String> {
@@ -834,24 +885,20 @@ fn start_foreground_refresh(app: &AppHandle, state: &AuthState) {
                 .store(false, Ordering::Release);
             return;
         }
+        let mut request = current_probe_request(&state);
+        request.scope = auth::AuthProbeScope::Background;
         #[cfg(target_os = "android")]
         let result = start_android_session_probe(
             &app,
             &state,
-            auth::AuthProbeRequest::default(),
+            request,
             false,
             false,
             "Refreshing Cavoti usage",
         );
         #[cfg(not(target_os = "android"))]
-        let result = open_auth_window(
-            &app,
-            &state,
-            auth::AuthProbeRequest::default(),
-            false,
-            "Refreshing Cavoti usage",
-        )
-        .await;
+        let result =
+            open_auth_window(&app, &state, request, false, "Refreshing Cavoti usage").await;
         if let Err(error) = result {
             state
                 .foreground_refresh_started
@@ -963,24 +1010,20 @@ fn start_refresh_scheduler(app: &AppHandle, state: &AuthState) {
             let app = app.clone();
             let state = state.clone();
             tauri::async_runtime::spawn(async move {
+                let mut request = auth::AuthProbeRequest::default();
+                request.scope = auth::AuthProbeScope::Background;
                 #[cfg(target_os = "android")]
                 let _ = start_android_session_probe(
                     &app,
                     &state,
-                    auth::AuthProbeRequest::default(),
+                    request,
                     false,
                     false,
                     "Refreshing Cavoti usage",
                 );
                 #[cfg(not(target_os = "android"))]
-                let _ = open_auth_window(
-                    &app,
-                    &state,
-                    auth::AuthProbeRequest::default(),
-                    false,
-                    "Refreshing Cavoti usage",
-                )
-                .await;
+                let _ =
+                    open_auth_window(&app, &state, request, false, "Refreshing Cavoti usage").await;
             });
         }
     });
@@ -1019,11 +1062,42 @@ fn probe_request(value: Option<&Value>) -> auth::AuthProbeRequest {
             .and_then(Value::as_u64)
             .map_or(1, |page| page.clamp(1, u32::MAX as u64) as u32)
     };
+    let scope = match value
+        .and_then(|value| value.get("scope"))
+        .and_then(Value::as_str)
+    {
+        Some("activity") => auth::AuthProbeScope::Activity,
+        Some("overview") => auth::AuthProbeScope::Overview,
+        Some("usage") => auth::AuthProbeScope::Usage,
+        Some("plans") => auth::AuthProbeScope::Plans,
+        Some("status") => auth::AuthProbeScope::Status,
+        _ => auth::AuthProbeScope::Full,
+    };
     auth::AuthProbeRequest {
         filters,
         usage_page: page("usagePage"),
         error_page: page("errorPage"),
+        scope,
     }
+}
+
+fn probe_request_summary(request: &auth::AuthProbeRequest) -> String {
+    let filters = request.filters.as_object();
+    let text = |name: &str| {
+        filters
+            .and_then(|filters| filters.get(name))
+            .and_then(Value::as_str)
+            .unwrap_or("-")
+    };
+    format!(
+        "scope={} range={}..{} model={} usage_page={} error_page={}",
+        request.scope.name(),
+        text("startDate"),
+        text("endDate"),
+        text("model"),
+        request.usage_page,
+        request.error_page,
+    )
 }
 
 #[cfg(not(target_os = "android"))]
@@ -1309,11 +1383,19 @@ async fn open_auth_window(
             .adapter
             .lock()
             .map_err(|_| "Cavoti auth state is unavailable".to_string())?;
-        let Some(collection_id) = adapter.try_begin_collection_with_request(request) else {
-            eprintln!("[cavoti-auth] collection already active; ignoring duplicate request");
-            return Ok(());
-        };
-        collection_id
+        if show {
+            let Some(collection_id) = adapter.try_begin_collection_with_request(request) else {
+                eprintln!("[cavoti-auth] collection already active; ignoring duplicate request");
+                return Ok(());
+            };
+            collection_id
+        } else {
+            let Some(collection_id) = adapter.try_begin_collection_with_request(request) else {
+                eprintln!("[cavoti-auth] collection already active; skipping hidden probe");
+                return Err("Cavoti session probe is already running".into());
+            };
+            collection_id
+        }
     };
     emit_bridge_state(app, "loading", 0, message)?;
     let login_url: url::Url = "https://cavoti.com/login"
@@ -1475,6 +1557,18 @@ fn publish_auth_collection(
     state: &AuthState,
     payload: AuthCollectionPayload,
 ) -> Result<bool, String> {
+    eprintln!(
+        "[cavoti-auth] result received phase={} complete={} state={} {}",
+        payload.phase,
+        payload.complete,
+        payload.session_state,
+        payload
+            .results
+            .iter()
+            .map(|(name, result)| format!("{name}={}({}b)", result.status, result.text.len()))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
     let event = match state
         .adapter
         .lock()
@@ -1499,17 +1593,53 @@ fn publish_auth_collection(
             .automatic_refresh_suspended
             .store(true, Ordering::Release);
     }
+    let merged_raw = merge_raw_results(state, &raw);
     let (bridge_state, status, message) = raw_results_state(&raw);
-    let normalized_snapshot = if matches!(raw.phase.as_str(), "core" | "enrichment")
-        && raw.session_state == "authenticated"
+    let normalized_snapshot = if matches!(merged_raw.phase.as_str(), "core" | "enrichment")
+        && merged_raw.session_state == "authenticated"
     {
-        let Some(snapshot) = normalize_core_snapshot(&raw) else {
+        let Some(snapshot) = normalize_core_snapshot(&merged_raw) else {
             if let Ok(mut adapter) = state.adapter.lock() {
                 adapter.abort(&raw.collection_id);
             }
             emit_bridge_state(&app, "error", 0, "Cavoti returned malformed usage data")?;
             return Err("Cavoti core snapshot could not be normalized".into());
         };
+        eprintln!(
+            "[cavoti-snapshot] normalized usage_logs={} usage_total={} usage_page={} errors={} error_total={} error_page={}",
+            snapshot
+                .get("usageLogs")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len),
+            snapshot
+                .get("usagePageInfo")
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("total"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0),
+            snapshot
+                .get("usagePageInfo")
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("page"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0),
+            snapshot
+                .get("errors")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len),
+            snapshot
+                .get("errorPageInfo")
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("total"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0),
+            snapshot
+                .get("errorPageInfo")
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("page"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0),
+        );
         Some(snapshot)
     } else {
         None
@@ -1524,6 +1654,7 @@ fn publish_auth_collection(
                 "protocol": 1,
                 "type": "snapshot",
                 "complete": bridge_state == "live",
+                "scope": raw.scope.name(),
                 "snapshot": snapshot,
             }),
         )?;
@@ -1867,6 +1998,7 @@ async fn host_command(
         }
         "connect" => {
             let request = probe_request(message.value.as_ref());
+            remember_probe_request(state.inner(), &request);
             #[cfg(target_os = "android")]
             {
                 start_android_session_probe(
@@ -1892,6 +2024,11 @@ async fn host_command(
         }
         "refresh" => {
             let request = probe_request(message.value.as_ref());
+            remember_probe_request(state.inner(), &request);
+            eprintln!(
+                "[cavoti-auth] refresh command {}",
+                probe_request_summary(&request)
+            );
             #[cfg(target_os = "android")]
             {
                 start_android_session_probe(
@@ -1913,6 +2050,29 @@ async fn host_command(
                     "Refreshing Cavoti usage",
                 )
                 .await
+            }
+        }
+        "view" => {
+            let request = probe_request(message.value.as_ref());
+            remember_probe_request(state.inner(), &request);
+            eprintln!(
+                "[cavoti-auth] view scope request {}",
+                probe_request_summary(&request)
+            );
+            #[cfg(target_os = "android")]
+            {
+                start_android_session_probe(
+                    &app,
+                    state.inner(),
+                    request,
+                    false,
+                    false,
+                    "Loading Cavoti view",
+                )
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                open_auth_window(&app, state.inner(), request, false, "Loading Cavoti view").await
             }
         }
         "setting" => apply_setting(&app, state.inner(), message.value.as_ref()),

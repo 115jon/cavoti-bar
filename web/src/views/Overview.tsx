@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
   ArrowsClockwiseIcon as ArrowsClockwise,
@@ -418,7 +418,7 @@ function CompactOverview({
   );
 }
 
-export function Overview({
+export const Overview = memo(function Overview({
   snapshot,
   onNavigate,
   onConnect,
@@ -466,4 +466,4 @@ export function Overview({
       showShortcuts={showShortcuts}
     />
   );
-}
+});

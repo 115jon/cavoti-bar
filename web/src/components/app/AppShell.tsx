@@ -7,8 +7,10 @@ import {
   GearSixIcon as GearSix,
   HouseIcon as House,
   InfoIcon as Info,
+  KeyIcon as Key,
   MinusIcon as Minus,
   PulseIcon as Pulse,
+  TagIcon as Tag,
   StackIcon as Stack,
   XIcon as X,
 } from "@phosphor-icons/react";
@@ -46,6 +48,8 @@ export const views: Array<{
   { id: "overview", label: "Overview", icon: House },
   { id: "usage", label: "Usage", icon: ChartBar },
   { id: "plans", label: "Plans", icon: Stack },
+  { id: "pricing", label: "Pricing", icon: Tag },
+  { id: "keys", label: "API keys", icon: Key },
   { id: "status", label: "Status", icon: Pulse },
   { id: "settings", label: "Settings", icon: GearSix },
 ];
@@ -242,6 +246,26 @@ export function AppShell({
                     </DrawerDescription>
                   </DrawerHeader>
                   <div className="flex flex-col gap-1">
+                    <DrawerClose asChild>
+                      <Button
+                        variant={view === "pricing" ? "secondary" : "ghost"}
+                        className="h-11 justify-start gap-3 px-3"
+                        onClick={() => onViewChange("pricing")}
+                      >
+                        <Tag weight={view === "pricing" ? "fill" : "regular"} />
+                        Pricing
+                      </Button>
+                    </DrawerClose>
+                    <DrawerClose asChild>
+                      <Button
+                        variant={view === "keys" ? "secondary" : "ghost"}
+                        className="h-11 justify-start gap-3 px-3"
+                        onClick={() => onViewChange("keys")}
+                      >
+                        <Key weight={view === "keys" ? "fill" : "regular"} />
+                        API keys
+                      </Button>
+                    </DrawerClose>
                     <DrawerClose asChild>
                       <Button
                         variant={view === "settings" ? "secondary" : "ghost"}
