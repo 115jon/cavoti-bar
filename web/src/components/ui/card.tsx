@@ -26,9 +26,9 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function CardTitle({ as: Tag = "h2", className, ...props }: CardTitleProps) {
   return (
-    <div
+    <Tag
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
@@ -38,6 +38,10 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
     />
   );
 }
+
+type CardTitleProps = React.HTMLAttributes<HTMLHeadingElement> & {
+  as?: "h1" | "h2" | "h3" | "h4";
+};
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (

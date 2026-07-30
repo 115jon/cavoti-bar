@@ -1,4 +1,3 @@
-import { Badge } from "../components/app/shared";
 import {
   Card,
   CardContent,
@@ -10,10 +9,7 @@ import { Separator } from "../components/ui/separator";
 
 export function About() {
   return (
-    <div className="flex w-full max-w-370 flex-col gap-6">
-      <div className="flex justify-end">
-        <Badge variant="outline">Baseline</Badge>
-      </div>
+    <div className="flex w-full max-w-370 flex-col gap-4">
       <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
         <CardHeader className="flex items-center gap-3 p-0">
           <img

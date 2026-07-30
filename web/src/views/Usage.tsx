@@ -744,6 +744,25 @@ function TrendTooltip({
   );
 }
 
+export function trendChartData(rows: SnapshotEnvelope["dailyTrend"]) {
+  const hasBreakdown = rows.some((row) =>
+    [
+      row.inputTokens,
+      row.outputTokens,
+      row.cacheCreationTokens,
+      row.cacheReadTokens,
+    ].some((value) => value !== undefined),
+  );
+  return rows.map((row) => ({
+    ...row,
+    inputTokens: row.inputTokens ?? 0,
+    outputTokens: row.outputTokens ?? 0,
+    cacheCreationTokens: row.cacheCreationTokens ?? 0,
+    cacheReadTokens: row.cacheReadTokens ?? 0,
+    totalTokens: hasBreakdown ? undefined : row.tokens,
+  }));
+}
+
 function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
   const compact = useCompactTiles();
   if (!rows.length)
@@ -754,101 +773,133 @@ function TrendChart({ rows }: { rows: SnapshotEnvelope["dailyTrend"] }) {
         compact
       />
     );
-  const data = rows.map((row) => ({
-    ...row,
-    inputTokens: row.inputTokens ?? 0,
-    outputTokens: row.outputTokens ?? 0,
-    cacheCreationTokens: row.cacheCreationTokens ?? 0,
-    cacheReadTokens: row.cacheReadTokens ?? 0,
-  }));
+  const data = trendChartData(rows);
+  const aggregateOnly = data.some((row) => row.totalTokens !== undefined);
+  const series = aggregateOnly
+    ? [{ label: "Total tokens", color: "var(--chart-1)" }]
+    : compact
+      ? [
+          { label: "Input tokens", color: "var(--chart-1)" },
+          { label: "Output tokens", color: "var(--chart-2)" },
+        ]
+      : [
+          { label: "Input tokens", color: "var(--chart-1)" },
+          { label: "Output tokens", color: "var(--chart-2)" },
+          { label: "Cache created", color: "var(--chart-3)" },
+          { label: "Cache read", color: "var(--chart-4)" },
+        ];
   return (
-    <div
-      className="h-56 min-w-0"
-      role="img"
-      aria-label="Daily token usage trend"
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={data}
-          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-        >
-          <CartesianGrid
-            stroke="var(--line)"
-            strokeDasharray="3 3"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            minTickGap={24}
-          />
-          <YAxis
-            width={44}
-            tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(value) => tokens(Number(value))}
-          />
-          <Tooltip
-            wrapperStyle={{ zIndex: 50 }}
-            content={(props) => (
-              <TrendTooltip
-                active={props.active}
-                payload={
-                  props.payload as unknown as ReadonlyArray<{
-                    name?: string;
-                    value?: number;
-                    color?: string;
-                  }>
-                }
-                label={String(props.label ?? "")}
+    <div className="min-w-0" role="img" aria-label="Daily token usage trend">
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-(--ink-muted)">
+        {series.map(({ label, color }) => (
+          <span className="inline-flex items-center gap-1" key={label}>
+            <span
+              aria-hidden="true"
+              className="size-2 rounded-full"
+              style={{ backgroundColor: color }}
+            />
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={data}
+            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid
+              stroke="var(--line)"
+              strokeDasharray="3 3"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              minTickGap={24}
+            />
+            <YAxis
+              width={44}
+              tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => tokens(Number(value))}
+            />
+            <Tooltip
+              wrapperStyle={{ zIndex: 50 }}
+              content={(props) => (
+                <TrendTooltip
+                  active={props.active}
+                  payload={
+                    props.payload as unknown as ReadonlyArray<{
+                      name?: string;
+                      value?: number;
+                      color?: string;
+                    }>
+                  }
+                  label={String(props.label ?? "")}
+                />
+              )}
+            />
+            {aggregateOnly ? (
+              <Line
+                type="monotone"
+                dataKey="totalTokens"
+                name="Total tokens"
+                stroke="var(--chart-1)"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 3 }}
               />
+            ) : (
+              <>
+                <Line
+                  type="monotone"
+                  dataKey="inputTokens"
+                  name="Input tokens"
+                  stroke="var(--chart-1)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="outputTokens"
+                  name="Output tokens"
+                  stroke="var(--chart-2)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                />
+              </>
             )}
-          />
-          <Line
-            type="monotone"
-            dataKey="inputTokens"
-            name="inputTokens"
-            stroke="var(--chart-1)"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 3 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="outputTokens"
-            name="outputTokens"
-            stroke="var(--chart-2)"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 3 }}
-          />
-          {compact ? null : (
-            <Line
-              type="monotone"
-              dataKey="cacheCreationTokens"
-              name="cacheCreationTokens"
-              stroke="var(--chart-3)"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 3 }}
-            />
-          )}
-          {compact ? null : (
-            <Line
-              type="monotone"
-              dataKey="cacheReadTokens"
-              name="cacheReadTokens"
-              stroke="var(--chart-4)"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 3 }}
-            />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
+            {!aggregateOnly && !compact ? (
+              <Line
+                type="monotone"
+                dataKey="cacheCreationTokens"
+                name="Cache created"
+                stroke="var(--chart-3)"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 3 }}
+              />
+            ) : null}
+            {!aggregateOnly && !compact ? (
+              <Line
+                type="monotone"
+                dataKey="cacheReadTokens"
+                name="Cache read"
+                stroke="var(--chart-4)"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 3 }}
+              />
+            ) : null}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -1248,19 +1299,6 @@ function UsageWide({
 }) {
   return (
     <div className="flex w-full max-w-370 flex-col gap-6">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-            Usage dashboard
-          </span>
-          <h1 className="m-0 text-3xl font-semibold leading-9 tracking-tight">
-            Usage
-          </h1>
-        </div>
-        <Badge variant="outline">
-          {filters.startDate} to {filters.endDate}
-        </Badge>
-      </div>
       <UsageFilters
         snapshot={snapshot}
         filters={filters}
@@ -1355,17 +1393,6 @@ export function Usage({ snapshot }: { snapshot: SnapshotEnvelope }) {
     );
   return (
     <div className="flex min-h-full flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-            Usage dashboard
-          </span>
-          <h1>Usage</h1>
-        </div>
-        <Badge variant="outline">
-          {filters.startDate} to {filters.endDate}
-        </Badge>
-      </div>
       <UsageFilters
         snapshot={snapshot}
         filters={filters}

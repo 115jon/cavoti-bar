@@ -1,9 +1,28 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Usage } from "./Usage";
+import { trendChartData, Usage } from "./Usage";
 import { liveSnapshot } from "../test/fixtures";
 
 describe("Usage", () => {
+  it("preserves aggregate token totals when trend breakdowns are absent", () => {
+    expect(
+      trendChartData([
+        {
+          date: "2026-07-24",
+          requests: 4,
+          tokens: 128,
+          actualCost: 0.12,
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        totalTokens: 128,
+        inputTokens: 0,
+        outputTokens: 0,
+      }),
+    ]);
+  });
+
   it("switches model metrics and activity tabs for rich usage data", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,

@@ -20,7 +20,7 @@ export const tokens = (value: number) =>
         ? `${(value / 1e3).toFixed(1).replace(/\.0$/, "")}K`
         : integer(value);
 export const date = (value: string | null) =>
-  value
+  value && !Number.isNaN(Date.parse(value))
     ? new Intl.DateTimeFormat("en-US", {
         month: "short",
         day: "numeric",
@@ -129,4 +129,20 @@ export function monitorVariant(
     : status === "degraded" || status === "outage"
       ? "warning"
       : "outline";
+}
+
+export function planVariant(
+  status: string,
+  quotaState: "available" | "limited",
+): "success" | "warning" | "outline" {
+  const normalized = status.toLowerCase();
+  if (
+    quotaState === "limited" ||
+    ["limited", "degraded", "expired"].includes(normalized)
+  ) {
+    return "warning";
+  }
+  return ["active", "available", "healthy"].includes(normalized)
+    ? "success"
+    : "outline";
 }

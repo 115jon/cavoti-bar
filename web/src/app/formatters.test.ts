@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateRangeForPreset, money } from "./formatters";
+import { date, dateRangeForPreset, money, planVariant } from "./formatters";
 
 describe("dateRangeForPreset", () => {
   const now = new Date(2026, 6, 24, 15, 30);
@@ -36,5 +36,17 @@ describe("money", () => {
   it("keeps sub-cent usage costs visible", () => {
     expect(money(0.000123)).toBe("$0.000123");
     expect(money(0)).toBe("$0.00");
+  });
+});
+
+describe("display state formatters", () => {
+  it("uses a safe fallback for invalid dates", () => {
+    expect(date("not-a-date")).toBe("Not provided");
+  });
+
+  it("does not present unknown plan states as healthy", () => {
+    expect(planVariant("unknown", "available")).toBe("outline");
+    expect(planVariant("active", "available")).toBe("success");
+    expect(planVariant("active", "limited")).toBe("warning");
   });
 });

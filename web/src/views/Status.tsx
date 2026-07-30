@@ -1,9 +1,7 @@
-import { useState } from "react";
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
   CheckCircleIcon as CheckCircle,
   InfoIcon as Info,
-  PulseIcon as Pulse,
   WarningCircleIcon as WarningCircle,
 } from "@phosphor-icons/react";
 import type { SnapshotEnvelope } from "../domain/snapshot";
@@ -13,16 +11,10 @@ import {
   Badge,
   Empty,
   SignalNote,
-  TilePager,
   useCompactTiles,
 } from "../components/app/shared";
 import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Card, CardTitle } from "../components/ui/card";
 import {
   Table,
   TableBody,
@@ -34,10 +26,65 @@ import {
 
 function MonitorRows({
   monitors,
+  compact,
 }: {
   monitors: SnapshotEnvelope["channelMonitors"];
+  compact: boolean;
 }) {
-  return monitors.length ? (
+  if (!monitors.length) return null;
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-2">
+        {monitors.map((monitor) => (
+          <article
+            className="rounded-lg border border-(--line) bg-white/70 p-3"
+            key={`${monitor.provider}-${monitor.name}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <strong className="block truncate text-sm font-semibold">
+                  {monitor.name}
+                </strong>
+                <small className="mt-0.5 block truncate text-[10px] text-(--ink-muted)">
+                  {monitor.provider}
+                  {monitor.model ? ` | ${monitor.model}` : ""}
+                </small>
+              </div>
+              <Badge
+                className="capitalize"
+                variant={monitorVariant(monitor.status)}
+              >
+                {monitor.status}
+              </Badge>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="block text-[10px] text-(--ink-muted)">
+                  Latency
+                </span>
+                <strong>
+                  {monitor.latencyMs === null
+                    ? "No latency"
+                    : `${Math.round(monitor.latencyMs)} ms`}
+                </strong>
+              </div>
+              <div className="text-right">
+                <span className="block text-[10px] text-(--ink-muted)">
+                  Availability
+                </span>
+                <strong>
+                  {monitor.availability7d === null
+                    ? "-"
+                    : `${monitor.availability7d.toFixed(1)}% / 7d`}
+                </strong>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
+  return (
     <Table className="w-full border-t border-(--line) text-[10px]">
       <TableHeader>
         <TableRow>
@@ -58,7 +105,10 @@ function MonitorRows({
               </small>
             </TableCell>
             <TableCell>
-              <Badge variant={monitorVariant(monitor.status)}>
+              <Badge
+                className="capitalize"
+                variant={monitorVariant(monitor.status)}
+              >
                 {monitor.status}
               </Badge>
             </TableCell>
@@ -76,12 +126,6 @@ function MonitorRows({
         ))}
       </TableBody>
     </Table>
-  ) : (
-    <Empty
-      title="No channel monitors"
-      message="Cavoti did not return channel health data."
-      compact
-    />
   );
 }
 
@@ -117,144 +161,96 @@ export function Status({
   onConnect: () => void;
   onOpenStatus?: () => void;
 }) {
+  const compact = useCompactTiles();
   const monitors = snapshot?.channelMonitors ?? [];
   const healthy =
     monitors.length > 0 &&
     monitors.every((monitor) => monitor.status === "operational");
-  const [page, setPage] = useState(0);
-  const compact = useCompactTiles();
-  const pageCount = monitors.length + 1;
-  const safePage = Math.min(page, pageCount - 1);
-  if (!compact)
-    return (
-      <div className="flex w-full max-w-370 flex-col gap-6">
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={onOpenStatus}>
-            Open monitor <ArrowSquareOut data-icon="inline-end" />
-          </Button>
-        </div>
-        <Card className="flex items-center gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-          <div className="grid size-10.5 shrink-0 place-items-center rounded-full bg-(--good-soft) text-[22px] text-(--good)">
-            {state === "live" && healthy ? (
-              <CheckCircle weight="fill" />
-            ) : (
-              <WarningCircle weight="fill" />
-            )}
-          </div>
-          <div>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-              Cavoti channels
-            </span>
-            <CardTitle className="m-0 text-sm font-bold leading-4.5">
-              {healthy
-                ? "All channels operational"
-                : "Channel attention needed"}
-            </CardTitle>
-            <p className="mt-1 max-w-60 text-[10px] leading-3.5 text-(--ink-muted)">
-              {monitors.length} channels reported. Last received{" "}
-              {date(snapshot?.capturedAt ?? null)}.
-            </p>
-          </div>
-        </Card>
-        <MonitorRows monitors={monitors} />
-      </div>
-    );
+  const channelState =
+    state !== "live"
+      ? "no-live"
+      : monitors.length === 0
+        ? "no-data"
+        : healthy
+          ? "healthy"
+          : "attention";
+  const channelTitle =
+    channelState === "healthy"
+      ? "All channels operational"
+      : channelState === "attention"
+        ? "Channel attention needed"
+        : channelState === "no-data"
+          ? "No channel data"
+          : "No live snapshot yet";
+  const channelMessage =
+    channelState === "no-live"
+      ? "The monitor receives sanitized aggregate data from the authenticated browser profile."
+      : channelState === "no-data"
+        ? "Cavoti did not return channel health data."
+        : `${monitors.length} channels reported. Last received ${date(snapshot?.capturedAt ?? null)}.`;
+  const accountGood = ["active", "operational", "healthy"].includes(
+    snapshot?.account.status.toLowerCase() ?? "",
+  );
+
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex min-h-0 flex-col gap-3">
-        <div className="flex items-center justify-end gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onOpenStatus}>
-              Open monitor <ArrowSquareOut data-icon="inline-end" />
-            </Button>
-            <TilePager
-              page={safePage}
-              count={pageCount}
-              onChange={setPage}
-              label="Status screen"
-            />
-          </div>
-        </div>
-        {safePage === 0 ? (
-          <>
-            <Card className="flex items-center gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-              <div className="grid size-10.5 shrink-0 place-items-center rounded-full bg-(--good-soft) text-[22px] text-(--good)">
-                {state === "live" && healthy ? (
-                  <CheckCircle weight="fill" />
-                ) : (
-                  <WarningCircle weight="fill" />
-                )}
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                  Cavoti channels
-                </span>
-                <CardTitle className="m-0 text-sm font-bold leading-4.5">
-                  {state === "live"
-                    ? healthy
-                      ? "All channels operational"
-                      : "Channel attention needed"
-                    : "No live snapshot yet"}
-                </CardTitle>
-                <p className="mt-1 text-[10px] leading-3.5 text-(--ink-muted)">
-                  {state === "live"
-                    ? `${monitors.length} channels reported. Last received ${date(snapshot?.capturedAt ?? null)}.`
-                    : "The overlay only receives sanitized aggregate JSON from the authenticated browser profile."}
-                </p>
-              </div>
-            </Card>
-            {snapshot ? (
-              <Card className="gap-0 rounded-xl border border-(--line) bg-white/75 px-3 py-1 shadow-sm">
-                <CheckRow
-                  label="Account record"
-                  value={snapshot.account.status}
-                  good
-                />
-                <CheckRow
-                  label="Plan records"
-                  value={`${snapshot.subscriptions.length} returned`}
-                  good={snapshot.subscriptions.length > 0}
-                />
-                <CheckRow
-                  label="Usage aggregates"
-                  value={`${snapshot.models.length} models | ${snapshot.stats.endpoints.length} endpoints`}
-                  good={snapshot.models.length > 0}
-                />
-              </Card>
-            ) : (
-              <Empty
-                title="Live session required"
-                message="Sign in through the Cavoti connection window to populate this view."
-                onAction={onConnect}
-              />
-            )}
-          </>
-        ) : (
-          <Card className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
-            <CardHeader className="mb-0 flex items-start justify-between gap-3 p-0">
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-(--ink-faint)">
-                  Channel {safePage}
-                </span>
-                <CardTitle className="text-lg font-semibold leading-7">
-                  {monitors[safePage - 1]?.name ?? "Unknown channel"}
-                </CardTitle>
-              </div>
-              <Pulse className="size-5 text-accent" />
-            </CardHeader>
-            <CardContent className="min-w-0 flex-1 p-0">
-              <MonitorRows monitors={monitors.slice(safePage - 1, safePage)} />
-            </CardContent>
-          </Card>
-        )}
-        {snapshot?.announcements.length ? (
-          <SignalNote
-            icon={<Info />}
-            title={snapshot.announcements[0].title}
-            message={snapshot.announcements[0].message}
-          />
-        ) : null}
+    <div className="flex w-full max-w-370 flex-col gap-4">
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onOpenStatus}>
+          Open monitor <ArrowSquareOut data-icon="inline-end" />
+        </Button>
       </div>
+      <Card className="flex items-center gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
+        <div
+          className={`grid size-10.5 shrink-0 place-items-center rounded-full text-[22px] ${channelState === "healthy" ? "bg-(--good-soft) text-(--good)" : "bg-(--warning-soft) text-(--warning)"}`}
+        >
+          {channelState === "healthy" ? (
+            <CheckCircle weight="fill" />
+          ) : (
+            <WarningCircle weight="fill" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <CardTitle className="m-0 text-sm font-semibold leading-4.5">
+            {channelTitle}
+          </CardTitle>
+          <p className="mt-1 max-w-80 text-[10px] leading-3.5 text-(--ink-muted)">
+            {channelMessage}
+          </p>
+        </div>
+      </Card>
+      {snapshot ? (
+        <Card className="gap-0 rounded-xl border border-(--line) bg-white/75 px-3 py-1 shadow-sm">
+          <CheckRow
+            label="Account record"
+            value={snapshot.account.status}
+            good={accountGood}
+          />
+          <CheckRow
+            label="Plan records"
+            value={`${snapshot.subscriptions.length} returned`}
+            good={snapshot.subscriptions.length > 0}
+          />
+          <CheckRow
+            label="Usage aggregates"
+            value={`${snapshot.models.length} models | ${snapshot.stats.endpoints.length} endpoints`}
+            good={snapshot.models.length > 0}
+          />
+        </Card>
+      ) : (
+        <Empty
+          title="Live session required"
+          message="Sign in through the Cavoti connection window to populate this view."
+          onAction={onConnect}
+        />
+      )}
+      <MonitorRows monitors={monitors} compact={compact} />
+      {snapshot?.announcements.length ? (
+        <SignalNote
+          icon={<Info />}
+          title={snapshot.announcements[0].title}
+          message={snapshot.announcements[0].message}
+        />
+      ) : null}
     </div>
   );
 }

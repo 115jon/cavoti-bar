@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { KeyIcon as Key } from "@phosphor-icons/react";
-import { Badge } from "../components/app/shared";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import {
@@ -233,15 +232,6 @@ export function Settings({
 }) {
   return (
     <div className="flex w-full max-w-370 flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <span className="block text-xs font-medium text-(--ink-muted)">
-            App preferences
-          </span>
-          <h1 className="m-0 text-2xl font-semibold leading-8">Settings</h1>
-        </div>
-        <Badge variant="outline">Local</Badge>
-      </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <Card className="gap-3 rounded-xl border border-(--line) bg-white/75 p-4 shadow-sm">
           <CardHeader className="mb-0 flex-col items-start gap-1 p-0">

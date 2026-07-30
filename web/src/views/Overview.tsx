@@ -11,7 +11,7 @@ import {
   XIcon as X,
 } from "@phosphor-icons/react";
 import type { SnapshotEnvelope, Subscription } from "../domain/snapshot";
-import { date, money, tokens } from "../app/formatters";
+import { date, money, planVariant, tokens } from "../app/formatters";
 import type { ActionProps, View } from "../app/types";
 import {
   Badge,
@@ -193,8 +193,8 @@ function DesktopPlanCard({
       className={`min-w-0 gap-0 cursor-pointer rounded-xl border border-(--line) bg-white/75 p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-(--accent-soft-strong) hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
         selected ? "border-accent bg-white" : ""
       } ${plan.quotaState === "limited" ? "border-(--warning) bg-(--warning-soft)" : ""}`}
-      role="tab"
-      aria-selected={selected}
+      role="button"
+      aria-pressed={selected}
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
@@ -216,7 +216,7 @@ function DesktopPlanCard({
         <CardAction className="self-start">
           <Badge
             className="capitalize"
-            variant={plan.quotaState === "limited" ? "warning" : "success"}
+            variant={planVariant(plan.status, plan.quotaState)}
           >
             {plan.status}
           </Badge>
@@ -292,11 +292,7 @@ function DesktopOverview({
               {snapshot.subscriptions.length} total
             </Badge>
           </div>
-          <div
-            className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]"
-            role="tablist"
-            aria-label="All plans"
-          >
+          <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]">
             {snapshot.subscriptions.map((item) => (
               <DesktopPlanCard
                 key={item.name}
@@ -354,18 +350,17 @@ function CompactOverview({
         showSeconds={showSeconds}
         onRefresh={refresh}
       />
-      <div className="flex items-center justify-between gap-3 px-1">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold leading-8 tracking-tight">
-            {plan?.name ?? "No active plan"}
-          </h1>
-        </div>
-        {plan ? (
-          <Badge variant={plan.status === "limited" ? "warning" : "success"}>
+      {snapshot.subscriptions.length < 2 && plan ? (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 className="m-0 text-xl font-semibold leading-7">{plan.name}</h2>
+          <Badge
+            className="capitalize"
+            variant={planVariant(plan.status, plan.quotaState)}
+          >
             {plan.status}
           </Badge>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       <PlanTabs
         plans={snapshot.subscriptions}
         selected={plan}
@@ -380,7 +375,7 @@ function CompactOverview({
       ) : null}
       {plan ? (
         <section className="rounded-lg border border-(--line) bg-white/70 px-3 py-4 shadow-sm">
-          <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="mb-3">
             <div>
               <span className="block text-xs font-medium text-(--ink-muted)">
                 Quota overview
@@ -389,12 +384,6 @@ function CompactOverview({
                 {plan.name}
               </h2>
             </div>
-            <Badge
-              className="capitalize"
-              variant={plan.quotaState === "limited" ? "warning" : "success"}
-            >
-              {plan.status}
-            </Badge>
           </div>
           <div className="grid grid-cols-1 gap-4">
             <UsageMeter label="Daily" window={plan.usage.daily} />

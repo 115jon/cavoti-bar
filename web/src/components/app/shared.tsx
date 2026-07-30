@@ -30,7 +30,7 @@ import {
 import { Progress } from "../ui/progress";
 import { Skeleton } from "../ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
-import { usageAmount, resetLabel } from "../../app/formatters";
+import { planVariant, resetLabel, usageAmount } from "../../app/formatters";
 import type { BridgeState } from "../../app/types";
 
 export function Badge(props: ComponentProps<typeof BadgePrimitive>) {
@@ -162,6 +162,7 @@ export function PlanTabs({
   selected: Subscription | undefined;
   onSelect: (name: string) => void;
 }) {
+  const compact = useCompactTiles();
   if (plans.length < 2) return null;
   return (
     <Tabs
@@ -170,7 +171,13 @@ export function PlanTabs({
       className="flex h-auto w-full min-w-0 rounded-lg border border-(--line) bg-white/45 p-1"
       aria-label="Plans"
     >
-      <TabsList className="grid h-auto w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-1 bg-transparent p-0">
+      <TabsList
+        className={
+          compact
+            ? "grid h-auto w-full min-w-0 grid-cols-2 gap-1 bg-transparent p-0"
+            : "grid h-auto w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-1 bg-transparent p-0"
+        }
+      >
         {plans.map((plan) => {
           const windows = [
             { label: "5 hour", value: plan.usage.fiveHour },
@@ -182,7 +189,7 @@ export function PlanTabs({
               type="button"
               value={plan.name}
               key={plan.name}
-              className={`min-w-0 w-full flex-none grid min-h-20 grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-2 gap-y-0 overflow-hidden rounded-md px-2 py-2 text-left ${
+              className={`${compact ? "min-w-0 w-full" : "min-w-0 w-full flex-none"} grid min-h-20 grid-cols-[1rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] items-center justify-items-start gap-x-2 gap-y-0 overflow-hidden rounded-md px-2 py-2 text-left ${
                 plan.quotaState === "limited"
                   ? "border-[color-mix(in_srgb,var(--warning)_36%,transparent)] bg-(--warning-soft)"
                   : ""
@@ -199,9 +206,7 @@ export function PlanTabs({
                 </span>
                 <Badge
                   className="shrink-0 text-[10px] capitalize"
-                  variant={
-                    plan.quotaState === "limited" ? "warning" : "success"
-                  }
+                  variant={planVariant(plan.status, plan.quotaState)}
                 >
                   {plan.status}
                 </Badge>
@@ -274,7 +279,7 @@ export function UsageMeter({
         : tone;
   const urgencyClass =
     urgency === "exhausted"
-      ? "rounded-md border border-[color-mix(in_srgb,var(--bad)_28%,transparent)] bg-[var(--bad-soft)] p-2"
+      ? "rounded-md border border-(--bad) bg-(--bad-soft) p-2"
       : "";
   const valueClass =
     urgency === "warning"
@@ -296,14 +301,17 @@ export function UsageMeter({
       </div>
       <Progress value={percent} tone={progressTone} />
       <div className="mt-1 grid grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)] items-start gap-2 text-[10px] leading-3.5 text-(--ink-muted) [&_span]:min-w-0 [&_span]:wrap-anywhere [&_span:last-child]:text-right">
-        <span>
-          {configured
-            ? `${usageAmount(window.used, window.unit)} of ${usageAmount(window.limit, window.unit)}`
-            : "No quota configured"}
-        </span>
-        <span>
-          {configured ? resetLabel(window.resetAt) : "No quota configured"}
-        </span>
+        {configured ? (
+          <>
+            <span>
+              {usageAmount(window.used, window.unit)} of{" "}
+              {usageAmount(window.limit, window.unit)}
+            </span>
+            <span>{resetLabel(window.resetAt)}</span>
+          </>
+        ) : (
+          <span className="col-span-2 text-center">No quota configured</span>
+        )}
       </div>
     </div>
   );
