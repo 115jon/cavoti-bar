@@ -776,6 +776,8 @@ test("Windows packaging validates the exact draft tag before exposing signing se
   assert.match(workflow, /gh release upload[\s\S]*--clobber/);
   assert.match(workflow, /Cavoti Bar Setup\.exe/);
   assert.match(workflow, /Cavoti Bar Setup\.exe\.sig/);
+  assert.match(workflow, /\$installer#Cavoti Bar Setup\.exe/);
+  assert.match(workflow, /\$signature#Cavoti Bar Setup\.exe\.sig/);
   assert.match(workflow, /latest\.json/);
   assert.match(workflow, /gh workflow run android-release\.yml/);
   assert.match(
@@ -825,6 +827,7 @@ test("Android packaging validates the exact draft tag, uploads idempotently, and
     /name: cavoti-bar-android-\$\{\{ inputs\.release_tag \}\}/,
   );
   assert.match(workflow, /gh release upload[\s\S]*--clobber/);
+  assert.match(workflow, /\$\(\$apk\[0\]\.FullName\)#Cavoti Bar\.apk/);
   for (const asset of [
     "Cavoti Bar Setup.exe",
     "Cavoti Bar Setup.exe.sig",

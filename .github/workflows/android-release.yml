@@ -164,7 +164,9 @@ jobs:
         run: |
           $apk = @(Get-ChildItem -LiteralPath "src-tauri/gen/android/app/build/outputs/apk" -Recurse -Filter "Cavoti Bar.apk" -File)
           if ($apk.Count -ne 1) { throw "Expected exactly one branded release APK." }
-          gh release upload $env:RELEASE_TAG $apk[0].FullName --clobber --repo $env:GITHUB_REPOSITORY
+          gh release upload $env:RELEASE_TAG `
+            "$($apk[0].FullName)#Cavoti Bar.apk" `
+            --clobber --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw "Android release asset upload failed." }
 
           $assetNames = @(gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)

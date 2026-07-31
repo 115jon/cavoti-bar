@@ -151,7 +151,10 @@ jobs:
           }
           $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $latestPath -NoNewline
 
-          gh release upload $env:RELEASE_TAG $installer $signature $latestPath --clobber --repo $env:GITHUB_REPOSITORY
+          gh release upload $env:RELEASE_TAG `
+            "$installer#Cavoti Bar Setup.exe" `
+            "$signature#Cavoti Bar Setup.exe.sig" `
+            $latestPath --clobber --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw "Windows release asset upload failed." }
           gh workflow run android-release.yml --repo $env:GITHUB_REPOSITORY --ref main --field release_tag=$env:RELEASE_TAG
           if ($LASTEXITCODE -ne 0) { throw "Android release workflow dispatch failed." }
