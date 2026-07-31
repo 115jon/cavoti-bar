@@ -93,6 +93,31 @@ if (-not (Test-Path -LiteralPath $keystorePath -PathType Leaf)) {
     throw "Android keystore was not found at $keystorePath."
 }
 
+$configPath = Join-Path $tauriRoot "src-tauri\tauri.conf.json"
+$config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+$expectedVersionName = [string]$config.version
+if ($expectedVersionName -notmatch '^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.(?<patch>[0-9]+)$') {
+    throw "tauri.conf.json version must be a semantic MAJOR.MINOR.PATCH version."
+}
+$major = [long]$Matches.major
+$minor = [long]$Matches.minor
+$patch = [long]$Matches.patch
+if ($minor -ge 1000 -or $patch -ge 1000) {
+    throw "Android semver minor and patch components must each be less than 1000 to produce a unique versionCode."
+}
+$derivedVersionCode = ($major * 1000000) + ($minor * 1000) + $patch
+$androidConfig = $config.bundle.android
+$hasExplicitVersionCode = $null -ne $androidConfig -and $androidConfig.PSObject.Properties.Name -contains "versionCode"
+if ($hasExplicitVersionCode) {
+    $expectedVersionCode = [long]$androidConfig.versionCode
+} else {
+    # Keep every automated release above the legacy 0.1.0 APK's versionCode 1001.
+    $expectedVersionCode = $derivedVersionCode + 1
+}
+if ($expectedVersionCode -le 0 -or $expectedVersionCode -gt 2100000000) {
+    throw "Android versionCode must be greater than zero and no greater than 2100000000."
+}
+
 if (-not (Test-Path -LiteralPath $androidRoot -PathType Container)) {
     Invoke-TauriBun -Arguments @("run", "tauri", "android", "init", "--ci")
 }
@@ -119,7 +144,16 @@ if (Test-Path -LiteralPath $apkOutputDirectory -PathType Container) {
     Remove-Item -LiteralPath $apkOutputDirectory -Recurse -Force
 }
 New-Item -ItemType Directory -Path $apkOutputDirectory -Force | Out-Null
-Invoke-TauriBun -Arguments @("run", "tauri", "android", "build", "--apk")
+$buildArguments = @("run", "tauri", "android", "build", "--apk")
+if (-not $hasExplicitVersionCode) {
+    $versionOverride = [ordered]@{
+        bundle = [ordered]@{
+            android = [ordered]@{ versionCode = $expectedVersionCode }
+        }
+    } | ConvertTo-Json -Depth 4 -Compress
+    $buildArguments += @("--config", $versionOverride)
+}
+Invoke-TauriBun -Arguments $buildArguments
 
 $apks = @(Get-ChildItem -LiteralPath $apkOutputDirectory -Recurse -Filter "*.apk" -File |
     Where-Object { $_.Name -notmatch "unsigned" -and $_.FullName -match "release" } |
@@ -136,11 +170,19 @@ if ($LASTEXITCODE -ne 0 -or ($signatureOutput -join "`n") -notmatch "Verified us
     throw "apksigner did not verify the APK with APK Signature Scheme v2."
 }
 $badging = & $aapt dump badging $apk.FullName
-$config = Get-Content -Raw -LiteralPath (Join-Path $tauriRoot "src-tauri\tauri.conf.json") | ConvertFrom-Json
-$expectedVersionCode = [int]$config.bundle.android.versionCode
-if ($expectedVersionCode -le 0) { throw "tauri.conf.json must define a positive Android versionCode." }
-if ($LASTEXITCODE -ne 0 -or ($badging -join "`n") -notmatch "package: name='com\.cavoti\.bar' versionCode='$expectedVersionCode'") {
+$badgingText = $badging -join "`n"
+$packageMatch = [regex]::Match($badgingText, "package:\s+name='(?<name>[^']+)'\s+versionCode='(?<versionCode>\d+)'\s+versionName='(?<versionName>[^']+)'")
+if ($LASTEXITCODE -ne 0 -or -not $packageMatch.Success) {
+    throw "The Android APK package metadata could not be read."
+}
+if ($packageMatch.Groups["name"].Value -ne "com.cavoti.bar") {
     throw "The Android APK package metadata is not com.cavoti.bar."
+}
+if ([long]$packageMatch.Groups["versionCode"].Value -ne $expectedVersionCode) {
+    throw "The Android APK versionCode does not match the configured version code $expectedVersionCode."
+}
+if ($packageMatch.Groups["versionName"].Value -ne $expectedVersionName) {
+    throw "The Android APK versionName does not match tauri.conf.json version $expectedVersionName."
 }
 $brandedApk = Join-Path $apk.DirectoryName "Cavoti Bar.apk"
 Copy-Item -LiteralPath $apk.FullName -Destination $brandedApk -Force

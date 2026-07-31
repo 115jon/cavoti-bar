@@ -500,7 +500,8 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
   assert.match(build, /Cavoti Bar Setup\.exe/);
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.match(workflow, /latest\.json/);
-  assert.match(workflow, /gh release create/);
+  assert.match(workflow, /gh release upload/);
+  assert.doesNotMatch(workflow, /gh release create/);
   assert.match(packageJson.scripts["build:installer"], /build-tauri-installer\.ps1/);
   assert.match(gitignore, /^\.env$/m);
 });
@@ -523,7 +524,10 @@ test("Cavoti packages a signed Android APK without repository keystores", () => 
   );
 
   assert.equal(config.identifier, "com.cavoti.bar");
-  assert.ok(config.bundle.android.versionCode > 1000);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(config.bundle.android, "versionCode"),
+    false,
+  );
   assert.match(script, /tauri.*android.*build.*--apk/);
   assert.match(script, /\[string\]\$DeviceSerial\s*=\s*""/);
   assert.match(script, /Import-CavotiAndroidEnv[\s\S]*DeviceSerial[\s\S]*ANDROID_DEVICE_SERIAL/);
@@ -573,13 +577,14 @@ test("Cavoti packages a signed Android APK without repository keystores", () => 
 
 test("Windows release signing is tag-scoped and version-checked before secrets", () => {
   const workflow = read(".github/workflows/windows-release.yml");
-  assert.doesNotMatch(workflow, /workflow_dispatch/);
-  assert.match(workflow, /RELEASE_REF/);
-  assert.match(workflow, /refs\/tags\/v/);
+  assert.match(workflow, /workflow_dispatch/);
+  assert.match(workflow, /release_tag/);
+  assert.match(workflow, /refs\/tags\/\$\{\{\s*inputs\.release_tag/);
   assert.match(workflow, /tauri\.conf\.json/);
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY:/);
   assert.match(workflow, /Build custom Cavoti installer[\s\S]*TAURI_SIGNING_PRIVATE_KEY/);
-  assert.doesNotMatch(workflow, /github\.ref_name.*release create/);
+  assert.match(workflow, /gh release upload/);
+  assert.doesNotMatch(workflow, /gh release create/);
 });
 
 test("Android release signing restores pre-existing keystore properties", () => {
@@ -637,12 +642,12 @@ test("GitHub Actions validate changes and publish signed desktop and Android rel
   assert.match(windowsRelease, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.match(windowsRelease, /Cavoti Bar Setup\.exe/);
   assert.match(androidRelease, /name: Cavoti Android Release/);
-  assert.match(androidRelease, /push:[\s\S]*tags:[\s\S]*"v\*"/);
+  assert.match(androidRelease, /workflow_dispatch/);
   assert.match(androidRelease, /CAVOTI_ANDROID_KEYSTORE_BASE64/);
   assert.match(androidRelease, /CAVOTI_ANDROID_KEY_ALIAS/);
   assert.match(androidRelease, /Cavoti Bar\.apk/);
   assert.match(androidRelease, /gh release upload/);
-  assert.doesNotMatch(androidRelease, /workflow_dispatch/);
+  assert.match(androidRelease, /gh release edit[\s\S]*--draft=false[\s\S]*--latest/);
   assert.match(androidScript, /Cavoti Bar\.apk/);
 });
 
@@ -665,5 +670,227 @@ test("repository documentation and secret provisioning are conventional", () => 
   assert.match(provision, /secret set/);
   assert.match(provision, /CAVOTI_ANDROID_KEYSTORE_BASE64/);
   assert.match(provision, /CAVOTI_UPDATE_ENDPOINT/);
+  assert.match(provision, /IsNullOrWhiteSpace\(\$keyPassword\)/);
+  assert.doesNotMatch(provision, /Require-CavotiValue "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"/);
   assert.doesNotMatch(provision, /Write-(Host|Output).*PASSWORD/i);
+});
+
+test("Release Please owns semantic versioning and typed version propagation", () => {
+  const config = JSON.parse(read("release-please-config.json"));
+  const manifest = JSON.parse(read(".release-please-manifest.json"));
+  const rootPackage = config.packages["."];
+
+  assert.equal(
+    config.$schema,
+    "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  );
+  assert.equal(
+    config["bootstrap-sha"],
+    "de81eb90bab976ab500232a275b2b4ef845bcf91",
+  );
+  assert.equal(rootPackage["release-type"], "node");
+  assert.equal(rootPackage.draft, true);
+  assert.equal(rootPackage["force-tag-creation"], true);
+  assert.equal(rootPackage["include-component-in-tag"], false);
+  assert.equal(rootPackage["include-v-in-tag"], true);
+  assert.deepEqual(rootPackage["extra-files"], [
+    {
+      type: "json",
+      path: "src-tauri/tauri.conf.json",
+      jsonpath: "$.version",
+    },
+    {
+      type: "toml",
+      path: "src-tauri/Cargo.toml",
+      jsonpath: "$.package.version",
+    },
+    {
+      type: "xml",
+      path: "installer/CavotiBarSetup.csproj",
+      xpath: "/Project/PropertyGroup/Version",
+    },
+  ]);
+  assert.deepEqual(manifest, { ".": "0.1.0" });
+});
+
+test("Release Please creates draft releases and dispatches validated Windows packaging without a PAT", () => {
+  const workflow = read(".github/workflows/release-please.yml");
+
+  assert.match(workflow, /push:[\s\S]*branches:[\s\S]*- main/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(
+    workflow,
+    /googleapis\/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5/,
+  );
+  assert.match(workflow, /contents:\s*write/);
+  assert.match(workflow, /issues:\s*write/);
+  assert.match(workflow, /pull-requests:\s*write/);
+  assert.match(workflow, /actions:\s*write/);
+  assert.match(workflow, /release_created/);
+  assert.match(workflow, /tag_name/);
+  assert.equal(workflow.includes("^v[0-9]+\\.[0-9]+\\.[0-9]+$"), true);
+  assert.match(workflow, /isDraft/);
+  assert.match(workflow, /gh run list[\s\S]*ci\.yml/);
+  assert.match(workflow, /conclusion[\s\S]*success/);
+  assert.match(workflow, /for attempt in/);
+  assert.match(workflow, /gh workflow run windows-release\.yml/);
+  assert.match(workflow, /--ref main/);
+  assert.match(workflow, /release_tag/);
+  assert.match(workflow, /github\.token/);
+  assert.doesNotMatch(workflow, /secrets\.|PAT/);
+});
+
+test("Windows packaging validates the exact draft tag before exposing signing secrets", () => {
+  const workflow = read(".github/workflows/windows-release.yml");
+  const validationIndex = workflow.indexOf(
+    "Validate release tag, remote tag, versions, and draft release",
+  );
+  const signingSecretIndex = workflow.indexOf("TAURI_SIGNING_PRIVATE_KEY:");
+
+  assert.match(
+    workflow,
+    /workflow_dispatch:[\s\S]*release_tag:[\s\S]*required:\s*true[\s\S]*type:\s*string/,
+  );
+  assert.match(workflow, /concurrency:[\s\S]*inputs\.release_tag/);
+  assert.match(workflow, /group:\s*cavoti-release-/);
+  assert.match(workflow, /environment:\s*release/);
+  assert.match(
+    workflow,
+    /ref:\s*refs\/tags\/\$\{\{\s*inputs\.release_tag\s*\}\}[\s\S]*persist-credentials:\s*false/,
+  );
+  assert.match(workflow, /git ls-remote[\s\S]*refs\/tags\/\$env:RELEASE_TAG/);
+  assert.match(workflow, /rev-parse[\s\S]*HEAD/);
+  assert.match(workflow, /merge-base --is-ancestor[\s\S]*origin\/main/);
+  assert.match(workflow, /gh run list[\s\S]*ci\.yml[\s\S]*success/);
+  assert.match(workflow, /minor[^\n]*-ge 1000/);
+  assert.match(workflow, /patch[^\n]*-ge 1000/);
+  assert.match(workflow, /versionCode[^\n]*\+ 1/);
+  assert.match(workflow, /package\.json/);
+  assert.match(workflow, /tauri\.conf\.json/);
+  assert.match(workflow, /Cargo\.toml/);
+  assert.match(workflow, /CavotiBarSetup\.csproj/);
+  assert.match(workflow, /isDraft/);
+  assert.match(workflow, /gh release upload[\s\S]*--clobber/);
+  assert.match(workflow, /Cavoti Bar Setup\.exe/);
+  assert.match(workflow, /Cavoti Bar Setup\.exe\.sig/);
+  assert.match(workflow, /latest\.json/);
+  assert.match(workflow, /gh workflow run android-release\.yml/);
+  assert.match(
+    workflow,
+    /gh workflow run android-release\.yml[\s\S]*LASTEXITCODE[\s\S]*throw/,
+  );
+  assert.equal(validationIndex >= 0, true);
+  assert.equal(signingSecretIndex > validationIndex, true);
+  assert.doesNotMatch(workflow, /gh release create/);
+});
+
+test("Android packaging validates the exact draft tag, uploads idempotently, and publishes atomically", () => {
+  const workflow = read(".github/workflows/android-release.yml");
+  const validationIndex = workflow.indexOf(
+    "Validate release tag, remote tag, versions, and draft release",
+  );
+  const signingSecretIndex = workflow.indexOf(
+    "CAVOTI_ANDROID_KEYSTORE_BASE64:",
+  );
+
+  assert.match(
+    workflow,
+    /workflow_dispatch:[\s\S]*release_tag:[\s\S]*required:\s*true[\s\S]*type:\s*string/,
+  );
+  assert.match(workflow, /concurrency:[\s\S]*inputs\.release_tag/);
+  assert.match(workflow, /group:\s*cavoti-release-/);
+  assert.match(workflow, /environment:\s*release/);
+  assert.match(workflow, /permissions:[\s\S]*actions:\s*read/);
+  assert.match(
+    workflow,
+    /ref:\s*refs\/tags\/\$\{\{\s*inputs\.release_tag\s*\}\}[\s\S]*persist-credentials:\s*false/,
+  );
+  assert.match(workflow, /git ls-remote[\s\S]*refs\/tags\/\$env:RELEASE_TAG/);
+  assert.match(workflow, /rev-parse[\s\S]*HEAD/);
+  assert.match(workflow, /merge-base --is-ancestor[\s\S]*origin\/main/);
+  assert.match(workflow, /gh run list[\s\S]*ci\.yml[\s\S]*success/);
+  assert.match(workflow, /minor[^\n]*-ge 1000/);
+  assert.match(workflow, /patch[^\n]*-ge 1000/);
+  assert.match(workflow, /versionCode[^\n]*\+ 1/);
+  assert.match(workflow, /package\.json/);
+  assert.match(workflow, /tauri\.conf\.json/);
+  assert.match(workflow, /Cargo\.toml/);
+  assert.match(workflow, /CavotiBarSetup\.csproj/);
+  assert.match(workflow, /isDraft/);
+  assert.match(
+    workflow,
+    /name: cavoti-bar-android-\$\{\{ inputs\.release_tag \}\}/,
+  );
+  assert.match(workflow, /gh release upload[\s\S]*--clobber/);
+  for (const asset of [
+    "Cavoti Bar Setup.exe",
+    "Cavoti Bar Setup.exe.sig",
+    "latest.json",
+    "Cavoti Bar.apk",
+  ]) {
+    assert.match(workflow, new RegExp(asset.replace(/[.]/g, "\\.")));
+  }
+  assert.match(workflow, /gh release edit[\s\S]*--draft=false[\s\S]*--latest/);
+  assert.match(
+    workflow,
+    /gh release edit[\s\S]*LASTEXITCODE[\s\S]*throw/,
+  );
+  assert.equal(validationIndex >= 0, true);
+  assert.equal(signingSecretIndex > validationIndex, true);
+});
+
+test("Android packaging derives and validates the APK version code and name", () => {
+  const config = JSON.parse(read("src-tauri/tauri.conf.json"));
+  const script = read("scripts/build-tauri-android-release.ps1");
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(config.bundle.android, "versionCode"),
+    false,
+  );
+  assert.match(script, /semantic.*version|semver/i);
+  assert.match(script, /major\s*\*\s*1000000/);
+  assert.match(script, /minor\s*\*\s*1000/);
+  assert.match(script, /patch/);
+  assert.match(script, /derivedVersionCode[\s\S]*\+ 1/);
+  assert.match(script, /--config/);
+  assert.match(script, /minor[^\n]*-ge 1000/);
+  assert.match(script, /patch[^\n]*-ge 1000/);
+  assert.match(script, /2100000000/);
+  assert.match(script, /PSObject\.Properties\.Name[\s\S]*versionCode/);
+  assert.match(script, /versionCode/);
+  assert.match(script, /versionName/);
+  assert.match(script, /expectedVersionCode/);
+  assert.match(script, /expectedVersionName/);
+});
+
+test("release workflows fail closed around native tools and stale optional secrets", () => {
+  const androidWorkflow = read(".github/workflows/android-release.yml");
+  const provision = read("scripts/configure-github-secrets.ps1");
+
+  assert.match(
+    androidWorkflow,
+    /sdkmanager[\s\S]*LASTEXITCODE[\s\S]*throw/,
+  );
+  assert.match(provision, /secret delete TAURI_SIGNING_PRIVATE_KEY_PASSWORD/);
+});
+
+test("Release documentation describes the draft chain, recovery, validation, and optional password", () => {
+  const readme = read("README.md");
+  const agents = read("AGENTS.md");
+
+  for (const document of [readme, agents]) {
+    assert.match(document, /Release Please/);
+    assert.match(document, /draft/i);
+    assert.match(document, /rerun|re-run|recovery/i);
+    assert.match(document, /semantic/i);
+    assert.match(document, /atomic/i);
+  }
+  assert.match(
+    readme,
+    /TAURI_SIGNING_PRIVATE_KEY_PASSWORD[\s\S]{0,120}optional/i,
+  );
+  assert.match(
+    agents,
+    /TAURI_SIGNING_PRIVATE_KEY_PASSWORD[\s\S]{0,120}optional/i,
+  );
 });

@@ -1,0 +1,82 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update release PR
+        id: release
+        uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Dispatch Windows packaging for the draft release
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release Please returned a non-semantic tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          draft=""
+          for attempt in {1..6}; do
+            draft=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || true)
+            [[ "$draft" == true ]] && break
+            sleep 5
+          done
+          if [[ "$draft" != true ]]; then
+            echo "Release $RELEASE_TAG is not draft; refusing to dispatch packaging." >&2
+            exit 1
+          fi
+
+          deadline=$((SECONDS + 1800))
+          while (( SECONDS < deadline )); do
+            run_state=$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow ci.yml \
+              --commit "$GITHUB_SHA" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | [.status, (.conclusion // "")] | @tsv')
+            if [[ -n "$run_state" ]]; then
+              IFS=$'\t' read -r status conclusion <<< "$run_state"
+              if [[ "$status" == completed ]]; then
+                if [[ "$conclusion" != success ]]; then
+                  echo "CI concluded with $conclusion; leaving $RELEASE_TAG draft." >&2
+                  exit 1
+                fi
+                break
+              fi
+            fi
+            sleep 10
+          done
+          if [[ "${status:-}" != completed ]]; then
+            echo "CI did not complete successfully within 30 minutes; leaving $RELEASE_TAG draft." >&2
+            exit 1
+          fi
+
+          for attempt in {1..3}; do
+            if gh workflow run windows-release.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              --field release_tag="$RELEASE_TAG"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Could not dispatch Windows packaging for $RELEASE_TAG." >&2
+          exit 1

@@ -1,34 +1,101 @@
 name: Cavoti Windows Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag to package, for example v1.2.3
+        required: true
+        type: string
 
 permissions:
   contents: write
+  actions: write
+
+concurrency:
+  group: cavoti-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  RELEASE_TAG: ${{ inputs.release_tag }}
 
 jobs:
   desktop-release:
     runs-on: windows-latest
-    env:
-      CARGO_INCREMENTAL: 0
+    environment: release
 
     steps:
-      - name: Checkout
+      - name: Checkout release tag
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Validate release tag and version
+      - name: Validate release tag, remote tag, versions, and draft release
         shell: pwsh
         env:
-          RELEASE_REF: ${{ github.ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if ($env:RELEASE_REF -notmatch '^refs/tags/v(?<version>[0-9]+\.[0-9]+\.[0-9]+)$') {
-            throw "This workflow only signs semantic-version release tags."
+          if ($env:RELEASE_TAG -notmatch '^v(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>0|[1-9][0-9]*)$') {
+            throw "Release tag must use vMAJOR.MINOR.PATCH: $env:RELEASE_TAG"
           }
-          $config = Get-Content -Raw -LiteralPath "src-tauri/tauri.conf.json" | ConvertFrom-Json
-          if ($Matches.version -ne $config.version) {
-            throw "Release tag version $($Matches.version) does not match tauri.conf.json version $($config.version)."
+          $major = [long]$Matches.major
+          $minor = [long]$Matches.minor
+          $patch = [long]$Matches.patch
+          if ($minor -ge 1000 -or $patch -ge 1000) {
+            throw "Release minor and patch components must each be less than 1000."
+          }
+          $versionCode = ($major * 1000000) + ($minor * 1000) + $patch + 1
+          if ($versionCode -le 0 -or $versionCode -gt 2100000000) {
+            throw "Release version is outside the supported Android versionCode range."
+          }
+          $tagVersion = "$major.$minor.$patch"
+
+          $remoteTagLines = @(git ls-remote origin "refs/tags/$env:RELEASE_TAG" "refs/tags/$env:RELEASE_TAG^{}")
+          if ($LASTEXITCODE -ne 0 -or $remoteTagLines.Count -eq 0) {
+            throw "Remote tag $env:RELEASE_TAG does not exist exactly."
+          }
+          $remoteTagLine = $remoteTagLines | Where-Object { $_ -match '\^\{\}$' } | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($remoteTagLine)) { $remoteTagLine = $remoteTagLines[0] }
+          $remoteCommit = ($remoteTagLine -split '\s+')[0]
+          $headCommit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $headCommit -ne $remoteCommit) {
+            throw "Checked out commit $headCommit does not match remote tag commit $remoteCommit."
+          }
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch origin/main for release provenance validation." }
+          git merge-base --is-ancestor $headCommit origin/main
+          if ($LASTEXITCODE -ne 0) { throw "Release tag commit is not reachable from origin/main." }
+
+          $successfulCiRuns = & gh run list --repo $env:GITHUB_REPOSITORY --workflow ci.yml --commit $headCommit --limit 20 --json status,conclusion --jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length'
+          if ($LASTEXITCODE -ne 0 -or [int]($successfulCiRuns -join "").Trim() -lt 1) {
+            throw "Release tag commit does not have a successful Cavoti CI run."
+          }
+
+          $packageJson = Get-Content -Raw -LiteralPath "package.json" | ConvertFrom-Json
+          $tauriConfig = Get-Content -Raw -LiteralPath "src-tauri/tauri.conf.json" | ConvertFrom-Json
+          $cargoText = Get-Content -Raw -LiteralPath "src-tauri/Cargo.toml"
+          $cargoMatch = [regex]::Match($cargoText, '(?ms)^\[package\]\s*.*?^\s*version\s*=\s*"(?<version>[^"]+)"')
+          if (-not $cargoMatch.Success) { throw "Could not read the Cargo package version." }
+          $installerProject = [xml](Get-Content -Raw -LiteralPath "installer/CavotiBarSetup.csproj")
+          $versions = [ordered]@{
+            "package.json" = [string]$packageJson.version
+            "src-tauri/tauri.conf.json" = [string]$tauriConfig.version
+            "src-tauri/Cargo.toml" = [string]$cargoMatch.Groups["version"].Value
+            "installer/CavotiBarSetup.csproj" = [string]$installerProject.Project.PropertyGroup.Version
+          }
+          foreach ($entry in $versions.GetEnumerator()) {
+            if ($entry.Value -ne $tagVersion) {
+              throw "$($entry.Key) version $($entry.Value) does not match tag version $tagVersion."
+            }
+          }
+
+          $draft = & gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
+          if ($LASTEXITCODE -ne 0 -or ($draft -join "").Trim() -ne "true") {
+            throw "Release $env:RELEASE_TAG must exist and remain draft before signing."
           }
 
       - name: Setup Rust
@@ -57,40 +124,34 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: .\scripts\build-tauri-installer.ps1
 
-      - name: Publish setup and updater metadata
+      - name: Upload Windows assets and dispatch Android packaging
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $installer = "installer/bin/Release/net48/Cavoti Bar Setup.exe"
-          $signature = "$installer.sig"
-          if (-not (Test-Path -LiteralPath $installer)) { throw "Custom installer not found: $installer" }
-          if (-not (Test-Path -LiteralPath $signature)) { throw "Custom installer signature not found: $signature" }
+          $signature = "installer/bin/Release/net48/Cavoti Bar Setup.exe.sig"
+          $latestPath = "installer/bin/Release/net48/latest.json"
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw "Custom installer not found: $installer" }
+          if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) { throw "Custom installer signature not found: $signature" }
 
           $config = Get-Content -Raw -LiteralPath "src-tauri/tauri.conf.json" | ConvertFrom-Json
-          $version = $config.version
           $assetName = "Cavoti Bar Setup.exe"
           $encodedAssetName = [Uri]::EscapeDataString($assetName)
-
           $metadata = [ordered]@{
-            version = $version
-            notes = "Cavoti Bar $version"
+            version = [string]$config.version
+            notes = "Cavoti Bar $($config.version)"
             pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
-                signature = (Get-Content -Raw -LiteralPath "installer/bin/Release/net48/$assetName.sig").Trim()
-                url = "https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/$encodedAssetName"
+                signature = (Get-Content -Raw -LiteralPath $signature).Trim()
+                url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$encodedAssetName"
               }
             }
           }
-          $latestPath = "installer/bin/Release/net48/latest.json"
           $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $latestPath -NoNewline
 
-          gh release create $env:RELEASE_TAG `
-            "installer/bin/Release/net48/$assetName" `
-            "installer/bin/Release/net48/$assetName.sig" `
-            $latestPath `
-            --title "Cavoti Bar $version" `
-            --generate-notes `
-            --latest
+          gh release upload $env:RELEASE_TAG $installer $signature $latestPath --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw "Windows release asset upload failed." }
+          gh workflow run android-release.yml --repo $env:GITHUB_REPOSITORY --ref main --field release_tag=$env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw "Android release workflow dispatch failed." }

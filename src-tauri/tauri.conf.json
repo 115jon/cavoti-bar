@@ -65,9 +65,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "android": {
-      "versionCode": 1001
-    },
+    "android": {},
     "windows": {}
   }
 }

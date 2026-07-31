@@ -152,14 +152,22 @@ Build a signed universal Android APK:
 
 Output: `src-tauri\gen\android\app\build\outputs\apk\...\release\Cavoti Bar.apk`
 
-Release tags must use `vMAJOR.MINOR.PATCH` and match `src-tauri/tauri.conf.json`. The Windows workflow creates the GitHub release and updater metadata; the Android workflow attaches the signed APK to that release.
+Release tags must use `vMAJOR.MINOR.PATCH` and match the versions in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `installer/CavotiBarSetup.csproj`.
+
+### Automated release chain
+
+Conventional commits merged to `main` create or update a Release Please pull request. Merging that pull request creates the forced semantic `vMAJOR.MINOR.PATCH` tag and a draft GitHub release. Release Please validates the tag and draft state, then dispatches `windows-release.yml` on `main` with the tag.
+
+The Windows workflow requires the exact remote tag to resolve to the checked-out, CI-passing commit on `main` before the protected `release` environment exposes signing secrets. It validates every shipped version, builds the existing installer, uploads `Cavoti Bar Setup.exe`, `Cavoti Bar Setup.exe.sig`, and `latest.json` with replacement enabled, then dispatches `android-release.yml`. Android repeats the provenance, version, CI, and draft checks, derives a monotonic version code with a one-step compatibility offset above the legacy `1001` build, uploads `Cavoti Bar.apk` idempotently, and verifies the complete four-asset set before publishing the release and marking it latest. The release stays draft until that final atomic check succeeds.
+
+Packaging workflows can be rerun with the existing draft tag after a transient failure. Reruns replace matching assets and never create a second release. A failed validation or incomplete asset set leaves the release draft for recovery; do not publish it manually until all four required assets exist.
 
 ### Release configuration
 
 GitHub Actions expects these repository secrets:
 
 - `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (optional; blank means the signer uses no password)
 - `CAVOTI_ANDROID_KEYSTORE_BASE64`
 - `CAVOTI_ANDROID_KEY_ALIAS`
 - `CAVOTI_ANDROID_KEYSTORE_PASSWORD`

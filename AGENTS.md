@@ -124,11 +124,26 @@ Do not run release signing or publish commands unless explicitly requested.
 - GitHub Actions receives signing material only through repository secrets.
 - The Android keystore is transferred as base64 and restored under the runner's
   temporary directory.
-- Release workflows are tag-only and must validate the semantic version before
-  accessing secrets.
-- `Cavoti Windows Release` creates the release and updater metadata.
-- `Cavoti Android Release` waits for that release and uploads the signed APK.
-- Do not add manual release dispatch without an explicit security review.
+- Conventional commits merged to `main` are handled by Release Please. Its
+  release PR owns the version bump, forced `vMAJOR.MINOR.PATCH` tag, and draft
+  GitHub release.
+- Release Please and both packaging workflows must validate the semantic tag,
+  immutable remote tag target, `main` ancestry, successful CI, all shipped
+  version files, and draft release state before accessing signing secrets.
+- Packaging jobs run in the `release` environment with checkout credentials
+  disabled and share one per-tag concurrency group across platforms.
+- Android release version codes follow the Tauri semver formula plus one to
+  remain above the legacy `0.1.0` build's explicit code `1001`.
+- `Cavoti Windows Release` uploads the three exact Windows assets and dispatches
+  `Cavoti Android Release` with the same tag. Android uploads the APK and
+  publishes only after the exact four-asset set is present in the final atomic
+  check.
+- Reruns are recovery-safe: existing draft tags are accepted, matching assets
+  are replaced with `--clobber`, and no workflow creates a second release.
+- `TAURI_SIGNING_PRIVATE_KEY` is mandatory. `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+  is optional and is configured only when nonblank.
+- Manual dispatch is limited to an existing semantic tag and draft release;
+  workflows must never publish a partially populated release.
 
 ## Change discipline
 

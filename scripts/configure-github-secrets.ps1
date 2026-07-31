@@ -34,9 +34,20 @@ if (-not (Test-Path -LiteralPath $keystorePath -PathType Leaf)) {
 $keystorePassword = Require-CavotiValue "CAVOTI_ANDROID_KEYSTORE_PASSWORD"
 $keyPassword = [Environment]::GetEnvironmentVariable("CAVOTI_ANDROID_KEY_PASSWORD")
 if ([string]::IsNullOrWhiteSpace($keyPassword)) { $keyPassword = $keystorePassword }
+$signingPrivateKey = Require-CavotiValue "TAURI_SIGNING_PRIVATE_KEY"
+$signingPrivateKeyPassword = [Environment]::GetEnvironmentVariable("TAURI_SIGNING_PRIVATE_KEY_PASSWORD")
 
-Set-CavotiGitHubSecret "TAURI_SIGNING_PRIVATE_KEY" (Require-CavotiValue "TAURI_SIGNING_PRIVATE_KEY")
-Set-CavotiGitHubSecret "TAURI_SIGNING_PRIVATE_KEY_PASSWORD" (Require-CavotiValue "TAURI_SIGNING_PRIVATE_KEY_PASSWORD")
+Set-CavotiGitHubSecret "TAURI_SIGNING_PRIVATE_KEY" $signingPrivateKey
+if (-not [string]::IsNullOrWhiteSpace($signingPrivateKeyPassword)) {
+    Set-CavotiGitHubSecret "TAURI_SIGNING_PRIVATE_KEY_PASSWORD" $signingPrivateKeyPassword
+} else {
+    $existingSecrets = @(& $gh.Source secret list --repo $Repository --json name --jq '.[].name')
+    if ($LASTEXITCODE -ne 0) { throw "Failed to inspect existing GitHub Secrets." }
+    if ($existingSecrets -contains "TAURI_SIGNING_PRIVATE_KEY_PASSWORD") {
+        & $gh.Source secret delete TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo $Repository
+        if ($LASTEXITCODE -ne 0) { throw "Failed to remove the stale GitHub signing password." }
+    }
+}
 Set-CavotiGitHubSecret "CAVOTI_ANDROID_KEYSTORE_BASE64" ([Convert]::ToBase64String([IO.File]::ReadAllBytes($keystorePath)))
 Set-CavotiGitHubSecret "CAVOTI_ANDROID_KEY_ALIAS" (Require-CavotiValue "CAVOTI_ANDROID_KEY_ALIAS")
 Set-CavotiGitHubSecret "CAVOTI_ANDROID_KEYSTORE_PASSWORD" $keystorePassword
