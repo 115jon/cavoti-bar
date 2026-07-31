@@ -183,7 +183,7 @@ jobs:
           Copy-Item -LiteralPath $apk[0].FullName -Destination (Join-Path $output "Cavoti-Bar-universal.apk") -Force
 
       - name: Upload Android build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cavoti-android-${{ inputs.release_tag }}
           path: release-assets/android
