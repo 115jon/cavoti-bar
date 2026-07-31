@@ -1,33 +1,76 @@
 # Cavoti Bar
 
-[![Cavoti CI](https://github.com/115jon/cavoti-bar/actions/workflows/ci.yml/badge.svg)](https://github.com/115jon/cavoti-bar/actions/workflows/ci.yml)
-[![Windows Release](https://github.com/115jon/cavoti-bar/actions/workflows/windows-release.yml/badge.svg)](https://github.com/115jon/cavoti-bar/actions/workflows/windows-release.yml)
-[![Android Release](https://github.com/115jon/cavoti-bar/actions/workflows/android-release.yml/badge.svg)](https://github.com/115jon/cavoti-bar/actions/workflows/android-release.yml)
+A native Windows and Android dashboard for Cavoti accounts: track quota, compare model pricing, inspect API key limits, and monitor usage from one focused interface.
 
-Cavoti Bar is a native desktop and Android client for monitoring Cavoti usage,
-plans, model pricing, API keys, and service health. A shared React renderer is
-hosted by Tauri 2, while Rust and the Android WebView adapter own authenticated
-collection and platform integration.
+![Cavoti Bar desktop and mobile dashboard](./docs/screenshots/hero.png)
+
+[![CI](https://img.shields.io/github/actions/workflow/status/115jon/cavoti-bar/ci.yml?branch=main&style=for-the-badge&label=CI&color=0f766e)](https://github.com/115jon/cavoti-bar/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/115jon/cavoti-bar?display_name=tag&sort=semver&style=for-the-badge&label=release&color=9a4f24)](https://github.com/115jon/cavoti-bar/releases/latest)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Android-374151?style=for-the-badge)
+![Stack](https://img.shields.io/badge/stack-Tauri%202%20%7C%20React%2019%20%7C%20Rust-52525b?style=for-the-badge)
+[![MIT license](https://img.shields.io/badge/license-MIT-2563eb?style=for-the-badge)](./LICENSE)
+![Status](https://img.shields.io/badge/status-active%20development-0f766e?style=for-the-badge)
 
 ## Features
 
-- Live usage, cost, token, request, and error summaries
-- Scoped refreshes for the active view and filters
-- Usage filtering by date, key, model, group, request type, and billing mode
-- Plan quota and reset monitoring
-- Model pricing and channel health views
-- Persistent Cavoti authentication in an app-owned WebView profile
-- Windows tray, startup, deep-link, notification, and updater integration
-- Native Android pull-to-refresh, lifecycle handling, and notifications
+- See current quota, reset windows, cost, token volume, request activity, and errors at a glance.
+- Filter usage by date, API key, model, group, request type, and billing mode.
+- Compare model pricing and billing groups without moving between account pages.
+- Inspect API key status, quota, and rate-limit metadata without exposing raw key values.
+- Monitor plan entitlements, channel health, and account connectivity.
+- Use the same bounded data model across the Windows desktop and Android clients.
+- Keep the desktop client available through tray, startup, deep links, notifications, and signed updates.
 
-## Downloads
+## Screenshots
 
-- [Latest GitHub release](https://github.com/115jon/cavoti-bar/releases/latest)
-- [Latest Windows installer](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar%20Setup.exe)
-- [Latest Android APK](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar.apk)
+<table>
+  <tr>
+    <td width="74%"><img src="./docs/screenshots/desktop.png" alt="Cavoti Bar usage analytics on Windows"></td>
+    <td width="26%"><img src="./docs/screenshots/mobile.png" alt="Cavoti Bar quota overview on a compact screen"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Windows desktop</strong></td>
+    <td align="center"><strong>Compact and Android layout</strong></td>
+  </tr>
+</table>
 
-Product screenshots will be added to `docs/screenshots/` for the desktop and
-mobile experiences once the release captures are provided.
+## Why it exists
+
+AI inference accounts spread operational data across quota pages, pricing tables, API key records, and service-status views. Cavoti Bar collects the useful aggregates into one local client so developers can answer practical questions quickly:
+
+- Which plan or key is close to its limit?
+- What is driving token volume and actual cost?
+- How do available model and billing-group prices compare?
+- Is a usage change caused by account state, channel health, or request errors?
+
+The app is deliberately a monitor, not a credential manager. Authenticated collection stays inside the native session boundary while the renderer receives normalized account data.
+
+## Install
+
+| Platform | Download | Notes |
+| --- | --- | --- |
+| Windows | [Cavoti Bar Setup.exe](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar%20Setup.exe) | Installs the desktop client, updater, shortcuts, and deep-link registration. |
+| Android | [Cavoti Bar.apk](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar.apk) | Signed universal APK for supported Android devices. |
+| Release notes | [Latest GitHub release](https://github.com/115jon/cavoti-bar/releases/latest) | Version details, checksums, and all published assets. |
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Renderer | React 19, TypeScript, Vite 8, Tailwind CSS 4 |
+| Native shell | Tauri 2 and Rust |
+| Android integration | Kotlin, Android WebView, and a bounded JNI bridge |
+| Desktop installer | .NET Framework 4.8 WPF bootstrapper |
+| Automation | Bun, PowerShell, GitHub Actions, Vitest, and Rust tests |
+
+## Security model
+
+- Cavoti session cookies and authenticated requests stay in an app-owned native WebView profile.
+- The renderer receives bounded, normalized snapshots rather than cookies, bearer tokens, raw HTML, or unrestricted API payloads.
+- API key views expose operational metadata such as status, quota, and rate limits. They do not render raw key secrets.
+- Collection IDs, endpoint names, lifecycle phases, and payload sizes are validated at the Android and Rust boundaries.
+- Deep links are navigation-only and cannot carry authentication state.
+- Signing keys, keystores, passwords, authenticated snapshots, and local session data must never be committed.
 
 ## Architecture
 
@@ -35,18 +78,13 @@ mobile experiences once the release captures are provided.
 src/                         React renderer and host protocol
 public/                      Renderer assets and application icons
 src-tauri/                   Rust host, auth adapter, snapshots, platform APIs
-src-tauri/gen/               Tracked Android project and native WebView adapter
+src-tauri/gen/android/       Tracked Android project and WebView adapter
 installer/                   Windows bootstrapper and versioned install layout
-scripts/                     Development, build, signing, and release entrypoints
-tests/                       Repository-level architecture and packaging contracts
+scripts/                     Development, build, signing, and release commands
+tests/                       Architecture, security, and packaging contracts
 ```
 
-Authenticated Cavoti requests execute inside the persistent Cavoti WebView
-profile. Only bounded, normalized snapshot data crosses into the renderer.
-Cookies, bearer tokens, and raw authenticated page content remain inside the
-native session boundary.
-
-The supported deep links are navigation-only:
+Supported deep links are intentionally narrow:
 
 - `cavoti://open/overview`
 - `cavoti://open/usage`
@@ -54,25 +92,20 @@ The supported deep links are navigation-only:
 - `cavoti://open/status`
 - `cavoti://open/settings`
 
-## Requirements
+## Development
+
+### Requirements
 
 - [Bun](https://bun.sh/)
 - [Rust](https://rustup.rs/) stable toolchain
-- Tauri 2 platform prerequisites
+- [Tauri 2 platform prerequisites](https://v2.tauri.app/start/prerequisites/)
 - Windows: .NET 10 SDK and .NET Framework 4.8 build tools for the custom installer
 - Android: JDK 17 and Android SDK/NDK 29
 
-## Development
-
-Install dependencies:
+Install dependencies and run the desktop development shell:
 
 ```powershell
 bun install --frozen-lockfile
-```
-
-Run the desktop development shell:
-
-```powershell
 bun run dev
 ```
 
@@ -100,7 +133,7 @@ Build the branded standalone Windows executable:
 
 Output: `src-tauri\target\release\Cavoti Bar.exe`
 
-Build the signed Windows bootstrapper and updater signature:
+Build the signed Windows installer and updater signature:
 
 ```powershell
 .\scripts\build-tauri-installer.ps1
@@ -119,14 +152,11 @@ Build a signed universal Android APK:
 
 Output: `src-tauri\gen\android\app\build\outputs\apk\...\release\Cavoti Bar.apk`
 
-Release tags must use `vMAJOR.MINOR.PATCH` and match the version in
-`src-tauri/tauri.conf.json`. The Windows workflow creates the GitHub
-Release and updater metadata. The Android workflow attaches the signed APK to
-that release.
+Release tags must use `vMAJOR.MINOR.PATCH` and match `src-tauri/tauri.conf.json`. The Windows workflow creates the GitHub release and updater metadata; the Android workflow attaches the signed APK to that release.
 
-## GitHub configuration
+### Release configuration
 
-The release workflows require these GitHub Actions secrets:
+GitHub Actions expects these repository secrets:
 
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
@@ -135,19 +165,21 @@ The release workflows require these GitHub Actions secrets:
 - `CAVOTI_ANDROID_KEYSTORE_PASSWORD`
 - `CAVOTI_ANDROID_KEY_PASSWORD`
 
-They also use the public Actions variable `CAVOTI_UPDATE_ENDPOINT`.
-
-After creating `115jon/cavoti-bar`, provision the configured local credentials
-without printing their values:
+The workflows also use the public Actions variable `CAVOTI_UPDATE_ENDPOINT`. Provision configured local credentials without printing their values:
 
 ```powershell
 .\scripts\configure-github-secrets.ps1 -Repository 115jon/cavoti-bar
 ```
 
-Signing keys, keystores, passwords, authenticated snapshots, and local session
-data must never be committed.
+## Roadmap
+
+- [x] Shared Windows and Android renderer with platform-specific native integration
+- [x] Quota, usage, pricing, API key, plan, and channel-health views
+- [x] Tag-scoped Windows and Android release automation
+- [ ] Publish the first signed public Windows and Android release
+- [ ] Continue hardening endpoint adapters and fixtures as Cavoti responses evolve
+- [ ] Evaluate additional desktop and mobile targets without weakening the native session boundary
 
 ## License
 
-No license has been declared yet. Add one before accepting external
-contributions or redistributing the source.
+Cavoti Bar is available under the [MIT License](./LICENSE).
