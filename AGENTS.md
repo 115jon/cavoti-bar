@@ -24,7 +24,7 @@ Keep these identities distinct:
 
 - Product and shipped application: `Cavoti Bar`
 - Shipped Windows executable: `Cavoti Bar.exe`
-- Shipped Windows installer: `Cavoti Bar Setup.exe`
+- Shipped Windows installer: `CavotiBarSetup.exe`
 - Shipped Android artifact: `Cavoti-Bar-universal.apk`
 - Rust package and compiler target: `cavoti_bar`
 - Rust library: `cavoti_bar_lib`
@@ -149,5 +149,5 @@ Do not run release signing or publish commands unless explicitly requested.
 - Preserve unrelated worktree changes.
 - Do not edit generated build output or dependency directories.
 - Keep comments concise and explain only non-obvious constraints.
-- Update documentation and contract tests when changing architecture,
-  packaging, secret names, or public artifact names.
+- Update documentation and focused tests when changing architecture, packaging,
+  secret names, or public artifact names.

@@ -151,7 +151,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) { throw "Custom installer signature not found: $signature" }
 
           $config = Get-Content -Raw -LiteralPath "src-tauri/tauri.conf.json" | ConvertFrom-Json
-          $assetName = "Cavoti Bar Setup.exe"
+          $assetName = "CavotiBarSetup.exe"
           $encodedAssetName = [Uri]::EscapeDataString($assetName)
           $metadata = [ordered]@{
             version = [string]$config.version
@@ -172,8 +172,8 @@ jobs:
         run: |
           $output = Join-Path $env:GITHUB_WORKSPACE "release-assets\windows"
           New-Item -ItemType Directory -Path $output -Force | Out-Null
-          Copy-Item -LiteralPath "installer/bin/Release/net48/Cavoti Bar Setup.exe" -Destination $output -Force
-          Copy-Item -LiteralPath "installer/bin/Release/net48/Cavoti Bar Setup.exe.sig" -Destination $output -Force
+          Copy-Item -LiteralPath "installer/bin/Release/net48/Cavoti Bar Setup.exe" -Destination (Join-Path $output "CavotiBarSetup.exe") -Force
+          Copy-Item -LiteralPath "installer/bin/Release/net48/Cavoti Bar Setup.exe.sig" -Destination (Join-Path $output "CavotiBarSetup.exe.sig") -Force
           Copy-Item -LiteralPath "installer/bin/Release/net48/latest.json" -Destination $output -Force
 
       - name: Upload Windows build artifact

@@ -53,8 +53,8 @@ jobs:
           draft: false
           make_latest: true
           files: |
-            release-assets/windows/Cavoti Bar Setup.exe
-            release-assets/windows/Cavoti Bar Setup.exe.sig
+            release-assets/windows/CavotiBarSetup.exe
+            release-assets/windows/CavotiBarSetup.exe.sig
             release-assets/windows/latest.json
             release-assets/android/Cavoti-Bar-universal.apk
           overwrite_files: true

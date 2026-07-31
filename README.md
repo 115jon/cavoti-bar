@@ -49,7 +49,7 @@ The app is deliberately a monitor, not a credential manager. Authenticated colle
 
 | Platform | Download | Notes |
 | --- | --- | --- |
-| Windows | [Cavoti Bar Setup.exe](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar%20Setup.exe) | Installs the desktop client, updater, shortcuts, and deep-link registration. |
+| Windows | [CavotiBarSetup.exe](https://github.com/115jon/cavoti-bar/releases/latest/download/CavotiBarSetup.exe) | Installs the desktop client, updater, shortcuts, and deep-link registration. |
 | Android | [Cavoti Bar universal APK](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti-Bar-universal.apk) | Signed universal APK for supported Android devices. |
 | Release notes | [Latest GitHub release](https://github.com/115jon/cavoti-bar/releases/latest) | Version details, checksums, and all published assets. |
 
@@ -155,7 +155,7 @@ Release tags must use `vMAJOR.MINOR.PATCH` and match the versions in `package.js
 
 Conventional commits merged to `main` create or update a Release Please pull request. Merging that pull request creates the forced semantic `vMAJOR.MINOR.PATCH` tag and a draft GitHub release. Release Please validates the tag and draft state, then dispatches `release.yml`. Its Windows and Android jobs build independently, upload workflow artifacts, and a final `publish` job uploads all release assets and publishes only when both builds succeed.
 
-The Windows and Android workflows each require the exact remote tag to resolve to the checked-out, CI-passing commit on `main` before the protected `release` environment exposes signing secrets. They use independent per-platform concurrency groups and cache Bun, Cargo, Rust targets, and Android Gradle dependencies. Each platform validates its shipped versions, builds its signed artifact, and uploads a named workflow artifact. The final `publish` job downloads both artifacts and uses the release action to upload `Cavoti Bar Setup.exe`, `Cavoti Bar Setup.exe.sig`, `latest.json`, and `Cavoti-Bar-universal.apk` together before publishing and marking the release latest.
+The Windows and Android workflows each require the exact remote tag to resolve to the checked-out, CI-passing commit on `main` before the protected `release` environment exposes signing secrets. They use independent per-platform concurrency groups and cache Bun, Cargo, Rust targets, and Android Gradle dependencies. Each platform validates its shipped versions, builds its signed artifact, and uploads a named workflow artifact. The final `publish` job downloads both artifacts and uses the release action to upload `CavotiBarSetup.exe`, `CavotiBarSetup.exe.sig`, `latest.json`, and `Cavoti-Bar-universal.apk` together before publishing and marking the release latest.
 
 The release workflow can be rerun with the existing draft tag after a transient failure. Reruns replace matching assets and never create a second release. A failed validation or build leaves the release draft for recovery; the final publish job runs only after both platform artifacts are available.
 
