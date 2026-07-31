@@ -500,7 +500,7 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
   assert.match(build, /Cavoti Bar Setup\.exe/);
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.match(workflow, /latest\.json/);
-  assert.match(workflow, /gh release upload/);
+  assert.match(workflow, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
   assert.doesNotMatch(workflow, /gh release create/);
   assert.match(packageJson.scripts["build:installer"], /build-tauri-installer\.ps1/);
   assert.match(gitignore, /^\.env$/m);
@@ -583,7 +583,7 @@ test("Windows release signing is tag-scoped and version-checked before secrets",
   assert.match(workflow, /tauri\.conf\.json/);
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY:/);
   assert.match(workflow, /Build custom Cavoti installer[\s\S]*TAURI_SIGNING_PRIVATE_KEY/);
-  assert.match(workflow, /gh release upload/);
+  assert.match(workflow, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
   assert.doesNotMatch(workflow, /gh release create/);
 });
 
@@ -646,7 +646,7 @@ test("GitHub Actions validate changes and publish signed desktop and Android rel
   assert.match(androidRelease, /CAVOTI_ANDROID_KEYSTORE_BASE64/);
   assert.match(androidRelease, /CAVOTI_ANDROID_KEY_ALIAS/);
   assert.match(androidRelease, /Cavoti Bar\.apk/);
-  assert.match(androidRelease, /gh release upload/);
+  assert.match(androidRelease, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
   assert.match(androidRelease, /gh release edit[\s\S]*--draft=false[\s\S]*--latest/);
   assert.match(windowsRelease, /actions\/cache@v4/);
   assert.match(androidRelease, /actions\/cache@v4/);
@@ -776,11 +776,9 @@ test("Windows packaging validates the exact draft tag before exposing signing se
   assert.match(workflow, /Cargo\.toml/);
   assert.match(workflow, /CavotiBarSetup\.csproj/);
   assert.match(workflow, /isDraft/);
-  assert.match(workflow, /gh release upload[\s\S]*--clobber/);
+  assert.match(workflow, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
   assert.match(workflow, /Cavoti Bar Setup\.exe/);
   assert.match(workflow, /Cavoti Bar Setup\.exe\.sig/);
-  assert.match(workflow, /\$installer#Cavoti Bar Setup\.exe/);
-  assert.match(workflow, /\$signature#Cavoti Bar Setup\.exe\.sig/);
   assert.match(workflow, /Cavoti\.Bar\.Setup\.exe/);
   assert.match(workflow, /latest\.json/);
   assert.doesNotMatch(workflow, /gh workflow run android-release\.yml/);
@@ -826,8 +824,7 @@ test("Android packaging validates the exact draft tag, uploads idempotently, and
     workflow,
     /name: cavoti-bar-android-\$\{\{ inputs\.release_tag \}\}/,
   );
-  assert.match(workflow, /gh release upload[\s\S]*--clobber/);
-  assert.match(workflow, /\$\(\$apk\[0\]\.FullName\)#Cavoti Bar\.apk/);
+  assert.match(workflow, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
   assert.match(workflow, /Cavoti\.Bar\.apk/);
   assert.match(workflow, /Wait for Windows release assets/);
   for (const asset of [
