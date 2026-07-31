@@ -15,7 +15,7 @@ export function About() {
           <img
             className="size-11 object-contain"
             src="./cavoti-logo.png"
-            alt="Cavoti logo"
+            alt="Cavoti Bar logo"
           />
           <CardTitle className="text-xl font-semibold leading-7">
             Private usage at a glance

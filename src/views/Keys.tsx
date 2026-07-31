@@ -225,8 +225,10 @@ function KeyCard({ item, compact }: { item: ApiKey; compact: boolean }) {
 
 export const Keys = memo(function Keys({
   snapshot,
+  showRefresh,
 }: {
   snapshot: SnapshotEnvelope;
+  showRefresh: boolean;
 }) {
   const compact = useCompactTiles();
   return (
@@ -240,7 +242,7 @@ export const Keys = memo(function Keys({
               status.
             </p>
           </div>
-          {!compact ? (
+          {showRefresh ? (
             <button
               type="button"
               className="grid size-9 shrink-0 place-items-center rounded-lg border border-(--line) text-(--ink-muted) hover:bg-(--canvas)"

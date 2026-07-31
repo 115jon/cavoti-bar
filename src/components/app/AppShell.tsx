@@ -128,11 +128,11 @@ export function AppShell({
             <img
               className="size-7 object-contain group-data-[layout=wide]/app:size-9"
               src="./favicon.png"
-              alt="Cavoti"
+              alt=""
             />
             <span>
               <strong className="block text-sm font-bold leading-4 group-data-[layout=wide]/app:text-base group-data-[layout=wide]/app:font-semibold group-data-[layout=wide]/app:leading-5">
-                Cavoti
+                Cavoti <span className="text-(--accent-ink)">Bar</span>
               </strong>
             </span>
           </button>

@@ -13,7 +13,7 @@ import {
   multiplierTone,
 } from "../domain/model-logos";
 import { money } from "../app/formatters";
-import { Badge, Empty, useCompactTiles } from "../components/app/shared";
+import { Badge, Empty } from "../components/app/shared";
 import {
   Card,
   CardContent,
@@ -199,10 +199,11 @@ function PricingRow({
 
 export const Pricing = memo(function Pricing({
   snapshot,
+  showRefresh,
 }: {
   snapshot: SnapshotEnvelope;
+  showRefresh: boolean;
 }) {
-  const compact = useCompactTiles();
   const families = new Map<string, Set<string>>();
   for (const item of snapshot.modelPricing) {
     const family = modelFamily(item.name, item.platform);
@@ -254,7 +255,7 @@ export const Pricing = memo(function Pricing({
             Current Cavoti prices by model family and price group.
           </p>
         </div>
-        {!compact ? (
+        {showRefresh ? (
           <button
             type="button"
             className="grid size-9 shrink-0 place-items-center rounded-lg border border-(--line) text-(--ink-muted) hover:bg-(--canvas)"

@@ -43,6 +43,7 @@ type OverviewProps = {
   updateReady: boolean;
   showSeconds: boolean;
   showShortcuts: boolean;
+  showRefresh: boolean;
 };
 
 function CostSummary({
@@ -265,6 +266,7 @@ function DesktopOverview({
   refresh,
   showSeconds,
   showShortcuts,
+  showRefresh,
 }: OverviewProps & {
   selectedName: string | undefined;
   onSelect: (name: string) => void;
@@ -275,6 +277,7 @@ function DesktopOverview({
       <SourceStrip
         capturedAt={snapshot.capturedAt}
         showSeconds={showSeconds}
+        showRefresh={showRefresh}
         onRefresh={refresh}
       />
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_18rem] items-start gap-6">
@@ -335,6 +338,7 @@ function CompactOverview({
   refresh,
   showSeconds,
   showShortcuts,
+  showRefresh,
 }: OverviewProps & {
   selectedName: string | undefined;
   onSelect: (name: string) => void;
@@ -348,6 +352,7 @@ function CompactOverview({
       <SourceStrip
         capturedAt={snapshot.capturedAt}
         showSeconds={showSeconds}
+        showRefresh={showRefresh}
         onRefresh={refresh}
       />
       {snapshot.subscriptions.length < 2 && plan ? (
@@ -428,6 +433,7 @@ export const Overview = memo(function Overview({
   updateReady,
   showSeconds,
   showShortcuts,
+  showRefresh,
 }: OverviewProps) {
   const activePlan =
     snapshot.subscriptions.find((item) => item.status === "active") ??
@@ -449,6 +455,7 @@ export const Overview = memo(function Overview({
       refresh={refresh}
       showSeconds={showSeconds}
       showShortcuts={showShortcuts}
+      showRefresh={showRefresh}
     />
   ) : (
     <DesktopOverview
@@ -464,6 +471,7 @@ export const Overview = memo(function Overview({
       refresh={refresh}
       showSeconds={showSeconds}
       showShortcuts={showShortcuts}
+      showRefresh={showRefresh}
     />
   );
 });

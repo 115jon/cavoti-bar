@@ -139,15 +139,17 @@ function PlanCard({
 export const Plans = memo(function Plans({
   snapshot,
   onConnect,
+  showRefresh,
 }: {
   snapshot: SnapshotEnvelope;
   onConnect: () => void;
+  showRefresh: boolean;
 }) {
   const compact = useCompactTiles();
   return (
     <div className="flex w-full max-w-370 flex-col gap-4">
       <div className="flex justify-end gap-2">
-        {!compact ? (
+        {showRefresh ? (
           <Button
             variant="ghost"
             size="icon"

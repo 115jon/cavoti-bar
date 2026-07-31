@@ -403,7 +403,7 @@ export function App({ bridge }: AppProps) {
     if (capabilities.platform !== "mobile") return;
     void createChannel({
       id: "cavoti-monitor",
-      name: "Cavoti monitoring",
+      name: "Cavoti Bar monitoring",
       description: "Connection and quota alerts from Cavoti Bar.",
       importance: Importance.Default,
       visibility: Visibility.Private,
@@ -466,6 +466,7 @@ export function App({ bridge }: AppProps) {
       capturedAt: backgroundSnapshot.capturedAt,
     };
   }, [backgroundSnapshot, displayedSnapshot]);
+  const showStandaloneRefresh = capabilities.platform !== "mobile";
   const beginDrag = (event: MouseEvent<HTMLElement>) => {
     if (!capabilities.titlebarControls) return;
     if (event.button !== 0 || (event.target as HTMLElement).closest("button"))
@@ -521,19 +522,30 @@ export function App({ bridge }: AppProps) {
               updateReady={updateReady}
               showSeconds={showFreshnessSeconds}
               showShortcuts={capabilities.platform !== "mobile"}
+              showRefresh={showStandaloneRefresh}
             />
           </div>
           <div hidden={view !== "usage"}>
             <Usage snapshot={displayedSnapshot} />
           </div>
           <div hidden={view !== "plans"}>
-            <Plans snapshot={displayedSnapshot} onConnect={connect} />
+            <Plans
+              snapshot={displayedSnapshot}
+              onConnect={connect}
+              showRefresh={showStandaloneRefresh}
+            />
           </div>
           <div hidden={view !== "pricing"}>
-            <Pricing snapshot={displayedSnapshot} />
+            <Pricing
+              snapshot={displayedSnapshot}
+              showRefresh={showStandaloneRefresh}
+            />
           </div>
           <div hidden={view !== "keys"}>
-            <Keys snapshot={displayedSnapshot} />
+            <Keys
+              snapshot={displayedSnapshot}
+              showRefresh={showStandaloneRefresh}
+            />
           </div>
           <div hidden={view !== "status"}>
             <Status
@@ -544,6 +556,7 @@ export function App({ bridge }: AppProps) {
               }
               state={state}
               onConnect={connect}
+              showRefresh={showStandaloneRefresh}
             />
           </div>
           <div hidden={view !== "about"}>

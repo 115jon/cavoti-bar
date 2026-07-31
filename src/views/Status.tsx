@@ -339,12 +339,14 @@ export const Status = memo(function Status({
   snapshot,
   state,
   onConnect,
+  showRefresh,
   onOpenStatus = () =>
     window.dispatchEvent(new CustomEvent("cavoti-open-status")),
 }: {
   snapshot?: SnapshotEnvelope;
   state: BridgeState;
   onConnect: () => void;
+  showRefresh: boolean;
   onOpenStatus?: () => void;
 }) {
   const compact = useCompactTiles();
@@ -384,7 +386,7 @@ export const Status = memo(function Status({
   return (
     <div className="flex w-full max-w-370 flex-col gap-4">
       <div className="flex justify-end gap-2">
-        {!compact ? (
+        {showRefresh ? (
           <Button
             variant="ghost"
             size="icon"

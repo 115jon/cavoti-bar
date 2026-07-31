@@ -33,6 +33,9 @@ describe("App", () => {
     const { bridge, dispatch, sent } = createBridge();
     render(<App bridge={bridge} />);
 
+    expect(
+      screen.getByRole("button", { name: "Cavoti Bar" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Loading Cavoti snapshot")).toBeInTheDocument();
     act(() =>
       dispatch({
@@ -626,7 +629,57 @@ describe("App", () => {
     });
   });
 
-  it("hides standalone refresh controls in compact layouts", () => {
+  it("keeps standalone refresh controls in narrow desktop layouts", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "snapshot",
+        snapshot: liveSnapshot,
+        complete: true,
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Refresh usage data" }),
+    ).toBeInTheDocument();
+    for (const [view, refreshLabel] of [
+      ["Plans", "Refresh plans"],
+      ["Pricing", "Refresh model pricing"],
+    ]) {
+      fireEvent.click(screen.getByRole("button", { name: view }));
+      expect(
+        screen.getByRole("button", { name: refreshLabel }),
+      ).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "More navigation" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "More" })).getByRole("button", {
+        name: "API keys",
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Refresh API keys" }),
+    ).toBeInTheDocument();
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "host-navigation",
+        target: "status",
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Refresh channel status" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides standalone refresh controls on native mobile", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 390,
@@ -675,6 +728,16 @@ describe("App", () => {
     );
     expect(
       screen.queryByRole("button", { name: "Refresh API keys" }),
+    ).toBeNull();
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "host-navigation",
+        target: "status",
+      }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Refresh channel status" }),
     ).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Usage" }));
     expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
