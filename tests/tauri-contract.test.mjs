@@ -679,6 +679,7 @@ test("repository documentation and secret provisioning are conventional", () => 
 test("Release Please owns semantic versioning and typed version propagation", () => {
   const config = JSON.parse(read("release-please-config.json"));
   const manifest = JSON.parse(read(".release-please-manifest.json"));
+  const packageJson = JSON.parse(read("package.json"));
   const rootPackage = config.packages["."];
 
   assert.equal(
@@ -711,7 +712,8 @@ test("Release Please owns semantic versioning and typed version propagation", ()
       xpath: "/Project/PropertyGroup/Version",
     },
   ]);
-  assert.deepEqual(manifest, { ".": "0.1.0" });
+  assert.match(packageJson.version, /^\d+\.\d+\.\d+$/);
+  assert.deepEqual(manifest, { ".": packageJson.version });
 });
 
 test("Release Please creates draft releases and dispatches validated Windows packaging without a PAT", () => {
