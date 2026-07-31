@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[^/]+/[^/]+$')]
-    [string]$Repository
+    [string]$Repository,
+    [string]$Environment = "release"
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,7 +24,7 @@ function Require-CavotiValue([string]$Name) {
 }
 
 function Set-CavotiGitHubSecret([string]$Name, [string]$Value) {
-    $Value | & $gh.Source secret set $Name --repo $Repository
+    $Value | & $gh.Source secret set $Name --env $Environment --repo $Repository
     if ($LASTEXITCODE -ne 0) { throw "Failed to set GitHub Secret $Name." }
 }
 
@@ -44,7 +45,7 @@ if (-not [string]::IsNullOrWhiteSpace($signingPrivateKeyPassword)) {
     $existingSecrets = @(& $gh.Source secret list --repo $Repository --json name --jq '.[].name')
     if ($LASTEXITCODE -ne 0) { throw "Failed to inspect existing GitHub Secrets." }
     if ($existingSecrets -contains "TAURI_SIGNING_PRIVATE_KEY_PASSWORD") {
-        & $gh.Source secret delete TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo $Repository
+        & $gh.Source secret delete TAURI_SIGNING_PRIVATE_KEY_PASSWORD --env $Environment --repo $Repository
         if ($LASTEXITCODE -ne 0) { throw "Failed to remove the stale GitHub signing password." }
     }
 }

@@ -668,6 +668,7 @@ test("repository documentation and secret provisioning are conventional", () => 
   assert.match(agents, /installer\//);
   assert.match(agents, /cavoti_bar/);
   assert.match(provision, /secret set/);
+  assert.match(provision, /secret set[\s\S]*--env \$Environment/);
   assert.match(provision, /CAVOTI_ANDROID_KEYSTORE_BASE64/);
   assert.match(provision, /CAVOTI_UPDATE_ENDPOINT/);
   assert.match(provision, /IsNullOrWhiteSpace\(\$keyPassword\)/);
