@@ -350,6 +350,7 @@ mod tests {
             collection_id: "collection".into(),
             phase: "enrichment".into(),
             session_state: "authenticated".into(),
+            scope: auth::AuthProbeScope::Full,
             results: [(
                 "quota".into(),
                 auth::AuthEndpointResult {
@@ -1032,7 +1033,7 @@ fn start_refresh_scheduler(app: &AppHandle, state: &AuthState) {
 #[cfg(desktop)]
 fn cavoti_icon() -> Result<tauri::image::Image<'static>, String> {
     let decoder = png::Decoder::new(std::io::Cursor::new(include_bytes!(
-        "../../../../web/public/favicon.png"
+        "../../public/favicon.png"
     )));
     let mut reader = decoder.read_info().map_err(|error| error.to_string())?;
     let mut pixels = vec![0; reader.output_buffer_size()];

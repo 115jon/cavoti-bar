@@ -10,9 +10,12 @@ namespace CavotiInstaller
 {
     internal static class InstallerLogic
     {
-        private const string DisplayName = "CavotiBar";
-        private const string ExecutableName = "cavoti_bar.exe";
+        private const string DisplayName = "Cavoti Bar";
+        internal const string ExecutableName = "Cavoti Bar.exe";
+        private const string CurrentProcessName = "Cavoti Bar";
+        private const string LegacyProcessName = "cavoti_bar";
         private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\CavotiBar";
+        private static string ProcessStartArguments => "--processStart \"" + ExecutableName + "\"";
 
         public static void RunInstallation(bool launch)
         {
@@ -33,8 +36,8 @@ namespace CavotiInstaller
             ExtractEmbeddedIcon(layout.RootIconPath);
             DeepLinkRegistration.Register(layout.UpdatePath);
             WriteUninstall(layout);
-            CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Cavoti Bar.lnk"), layout.UpdatePath, "--processStart " + ExecutableName);
-            CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", "Cavoti Bar.lnk"), layout.UpdatePath, "--processStart " + ExecutableName);
+            CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Cavoti Bar.lnk"), layout.UpdatePath, ProcessStartArguments);
+            CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", "Cavoti Bar.lnk"), layout.UpdatePath, ProcessStartArguments);
             if (launch) LaunchCurrentVersion.Execute(new[] { "--processStart", ExecutableName });
         }
 
@@ -64,7 +67,7 @@ namespace CavotiInstaller
                     if (string.IsNullOrEmpty(entry.Name)) Directory.CreateDirectory(path);
                     else { Directory.CreateDirectory(Path.GetDirectoryName(path)); entry.ExtractToFile(path, true); }
                 }
-            if (!File.Exists(Path.Combine(destination, ExecutableName))) throw new InvalidOperationException("The Cavoti payload is missing cavoti_bar.exe.");
+            if (!File.Exists(Path.Combine(destination, ExecutableName))) throw new InvalidOperationException("The Cavoti payload is missing " + ExecutableName + ".");
         }
 
         private static void ExtractEmbeddedIcon(string destination)
@@ -81,7 +84,13 @@ namespace CavotiInstaller
 
         private static void StopRunning()
         {
-            foreach (var process in Process.GetProcessesByName("cavoti_bar")) { try { process.Kill(); process.WaitForExit(5000); } catch { } finally { process.Dispose(); } }
+            foreach (var processName in new[] { CurrentProcessName, LegacyProcessName })
+                foreach (var process in Process.GetProcessesByName(processName))
+                {
+                    try { process.Kill(); process.WaitForExit(5000); }
+                    catch { }
+                    finally { process.Dispose(); }
+                }
         }
 
         private static void WriteUninstall(InstallRootLayout layout)

@@ -4,17 +4,17 @@
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
     <UseWPF>true</UseWPF>
-    <AssemblyName>CavotiBarSetup</AssemblyName>
-    <ApplicationIcon>..\apps\tauri\src-tauri\icons\icon.ico</ApplicationIcon>
+    <AssemblyName>Cavoti Bar Setup</AssemblyName>
+    <ApplicationIcon>..\src-tauri\icons\icon.ico</ApplicationIcon>
     <Company>115jon</Company>
     <Product>Cavoti Bar Setup</Product>
     <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <Resource Include="..\apps\tauri\src-tauri\icons\icon.ico" Link="Assets\icon.ico" />
-    <EmbeddedResource Include="..\apps\tauri\src-tauri\icons\icon.ico" Link="Assets\icon.ico" />
-    <Resource Include="..\apps\tauri\src-tauri\icons\icon.png" Link="Assets\icon.png" />
+    <Resource Include="..\src-tauri\icons\icon.ico" Link="Assets\icon.ico" />
+    <EmbeddedResource Include="..\src-tauri\icons\icon.ico" Link="Assets\icon.ico" />
+    <Resource Include="..\src-tauri\icons\icon.png" Link="Assets\icon.png" />
     <EmbeddedResource Include="Assets\payload.zip" Condition="Exists('Assets\payload.zip')" />
   </ItemGroup>
 

@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.cavoti.bar",
   "build": {
-    "beforeDevCommand": "bun run --cwd ../../web dev:tauri",
+    "beforeDevCommand": "bun run dev:tauri",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run --cwd ../../web build:tauri",
+    "beforeBuildCommand": "bun run build:tauri",
     "frontendDist": "../dist"
   },
   "app": {

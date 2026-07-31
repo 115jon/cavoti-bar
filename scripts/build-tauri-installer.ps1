@@ -32,15 +32,20 @@ Invoke-TauriBun -Arguments @("run", "tauri", "build", "--no-bundle")
 $tauriRoot = Get-TauriRoot
 $releaseDirectory = Join-Path $tauriRoot "src-tauri\target\release"
 $payloadDirectory = Join-Path $releaseDirectory "installer_stage"
-$payloadZip = Join-Path $tauriRoot "..\..\installer\Assets\payload.zip"
+$payloadZip = Join-Path $tauriRoot "installer\Assets\payload.zip"
 $payloadZipDirectory = Split-Path -Parent $payloadZip
-$installerProject = Join-Path $tauriRoot "..\..\installer\CavotiBarSetup.csproj"
-$installerOutput = Join-Path $tauriRoot "..\..\installer\bin\Release\net48\CavotiBarSetup.exe"
+$installerProject = Join-Path $tauriRoot "installer\CavotiBarSetup.csproj"
+$installerOutput = Join-Path $tauriRoot "installer\bin\Release\net48\Cavoti Bar Setup.exe"
+$rawExecutable = Get-RawReleaseExecutable
+$brandedExecutableName = Split-Path -Leaf (Get-ReleaseExecutable)
 
 if (Test-Path -LiteralPath $payloadDirectory) { Remove-Item -LiteralPath $payloadDirectory -Recurse -Force }
 New-Item -ItemType Directory -Path $payloadDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $payloadZipDirectory -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $releaseDirectory "cavoti_bar.exe") -Destination (Join-Path $payloadDirectory "cavoti_bar.exe") -Force
+if (-not (Test-Path -LiteralPath $rawExecutable)) {
+    throw "The Tauri release executable was not found at $rawExecutable."
+}
+Copy-Item -LiteralPath $rawExecutable -Destination (Join-Path $payloadDirectory $brandedExecutableName) -Force
 if (Test-Path -LiteralPath $payloadZip) { Remove-Item -LiteralPath $payloadZip -Force }
 Compress-Archive -Path (Join-Path $payloadDirectory "*") -DestinationPath $payloadZip -Force
 

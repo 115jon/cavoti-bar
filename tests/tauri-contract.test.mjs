@@ -6,9 +6,30 @@ import test from "node:test";
 const root = path.resolve(import.meta.dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
+test("repository uses the root application layout", () => {
+  for (const requiredPath of ["package.json", "src", "public", "src-tauri"]) {
+    assert.equal(fs.existsSync(path.join(root, requiredPath)), true, requiredPath);
+  }
+  for (const legacyPath of [
+    "web/package.json",
+    "web/vite.config.ts",
+    "web/index.html",
+    "apps/tauri/package.json",
+    "apps/tauri/src-tauri/tauri.conf.json",
+  ]) {
+    assert.equal(fs.existsSync(path.join(root, legacyPath)), false, legacyPath);
+  }
+
+  const config = JSON.parse(read("src-tauri/tauri.conf.json"));
+  const native = read("src-tauri/src/lib.rs");
+  assert.equal(config.build.beforeDevCommand, "bun run dev:tauri");
+  assert.equal(config.build.beforeBuildCommand, "bun run build:tauri");
+  assert.match(native, /include_bytes!\(\s*"\.\.\/\.\.\/public\/favicon\.png"/);
+});
+
 test("Tauri shell is configured as the Cavoti product", () => {
-  const config = read("apps/tauri/src-tauri/tauri.conf.json");
-  const cargo = read("apps/tauri/src-tauri/Cargo.toml");
+  const config = read("src-tauri/tauri.conf.json");
+  const cargo = read("src-tauri/Cargo.toml");
   assert.match(config, /"productName": "Cavoti Bar"/);
   assert.match(config, /"identifier": "com\.cavoti\.bar"/);
   assert.match(cargo, /tauri-plugin-autostart/);
@@ -22,10 +43,10 @@ test("Tauri shell is configured as the Cavoti product", () => {
 });
 
 test("deep links register the Cavoti scheme on desktop and Android", () => {
-  const config = JSON.parse(read("apps/tauri/src-tauri/tauri.conf.json"));
-  const cargo = read("apps/tauri/src-tauri/Cargo.toml");
+  const config = JSON.parse(read("src-tauri/tauri.conf.json"));
+  const cargo = read("src-tauri/Cargo.toml");
   const manifest = read(
-    "apps/tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml",
+    "src-tauri/gen/android/app/src/main/AndroidManifest.xml",
   );
 
   assert.deepEqual(config.plugins["deep-link"].desktop.schemes, ["cavoti"]);
@@ -43,9 +64,9 @@ test("deep links register the Cavoti scheme on desktop and Android", () => {
 });
 
 test("deep-link handling is normalized before it crosses the host boundary", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const parser = read("apps/tauri/src-tauri/src/navigation.rs");
-  const protocol = read("web/src/bridge/protocol.ts");
+  const native = read("src-tauri/src/lib.rs");
+  const parser = read("src-tauri/src/navigation.rs");
+  const protocol = read("src/bridge/protocol.ts");
 
   assert.match(native, /on_open_url/);
   assert.match(native, /get_current/);
@@ -66,22 +87,22 @@ test("deep-link handling is normalized before it crosses the host boundary", () 
 
 test("Tauri keeps remote auth in a separate, narrowly scoped capability", () => {
   const capability = JSON.parse(
-    read("apps/tauri/src-tauri/capabilities/auth.json"),
+    read("src-tauri/capabilities/auth.json"),
   );
-  const permission = read("apps/tauri/src-tauri/permissions/auth.toml");
-  const config = read("apps/tauri/src-tauri/tauri.conf.json");
+  const permission = read("src-tauri/permissions/auth.toml");
+  const config = read("src-tauri/tauri.conf.json");
 
   assert.deepEqual(capability.windows, ["auth"]);
   assert.deepEqual(capability.remote.urls, ["https://cavoti.com/*"]);
   assert.deepEqual(capability.permissions, ["auth-collection-result"]);
   assert.match(permission, /auth_collection_result/);
   assert.match(config, /"capabilities"\s*:\s*\[[\s\S]*"default"[\s\S]*"desktop-capability"[\s\S]*"auth"/);
-  assert.doesNotMatch(read("apps/tauri/src-tauri/capabilities/default.json"), /"auth"/);
+  assert.doesNotMatch(read("src-tauri/capabilities/default.json"), /"auth"/);
 });
 
 test("auth collection validates origin, phases, terminal results, and payload bounds", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const auth = read("apps/tauri/src-tauri/src/auth.rs");
+  const native = read("src-tauri/src/lib.rs");
+  const auth = read("src-tauri/src/auth.rs");
 
   assert.match(native, /auth_collection_result/);
   assert.match(native, /AUTH_WINDOW_LABEL/);
@@ -102,7 +123,7 @@ test("auth collection validates origin, phases, terminal results, and payload bo
 });
 
 test("auth probe never sends tokens or unbounded page data across the bridge", () => {
-  const native = read("apps/tauri/src-tauri/src/auth.rs");
+  const native = read("src-tauri/src/auth.rs");
 
   assert.match(native, /localStorage\.getItem\('auth_token'\)/);
   assert.match(native, /Authorization/);
@@ -123,8 +144,8 @@ test("auth probe never sends tokens or unbounded page data across the bridge", (
 });
 
 test("auth probe uses Tauri's runtime invoke key on postMessage", () => {
-  const auth = read("apps/tauri/src-tauri/src/auth.rs");
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const auth = read("src-tauri/src/auth.rs");
+  const native = read("src-tauri/src/lib.rs");
 
   assert.match(native, /\.invoke_key\(\)/);
   assert.match(auth, /__TAURI_INVOKE_KEY__:\s*invokeKey/);
@@ -134,8 +155,8 @@ test("auth probe uses Tauri's runtime invoke key on postMessage", () => {
 });
 
 test("desktop auth command bounds raw JSON before deserialization", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const auth = read("apps/tauri/src-tauri/src/auth.rs");
+  const native = read("src-tauri/src/lib.rs");
+  const auth = read("src-tauri/src/auth.rs");
 
   assert.match(auth, /MAX_AUTH_PAYLOAD_BYTES/);
   assert.match(native, /payload: String/);
@@ -144,7 +165,7 @@ test("desktop auth command bounds raw JSON before deserialization", () => {
 });
 
 test("auth probe matches the optional endpoint contract", () => {
-  const auth = read("apps/tauri/src-tauri/src/auth.rs");
+  const auth = read("src-tauri/src/auth.rs");
 
   for (const endpoint of [
     "usage",
@@ -166,14 +187,14 @@ test("auth probe matches the optional endpoint contract", () => {
 });
 
 test("startup and refresh route Android auth through the MainActivity session adapter", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const native = read("src-tauri/src/lib.rs");
   const activity = read(
-    "apps/tauri/src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
+    "src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
   );
   const gateTest = read(
-    "apps/tauri/src-tauri/gen/android/app/src/test/java/com/cavoti/bar/SessionResultGateTest.kt",
+    "src-tauri/gen/android/app/src/test/java/com/cavoti/bar/SessionResultGateTest.kt",
   );
-  const bridge = read("web/src/bridge/host.ts");
+  const bridge = read("src/bridge/host.ts");
 
   assert.match(native, /start_android_session_probe/);
   assert.match(native, /emit_bootstrap[\s\S]*start_android_session_probe/);
@@ -208,8 +229,9 @@ test("startup and refresh route Android auth through the MainActivity session ad
   assert.match(activity, /dispatchAbortProbe/);
   assert.match(activity, /dispatchHideSession/);
   assert.match(activity, /dispatchPrepareForLogin/);
-  assert.doesNotMatch(activity, /CavotiAndroidController|ControllerBridge|JavascriptInterface/);
-  assert.doesNotMatch(activity, /addJavascriptInterface/);
+  assert.doesNotMatch(activity, /CavotiAndroidController|ControllerBridge/);
+  assert.match(activity, /LegacyResultBridge/);
+  assert.match(activity, /addJavascriptInterface\(LegacyResultBridge\(this\), "CavotiAndroidResult"\)/);
   assert.match(activity, /WebViewCompat\.addWebMessageListener/);
   assert.match(activity, /WebViewFeature\.isFeatureSupported\([\s\S]*WebViewFeature\.WEB_MESSAGE_LISTENER/);
   assert.match(activity, /authCollectionBridgeUnavailable/);
@@ -265,7 +287,7 @@ test("startup and refresh route Android auth through the MainActivity session ad
 });
 
 test("auth window creation is reached through an async command path", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const native = read("src-tauri/src/lib.rs");
 
   assert.match(native, /async fn open_auth_window/);
   assert.match(native, /async fn host_command/);
@@ -274,7 +296,7 @@ test("auth window creation is reached through an async command path", () => {
 });
 
 test("manual connect restores and explicitly navigates the visible auth window", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const native = read("src-tauri/src/lib.rs");
   assert.match(native, /window\.show\(\)/);
   assert.match(native, /window\.unminimize\(\)/);
   assert.match(native, /window\.navigate\(login_url\.clone\(\)/);
@@ -285,12 +307,12 @@ test("manual connect restores and explicitly navigates the visible auth window",
 
 test("Android has no secondary auth activity or split embedding path", () => {
   const manifest = read(
-    "apps/tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml",
+    "src-tauri/gen/android/app/src/main/AndroidManifest.xml",
   );
   const activity = read(
-    "apps/tauri/src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
+    "src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
   );
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const native = read("src-tauri/src/lib.rs");
 
   assert.doesNotMatch(manifest, /AuthActivity|SplitInitializer|PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED/);
   assert.match(native, /#\[cfg\(not\(target_os = "android"\)\)\]\s*async fn open_auth_window/);
@@ -298,8 +320,8 @@ test("Android has no secondary auth activity or split embedding path", () => {
 });
 
 test("settings persist through the Tauri store and drive native refresh behavior", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const cargo = read("apps/tauri/src-tauri/Cargo.toml");
+  const native = read("src-tauri/src/lib.rs");
+  const cargo = read("src-tauri/Cargo.toml");
   assert.match(cargo, /tauri-plugin-store/);
   assert.match(native, /use tauri_plugin_store::StoreExt/);
   assert.match(native, /app\.store\(SETTINGS_STORE\)/);
@@ -311,8 +333,8 @@ test("settings persist through the Tauri store and drive native refresh behavior
 });
 
 test("desktop host actions use fixed opener destinations and the process restart API", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const host = read("apps/tauri/src-tauri/src/host.rs");
+  const native = read("src-tauri/src/lib.rs");
+  const host = read("src-tauri/src/host.rs");
   assert.match(native, /resolve_external_command/);
   assert.match(native, /\.opener\(\)[\s\S]{0,40}\.open_url\(/);
   assert.match(native, /app\.request_restart\(\)/);
@@ -326,7 +348,7 @@ test("desktop host actions use fixed opener destinations and the process restart
 });
 
 test("window state restores desktop geometry with an off-screen fallback", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const native = read("src-tauri/src/lib.rs");
   assert.match(native, /tauri_plugin_window_state::Builder::default\(\)/);
   assert.match(native, /StateFlags::SIZE/);
   assert.match(native, /StateFlags::POSITION/);
@@ -340,9 +362,9 @@ test("window state restores desktop geometry with an off-screen fallback", () =>
 });
 
 test("native notifications use normalized quota state without forwarding raw payloads", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const notifications = read("apps/tauri/src-tauri/src/notifications.rs");
-  const quota = read("apps/tauri/src-tauri/src/quota.rs");
+  const native = read("src-tauri/src/lib.rs");
+  const notifications = read("src-tauri/src/notifications.rs");
+  const quota = read("src-tauri/src/quota.rs");
   assert.match(native, /notify_connection_state/);
   assert.match(native, /notify_quota_alerts/);
   assert.match(notifications, /NotificationExt/);
@@ -358,9 +380,9 @@ test("native notifications use normalized quota state without forwarding raw pay
 });
 
 test("Tauri host uses typed command and event boundaries", () => {
-  const host = read("web/src/bridge/host.ts");
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const mainCapability = read("apps/tauri/src-tauri/capabilities/default.json");
+  const host = read("src/bridge/host.ts");
+  const native = read("src-tauri/src/lib.rs");
+  const mainCapability = read("src-tauri/capabilities/default.json");
   assert.match(host, /@tauri-apps\/api\/core/);
   assert.match(host, /@tauri-apps\/api\/event/);
   assert.match(host, /chrome\?:[\s\S]*webview/);
@@ -371,19 +393,19 @@ test("Tauri host uses typed command and event boundaries", () => {
   assert.match(native, /"loading"/);
   assert.match(host, /unlistenEvents/);
   assert.match(host, /unlistenCommands/);
-  assert.match(read("apps/tauri/src-tauri/tauri.conf.json"), /"withGlobalTauri": true/);
+  assert.match(read("src-tauri/tauri.conf.json"), /"withGlobalTauri": true/);
   assert.match(mainCapability, /"host-command"/);
-  assert.match(read("apps/tauri/src-tauri/permissions/main.toml"), /host_command/);
-  assert.match(read("apps/tauri/src-tauri/tauri.conf.json"), /http:\/\/ipc\.localhost/);
+  assert.match(read("src-tauri/permissions/main.toml"), /host_command/);
+  assert.match(read("src-tauri/tauri.conf.json"), /http:\/\/ipc\.localhost/);
 });
 
 test("Tauri advertises mobile capabilities and gates desktop-only permissions", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const native = read("src-tauri/src/lib.rs");
   const mainCapability = JSON.parse(
-    read("apps/tauri/src-tauri/capabilities/default.json"),
+    read("src-tauri/capabilities/default.json"),
   );
   const desktopCapability = JSON.parse(
-    read("apps/tauri/src-tauri/capabilities/desktop.json"),
+    read("src-tauri/capabilities/desktop.json"),
   );
 
   assert.match(native, /type": "capabilities"/);
@@ -394,15 +416,15 @@ test("Tauri advertises mobile capabilities and gates desktop-only permissions", 
 });
 
 test("foreground lifecycle pauses collection and resumes one bounded probe", () => {
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const auth = read("apps/tauri/src-tauri/src/auth.rs");
-  const lifecycle = read("apps/tauri/src-tauri/src/lifecycle.rs");
-  const app = read("web/src/App.tsx");
+  const native = read("src-tauri/src/lib.rs");
+  const auth = read("src-tauri/src/auth.rs");
+  const lifecycle = read("src-tauri/src/lifecycle.rs");
+  const app = read("src/App.tsx");
 
   assert.match(native, /"lifecycle"/);
   assert.match(native, /__cavotiAuthAbort/);
   assert.match(native, /foreground_refresh_started/);
-  assert.match(native, /abort_auth_collection\(app, state\)/);
+  assert.match(native, /abort_current_android_collection\(app, state\)/);
   assert.match(native, /AUTH_COLLECTION_TIMEOUT/);
   assert.match(native, /is_foreground/);
   assert.match(auth, /try_begin_collection/);
@@ -412,13 +434,13 @@ test("foreground lifecycle pauses collection and resumes one bounded probe", () 
   assert.match(app, /action: "lifecycle"/);
 });
 
-test("Tauri builds the shared renderer without changing the web output", () => {
-  const packageJson = read("web/package.json");
-  const vite = read("web/vite.config.ts");
-  const config = read("apps/tauri/src-tauri/tauri.conf.json");
+test("Tauri builds the shared renderer without changing the renderer output", () => {
+  const packageJson = read("package.json");
+  const vite = read("vite.config.ts");
+  const config = read("src-tauri/tauri.conf.json");
   assert.match(packageJson, /"build:tauri"/);
   assert.match(vite, /mode === "tauri"/);
-  assert.match(vite, /apps\/tauri\/dist/);
+  assert.match(vite, /outDir: tauri \? "dist"/);
   assert.match(config, /"frontendDist": "\.\.\/dist"/);
 });
 
@@ -426,7 +448,7 @@ test("Tauri development and release scripts stop stale binaries before launching
   const dev = read("scripts/tauri-dev.ps1");
   const build = read("scripts/build-tauri-release.ps1");
   const run = read("scripts/run-tauri-release.ps1");
-  const packageJson = JSON.parse(read("apps/tauri/package.json"));
+  const packageJson = JSON.parse(read("package.json"));
 
   assert.match(dev, /Stop-CavotiProcesses/);
   assert.match(dev, /run\", \"tauri\", \"dev/);
@@ -440,12 +462,12 @@ test("Tauri development and release scripts stop stale binaries before launching
 });
 
 test("Cavoti packages a signed custom bootstrapper installer and updater", () => {
-  const config = JSON.parse(read("apps/tauri/src-tauri/tauri.conf.json"));
-  const packageJson = JSON.parse(read("apps/tauri/package.json"));
+  const config = JSON.parse(read("src-tauri/tauri.conf.json"));
+  const packageJson = JSON.parse(read("package.json"));
   const installer = read("installer/InstallerLogic.cs");
   const project = read("installer/CavotiBarSetup.csproj");
-  const updates = read("apps/tauri/src-tauri/src/updates.rs");
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
+  const updates = read("src-tauri/src/updates.rs");
+  const native = read("src-tauri/src/lib.rs");
   const build = read("scripts/build-tauri-installer.ps1");
   const workflow = read(".github/workflows/windows-release.yml");
   const gitignore = read(".gitignore");
@@ -453,7 +475,7 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
   assert.equal(config.bundle.active, false);
   assert.deepEqual(config.bundle.targets, []);
   assert.doesNotMatch(JSON.stringify(config.bundle), /nsis|msi/i);
-  assert.match(project, /CavotiBarSetup/);
+  assert.match(project, /AssemblyName>Cavoti Bar Setup<\/AssemblyName>/);
   assert.match(project, /ApplicationIcon.*icons\\icon\.ico/);
   assert.match(project, /Company>115jon<\/Company>/);
   assert.match(project, /Product>Cavoti Bar Setup<\/Product>/);
@@ -475,7 +497,7 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
   assert.match(build, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.match(build, /Import-CavotiEnv/);
   assert.match(build, /run\", \"tauri\", \"build/);
-  assert.match(build, /CavotiBarSetup\.exe/);
+  assert.match(build, /Cavoti Bar Setup\.exe/);
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.match(workflow, /latest\.json/);
   assert.match(workflow, /gh release create/);
@@ -484,20 +506,20 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
 });
 
 test("Cavoti packages a signed Android APK without repository keystores", () => {
-  const config = JSON.parse(read("apps/tauri/src-tauri/tauri.conf.json"));
+  const config = JSON.parse(read("src-tauri/tauri.conf.json"));
   const script = read("scripts/build-tauri-android-release.ps1");
   const envExample = read(".env.example");
   const gitignore = read(".gitignore");
-  const notifications = read("apps/tauri/src-tauri/src/notifications.rs");
-  const app = read("web/src/App.tsx");
-  const indexHtml = read("web/index.html");
-  const indexCss = read("web/src/index.css");
-  const appShell = read("web/src/components/app/AppShell.tsx");
-  const native = read("apps/tauri/src-tauri/src/lib.rs");
-  const androidGradle = read("apps/tauri/src-tauri/gen/android/app/build.gradle.kts");
-  const androidManifest = read("apps/tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml");
+  const notifications = read("src-tauri/src/notifications.rs");
+  const app = read("src/App.tsx");
+  const indexHtml = read("index.html");
+  const indexCss = read("src/index.css");
+  const appShell = read("src/components/app/AppShell.tsx");
+  const native = read("src-tauri/src/lib.rs");
+  const androidGradle = read("src-tauri/gen/android/app/build.gradle.kts");
+  const androidManifest = read("src-tauri/gen/android/app/src/main/AndroidManifest.xml");
   const activity = read(
-    "apps/tauri/src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
+    "src-tauri/gen/android/app/src/main/java/com/cavoti/bar/MainActivity.kt",
   );
 
   assert.equal(config.identifier, "com.cavoti.bar");
@@ -575,4 +597,73 @@ test("installer signing consumes exported environment secrets", () => {
   assert.match(script, /signArguments = @\("run", "tauri", "signer", "sign", \$installerOutput\)/);
   assert.doesNotMatch(script, /signer", "sign", "-k"/);
   assert.doesNotMatch(script, /signArguments.*-p/);
+});
+
+test("Windows release artifacts use branded filenames without changing internal identity", () => {
+  const processScript = read("scripts/tauri-process.ps1");
+  const releaseScript = read("scripts/build-tauri-release.ps1");
+  const installerScript = read("scripts/build-tauri-installer.ps1");
+  const installer = read("installer/InstallerLogic.cs");
+  const deepLinks = read("installer/DeepLinkRegistration.cs");
+  const project = read("installer/CavotiBarSetup.csproj");
+
+  assert.match(processScript, /Cavoti Bar\.exe/);
+  assert.match(processScript, /cavoti_bar/);
+  assert.match(releaseScript, /Get-RawReleaseExecutable/);
+  assert.match(releaseScript, /Get-ReleaseExecutable/);
+  assert.match(releaseScript, /Copy-Item/);
+  assert.match(installerScript, /brandedExecutableName/);
+  assert.match(installerScript, /Cavoti Bar Setup\.exe/);
+  assert.match(installer, /DisplayName = "Cavoti Bar"/);
+  assert.match(installer, /ExecutableName = "Cavoti Bar\.exe"/);
+  assert.match(installer, /LegacyProcessName = "cavoti_bar"/);
+  assert.match(installer, /ProcessStartArguments/);
+  assert.match(installer, /CreateShortcut[\s\S]*ProcessStartArguments/);
+  assert.match(deepLinks, /InstallerLogic\.ExecutableName/);
+  assert.match(project, /AssemblyName>Cavoti Bar Setup<\/AssemblyName>/);
+});
+
+test("GitHub Actions validate changes and publish signed desktop and Android releases", () => {
+  const validation = read(".github/workflows/ci.yml");
+  const windowsRelease = read(".github/workflows/windows-release.yml");
+  const androidRelease = read(".github/workflows/android-release.yml");
+  const androidScript = read("scripts/build-tauri-android-release.ps1");
+
+  assert.match(validation, /bun install --frozen-lockfile/);
+  assert.match(validation, /bun run typecheck/);
+  assert.match(validation, /bun run test/);
+  assert.match(validation, /cargo test/);
+  assert.match(windowsRelease, /name: Cavoti Windows Release/);
+  assert.match(windowsRelease, /TAURI_SIGNING_PRIVATE_KEY/);
+  assert.match(windowsRelease, /Cavoti Bar Setup\.exe/);
+  assert.match(androidRelease, /name: Cavoti Android Release/);
+  assert.match(androidRelease, /push:[\s\S]*tags:[\s\S]*"v\*"/);
+  assert.match(androidRelease, /CAVOTI_ANDROID_KEYSTORE_BASE64/);
+  assert.match(androidRelease, /CAVOTI_ANDROID_KEY_ALIAS/);
+  assert.match(androidRelease, /Cavoti Bar\.apk/);
+  assert.match(androidRelease, /gh release upload/);
+  assert.doesNotMatch(androidRelease, /workflow_dispatch/);
+  assert.match(androidScript, /Cavoti Bar\.apk/);
+});
+
+test("repository documentation and secret provisioning are conventional", () => {
+  const readme = read("README.md");
+  const agents = read("AGENTS.md");
+  const provision = read("scripts/configure-github-secrets.ps1");
+
+  assert.match(readme, /^# Cavoti Bar/m);
+  assert.match(readme, /^## Architecture/m);
+  assert.match(readme, /^## Development/m);
+  assert.match(readme, /^## Release builds/m);
+  assert.doesNotMatch(readme, /\.env/i);
+  assert.match(agents, /src-tauri\//);
+  assert.match(agents, /src\//);
+  assert.match(agents, /public\//);
+  assert.doesNotMatch(agents, /apps\/tauri|web\//);
+  assert.match(agents, /installer\//);
+  assert.match(agents, /cavoti_bar/);
+  assert.match(provision, /secret set/);
+  assert.match(provision, /CAVOTI_ANDROID_KEYSTORE_BASE64/);
+  assert.match(provision, /CAVOTI_UPDATE_ENDPOINT/);
+  assert.doesNotMatch(provision, /Write-(Host|Output).*PASSWORD/i);
 });

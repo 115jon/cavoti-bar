@@ -17,7 +17,7 @@ namespace CavotiInstaller
                 key.SetValue("URL Protocol", string.Empty);
                 using (var icon = key.CreateSubKey("DefaultIcon")) icon.SetValue(string.Empty, launcherPath);
                 using (var command = key.CreateSubKey(@"shell\open\command"))
-                    command.SetValue(string.Empty, "\"" + launcherPath + "\" --processStart cavoti_bar.exe \"%1\"");
+                    command.SetValue(string.Empty, "\"" + launcherPath + "\" --processStart \"" + InstallerLogic.ExecutableName + "\" \"%1\"");
             }
         }
 

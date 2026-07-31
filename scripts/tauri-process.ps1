@@ -1,10 +1,14 @@
+$script:CavotiRawExecutableName = "cavoti_bar.exe"
+$script:CavotiReleaseExecutableName = "Cavoti Bar.exe"
+$script:CavotiProcessNames = @("Cavoti Bar", "cavoti_bar")
+
 function Stop-CavotiProcesses {
     [CmdletBinding()]
     param(
         [int]$TimeoutSeconds = 5
     )
 
-    $processes = @(Get-Process -Name "cavoti_bar" -ErrorAction SilentlyContinue)
+    $processes = @(Get-Process -Name $script:CavotiProcessNames -ErrorAction SilentlyContinue)
     if ($processes.Count -eq 0) {
         return
     }
@@ -13,7 +17,7 @@ function Stop-CavotiProcesses {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         Start-Sleep -Milliseconds 100
-        $remaining = @(Get-Process -Name "cavoti_bar" -ErrorAction SilentlyContinue)
+        $remaining = @(Get-Process -Name $script:CavotiProcessNames -ErrorAction SilentlyContinue)
     } while ($remaining.Count -gt 0 -and (Get-Date) -lt $deadline)
 
     if ($remaining.Count -gt 0) {
@@ -22,7 +26,7 @@ function Stop-CavotiProcesses {
 }
 
 function Get-TauriRoot {
-    return Join-Path (Split-Path -Parent $PSScriptRoot) "apps\tauri"
+    return Split-Path -Parent $PSScriptRoot
 }
 
 function Import-CavotiEnv {
@@ -49,7 +53,11 @@ function Import-CavotiEnv {
 }
 
 function Get-ReleaseExecutable {
-    return Join-Path (Get-TauriRoot) "src-tauri\target\release\cavoti_bar.exe"
+    return Join-Path (Get-TauriRoot) "src-tauri\target\release\$script:CavotiReleaseExecutableName"
+}
+
+function Get-RawReleaseExecutable {
+    return Join-Path (Get-TauriRoot) "src-tauri\target\release\$script:CavotiRawExecutableName"
 }
 
 function Invoke-TauriBun {

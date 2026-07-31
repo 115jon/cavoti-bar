@@ -8,16 +8,17 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "tauri-process.ps1")
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$tauriRoot = Join-Path $repositoryRoot "apps\tauri"
+$tauriRoot = $repositoryRoot
 $androidRoot = Join-Path $tauriRoot "src-tauri\gen\android"
 $gradleFile = Join-Path $androidRoot "app\build.gradle.kts"
 $keystorePropertiesFile = Join-Path $androidRoot "keystore.properties"
 $apkOutputDirectory = Join-Path $androidRoot "app\build\outputs\apk"
 
 foreach ($requiredPath in @(
-    (Join-Path $repositoryRoot "apps\tauri\package.json"),
-    (Join-Path $repositoryRoot "apps\tauri\src-tauri\tauri.conf.json"),
-    (Join-Path $repositoryRoot "web\package.json")
+    (Join-Path $repositoryRoot "package.json"),
+    (Join-Path $repositoryRoot "src-tauri\tauri.conf.json"),
+    (Join-Path $repositoryRoot "src\main.tsx"),
+    (Join-Path $repositoryRoot "public\favicon.png")
 )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "The Cavoti Tauri repository structure is incomplete: $requiredPath"
@@ -141,6 +142,9 @@ if ($expectedVersionCode -le 0) { throw "tauri.conf.json must define a positive 
 if ($LASTEXITCODE -ne 0 -or ($badging -join "`n") -notmatch "package: name='com\.cavoti\.bar' versionCode='$expectedVersionCode'") {
     throw "The Android APK package metadata is not com.cavoti.bar."
 }
+$brandedApk = Join-Path $apk.DirectoryName "Cavoti Bar.apk"
+Copy-Item -LiteralPath $apk.FullName -Destination $brandedApk -Force
+$apk = Get-Item -LiteralPath $brandedApk
 
 if ($Install) {
     if ([string]::IsNullOrWhiteSpace($DeviceSerial)) {

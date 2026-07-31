@@ -26,7 +26,7 @@ jobs:
           if ($env:RELEASE_REF -notmatch '^refs/tags/v(?<version>[0-9]+\.[0-9]+\.[0-9]+)$') {
             throw "This workflow only signs semantic-version release tags."
           }
-          $config = Get-Content -Raw -LiteralPath "apps/tauri/src-tauri/tauri.conf.json" | ConvertFrom-Json
+          $config = Get-Content -Raw -LiteralPath "src-tauri/tauri.conf.json" | ConvertFrom-Json
           if ($Matches.version -ne $config.version) {
             throw "Release tag version $($Matches.version) does not match tauri.conf.json version $($config.version)."
           }
@@ -42,12 +42,12 @@ jobs:
       - name: Setup .NET Framework build tools
         uses: microsoft/setup-msbuild@v2
 
-      - name: Install web dependencies
-        working-directory: web
-        run: bun install --frozen-lockfile
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
 
-      - name: Install Tauri dependencies
-        working-directory: apps/tauri
+      - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Build custom Cavoti installer
@@ -63,16 +63,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $installer = "installer/bin/Release/net48/CavotiBarSetup.exe"
+          $installer = "installer/bin/Release/net48/Cavoti Bar Setup.exe"
           $signature = "$installer.sig"
           if (-not (Test-Path -LiteralPath $installer)) { throw "Custom installer not found: $installer" }
           if (-not (Test-Path -LiteralPath $signature)) { throw "Custom installer signature not found: $signature" }
 
-           $config = Get-Content -Raw -LiteralPath "apps/tauri/src-tauri/tauri.conf.json" | ConvertFrom-Json
-           $version = $config.version
-           $assetName = "CavotiBarSetup.exe"
-          Copy-Item -LiteralPath $installer -Destination "installer/bin/Release/net48/$assetName" -Force
-          Copy-Item -LiteralPath $signature -Destination "installer/bin/Release/net48/$assetName.sig" -Force
+          $config = Get-Content -Raw -LiteralPath "src-tauri/tauri.conf.json" | ConvertFrom-Json
+          $version = $config.version
+          $assetName = "Cavoti Bar Setup.exe"
+          $encodedAssetName = [Uri]::EscapeDataString($assetName)
 
           $metadata = [ordered]@{
             version = $version
@@ -81,14 +80,14 @@ jobs:
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
                 signature = (Get-Content -Raw -LiteralPath "installer/bin/Release/net48/$assetName.sig").Trim()
-             url = "https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/$assetName"
+                url = "https://github.com/${{ github.repository }}/releases/download/$env:RELEASE_TAG/$encodedAssetName"
               }
             }
           }
           $latestPath = "installer/bin/Release/net48/latest.json"
           $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $latestPath -NoNewline
 
-           gh release create $env:RELEASE_TAG `
+          gh release create $env:RELEASE_TAG `
             "installer/bin/Release/net48/$assetName" `
             "installer/bin/Release/net48/$assetName.sig" `
             $latestPath `
