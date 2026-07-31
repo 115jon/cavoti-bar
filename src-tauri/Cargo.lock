@@ -435,7 +435,7 @@ name = "cavoti_bar"
 version = "0.1.0"
 dependencies = [
  "jni 0.21.1",
- "png 0.17.16",
+ "png 0.18.1",
  "serde",
  "serde_json",
  "tauri",
