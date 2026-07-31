@@ -179,7 +179,7 @@ jobs:
             }
           }
 
-          $releaseId = (& gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .id | Out-String).Trim()
+          $releaseId = (& gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json databaseId --jq .databaseId | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseId)) { throw "Could not resolve the draft release ID." }
           function Upload-ReleaseAsset([string]$path, [string]$assetName, [string]$contentType) {
             $encodedName = [Uri]::EscapeDataString($assetName)

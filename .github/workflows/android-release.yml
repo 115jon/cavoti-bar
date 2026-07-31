@@ -212,7 +212,7 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw "Could not remove existing release asset: $assetName" }
             }
           }
-          $releaseId = (& gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq .id | Out-String).Trim()
+          $releaseId = (& gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json databaseId --jq .databaseId | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseId)) { throw "Could not resolve the draft release ID." }
           $encodedName = [Uri]::EscapeDataString("Cavoti Bar.apk")
           gh api --method POST --header "Content-Type: application/vnd.android.package-archive" --input $apk[0].FullName "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encodedName" | Out-Null
