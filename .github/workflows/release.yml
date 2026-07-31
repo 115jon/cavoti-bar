@@ -1,0 +1,61 @@
+name: Cavoti Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag to package, for example v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cavoti-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    uses: ./.github/workflows/windows-release.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+    secrets: inherit
+
+  android:
+    uses: ./.github/workflows/android-release.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+    secrets: inherit
+
+  publish:
+    if: ${{ needs.windows.result == 'success' && needs.android.result == 'success' }}
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Download Windows release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cavoti-windows-${{ inputs.release_tag }}
+          path: release-assets/windows
+
+      - name: Download Android release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cavoti-android-${{ inputs.release_tag }}
+          path: release-assets/android
+
+      - name: Publish the complete release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          draft: false
+          make_latest: true
+          files: |
+            release-assets/windows/Cavoti Bar Setup.exe
+            release-assets/windows/Cavoti Bar Setup.exe.sig
+            release-assets/windows/latest.json
+            release-assets/android/Cavoti-Bar-universal.apk
+          overwrite_files: true
+          fail_on_unmatched_files: true

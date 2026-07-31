@@ -2,16 +2,24 @@ name: Cavoti Android Release
 run-name: Cavoti Android Release ${{ inputs.release_tag }}
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       release_tag:
         description: Existing draft release tag to package, for example v1.2.3
         required: true
         type: string
+    secrets:
+      CAVOTI_ANDROID_KEYSTORE_BASE64:
+        required: true
+      CAVOTI_ANDROID_KEY_ALIAS:
+        required: true
+      CAVOTI_ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      CAVOTI_ANDROID_KEY_PASSWORD:
+        required: true
 
 permissions:
-  contents: write
-  actions: read
+  contents: read
 
 concurrency:
   group: cavoti-release-${{ inputs.release_tag }}-android
@@ -165,80 +173,18 @@ jobs:
           CAVOTI_ANDROID_KEY_PASSWORD: ${{ secrets.CAVOTI_ANDROID_KEY_PASSWORD }}
         run: .\scripts\build-tauri-android-release.ps1
 
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cavoti-bar-android-${{ inputs.release_tag }}-universal
-          path: src-tauri/gen/android/app/build/outputs/apk/**/release/Cavoti Bar.apk
-          if-no-files-found: error
-
-      - name: Wait for Windows release assets
+      - name: Prepare Android release asset
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $requiredWindowsAssets = @(
-            "Cavoti Bar Setup.exe",
-            "Cavoti Bar Setup.exe.sig",
-            "latest.json"
-          )
-          $deadline = (Get-Date).ToUniversalTime().AddMinutes(30)
-          do {
-            $windowsRuns = @(gh run list --repo $env:GITHUB_REPOSITORY --workflow windows-release.yml --event workflow_dispatch --limit 20 --json status,conclusion,displayTitle,createdAt | ConvertFrom-Json | Where-Object { $_.displayTitle -like "*$env:RELEASE_TAG*" } | Sort-Object createdAt -Descending)
-            if ($LASTEXITCODE -ne 0) { throw "Could not inspect the Windows packaging workflow." }
-            if ($windowsRuns.Count -gt 0 -and $windowsRuns[0].status -eq "completed" -and $windowsRuns[0].conclusion -ne "success") {
-              throw "Windows packaging for $env:RELEASE_TAG ended with $($windowsRuns[0].conclusion); refusing to wait or publish Android."
-            }
-            $assetNames = @(gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-            if ($LASTEXITCODE -eq 0 -and (@($requiredWindowsAssets | Where-Object { $assetNames -notcontains $_ }).Count -eq 0)) {
-              break
-            }
-            if ((Get-Date).ToUniversalTime() -ge $deadline) {
-              throw "Windows release assets were not available before the publish deadline."
-            }
-            Start-Sleep -Seconds 15
-          } while ($true)
-
-      - name: Upload APK and publish the complete release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $apk = @(Get-ChildItem -LiteralPath "src-tauri/gen/android/app/build/outputs/apk" -Recurse -Filter "Cavoti Bar.apk" -File)
           if ($apk.Count -ne 1) { throw "Expected exactly one branded release APK." }
-          $releaseApkName = "Cavoti-Bar-universal.apk"
-          $releaseApkPath = Join-Path $env:RUNNER_TEMP $releaseApkName
-          Copy-Item -LiteralPath $apk[0].FullName -Destination $releaseApkPath -Force
-          $assetNamesToReplace = @(
-            "Cavoti.Bar.apk",
-            "Cavoti Bar.apk",
-            $releaseApkName
-          )
-          $currentAssetNames = @(gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-          if ($LASTEXITCODE -ne 0) { throw "Could not inspect existing release assets." }
-          foreach ($assetName in $assetNamesToReplace) {
-            if ($currentAssetNames -contains $assetName) {
-              gh release delete-asset $env:RELEASE_TAG $assetName --yes --repo $env:GITHUB_REPOSITORY
-              if ($LASTEXITCODE -ne 0) { throw "Could not remove existing release asset: $assetName" }
-            }
-          }
-          $releaseId = (& gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json databaseId --jq .databaseId | Out-String).Trim()
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseId)) { throw "Could not resolve the draft release ID." }
-          $encodedName = [Uri]::EscapeDataString($releaseApkName)
-          gh api --hostname uploads.github.com --method POST --header "Content-Type: application/vnd.android.package-archive" --input $releaseApkPath "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encodedName" | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw "Android release asset upload failed." }
+          $output = Join-Path $env:GITHUB_WORKSPACE "release-assets\android"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          Copy-Item -LiteralPath $apk[0].FullName -Destination (Join-Path $output "Cavoti-Bar-universal.apk") -Force
 
-          $assetNames = @(gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
-          if ($LASTEXITCODE -ne 0) { throw "Could not inspect release assets." }
-          $expectedNames = @(
-            "Cavoti Bar Setup.exe",
-            "Cavoti Bar Setup.exe.sig",
-            "latest.json",
-            "Cavoti-Bar-universal.apk"
-          ) | Sort-Object
-          $differences = @(Compare-Object -ReferenceObject $expectedNames -DifferenceObject $assetNames)
-          if ($differences.Count -ne 0) {
-            throw "Draft release assets are not exactly the expected Windows and Android set: $($assetNames -join ', ')"
-          }
-          gh release edit $env:RELEASE_TAG --draft=false --latest --repo $env:GITHUB_REPOSITORY
-          if ($LASTEXITCODE -ne 0) { throw "Publishing the complete release failed." }
+      - name: Upload Android build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cavoti-android-${{ inputs.release_tag }}
+          path: release-assets/android
+          if-no-files-found: error

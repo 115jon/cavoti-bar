@@ -16,7 +16,6 @@ boundaries.
 - `installer/`: .NET Framework 4.8 WPF bootstrapper with embedded payload,
   versioned installation state, shortcuts, deep links, and uninstall support.
 - `scripts/`: canonical development, packaging, signing, and release commands.
-- `tests/`: Node contract tests for cross-module and packaging invariants.
 - `.github/`: validation, release automation, and dependency updates.
 
 ## Product identities
@@ -88,8 +87,6 @@ boundaries.
 Use Bun for JavaScript dependencies and scripts.
 
 ```powershell
-node --test .\tests\*.test.mjs
-
 bun run typecheck
 bun run test
 bun run format:check
@@ -112,8 +109,9 @@ Do not run release signing or publish commands unless explicitly requested.
 - Frontend behavior belongs in Vitest and Testing Library tests.
 - Rust parsing, adapters, and normalization belong in Rust unit tests.
 - Android gate and WebView protocol behavior belongs in Kotlin unit tests.
-- Cross-layer naming, security, packaging, and workflow rules belong in
-  `tests/tauri-contract.test.mjs`.
+- Keep tests close to the behavior they cover: renderer behavior in `src/`,
+  Rust behavior in `src-tauri/`, and Android bridge behavior in the tracked
+  Kotlin tests.
 - Scale validation to the blast radius and report existing unrelated warnings
   separately.
 
@@ -135,12 +133,12 @@ Do not run release signing or publish commands unless explicitly requested.
   Android can build concurrently.
 - Android release version codes follow the Tauri semver formula plus one to
   remain above the legacy `0.1.0` build's explicit code `1001`.
-- Release Please dispatches `Cavoti Windows Release` and `Cavoti Android
-  Release` concurrently with the same tag. Windows uploads the three exact
-  Windows assets. Android waits for those assets, uploads the APK, and publishes
-  only after the exact four-asset set is present in the final atomic check.
-- Reruns are recovery-safe: existing draft tags are accepted, matching assets
-  are replaced with `--clobber`, and no workflow creates a second release.
+- Release Please dispatches `Cavoti Release`. Its Windows and Android jobs run
+  independently, upload their assets, and a final `publish` job runs only when
+  both jobs succeed.
+- Reruns are recovery-safe: existing draft tags are accepted, matching release
+  assets are overwritten by the release action, and no workflow creates a
+  second release.
 - `TAURI_SIGNING_PRIVATE_KEY` is mandatory. `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
   is optional and is configured only when nonblank.
 - Manual dispatch is limited to an existing semantic tag and draft release;

@@ -22,7 +22,7 @@ jobs:
         with:
           token: ${{ github.token }}
 
-      - name: Dispatch Windows packaging for the draft release
+      - name: Dispatch the release build graph
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,9 +70,8 @@ jobs:
           fi
 
           dispatch_workflow() {
-            local workflow="$1"
             for attempt in {1..3}; do
-              if gh workflow run "$workflow" \
+              if gh workflow run release.yml \
                 --repo "$GITHUB_REPOSITORY" \
                 --ref main \
                 --field release_tag="$RELEASE_TAG"; then
@@ -80,16 +79,10 @@ jobs:
               fi
               sleep 5
             done
-            echo "Could not dispatch $workflow for $RELEASE_TAG." >&2
+            echo "Could not dispatch the release build graph for $RELEASE_TAG." >&2
             return 1
           }
 
-          windows_status=0
-          android_status=0
-          dispatch_workflow windows-release.yml & windows_pid=$!
-          dispatch_workflow android-release.yml & android_pid=$!
-          wait "$windows_pid" || windows_status=$?
-          wait "$android_pid" || android_status=$?
-          if (( windows_status != 0 || android_status != 0 )); then
+          if ! dispatch_workflow; then
             exit 1
           fi

@@ -2,16 +2,20 @@ name: Cavoti Windows Release
 run-name: Cavoti Windows Release ${{ inputs.release_tag }}
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       release_tag:
         description: Existing draft release tag to package, for example v1.2.3
         required: true
         type: string
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: true
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 concurrency:
   group: cavoti-release-${{ inputs.release_tag }}-windows
@@ -137,10 +141,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: .\scripts\build-tauri-installer.ps1
 
-      - name: Upload Windows assets
+      - name: Prepare Windows release assets
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $installer = "installer/bin/Release/net48/Cavoti Bar Setup.exe"
           $signature = "installer/bin/Release/net48/Cavoti Bar Setup.exe.sig"
@@ -164,29 +166,19 @@ jobs:
           }
           $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $latestPath -NoNewline
 
-          $assetNamesToReplace = @(
-            "Cavoti.Bar.Setup.exe",
-            "Cavoti.Bar.Setup.exe.sig",
-            "Cavoti Bar Setup.exe",
-            "Cavoti Bar Setup.exe.sig",
-            "latest.json"
-          )
-          $currentAssetNames = @(gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-          if ($LASTEXITCODE -ne 0) { throw "Could not inspect existing release assets." }
-          foreach ($assetName in $assetNamesToReplace) {
-            if ($currentAssetNames -contains $assetName) {
-              gh release delete-asset $env:RELEASE_TAG $assetName --yes --repo $env:GITHUB_REPOSITORY
-              if ($LASTEXITCODE -ne 0) { throw "Could not remove existing release asset: $assetName" }
-            }
-          }
 
-          $releaseId = (& gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json databaseId --jq .databaseId | Out-String).Trim()
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseId)) { throw "Could not resolve the draft release ID." }
-          function Upload-ReleaseAsset([string]$path, [string]$assetName, [string]$contentType) {
-            $encodedName = [Uri]::EscapeDataString($assetName)
-            gh api --hostname uploads.github.com --method POST --header "Content-Type: $contentType" --input $path "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encodedName" | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw "Could not upload release asset: $assetName" }
-          }
-          Upload-ReleaseAsset $installer "Cavoti Bar Setup.exe" "application/x-msdownload"
-          Upload-ReleaseAsset $signature "Cavoti Bar Setup.exe.sig" "application/octet-stream"
-          Upload-ReleaseAsset $latestPath "latest.json" "application/json"
+      - name: Prepare Windows release artifact
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:GITHUB_WORKSPACE "release-assets\windows"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          Copy-Item -LiteralPath "installer/bin/Release/net48/Cavoti Bar Setup.exe" -Destination $output -Force
+          Copy-Item -LiteralPath "installer/bin/Release/net48/Cavoti Bar Setup.exe.sig" -Destination $output -Force
+          Copy-Item -LiteralPath "installer/bin/Release/net48/latest.json" -Destination $output -Force
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cavoti-windows-${{ inputs.release_tag }}
+          path: release-assets/windows
+          if-no-files-found: error
