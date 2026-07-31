@@ -1,4 +1,5 @@
 name: Cavoti Windows Release
+run-name: Cavoti Windows Release ${{ inputs.release_tag }}
 
 on:
   workflow_dispatch:
@@ -183,7 +184,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseId)) { throw "Could not resolve the draft release ID." }
           function Upload-ReleaseAsset([string]$path, [string]$assetName, [string]$contentType) {
             $encodedName = [Uri]::EscapeDataString($assetName)
-            gh api --method POST --header "Content-Type: $contentType" --input $path "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encodedName" | Out-Null
+            gh api --hostname uploads.github.com --method POST --header "Content-Type: $contentType" --input $path "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?name=$encodedName" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "Could not upload release asset: $assetName" }
           }
           Upload-ReleaseAsset $installer "Cavoti Bar Setup.exe" "application/x-msdownload"

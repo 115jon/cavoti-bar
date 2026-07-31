@@ -26,7 +26,7 @@ Keep these identities distinct:
 - Product and shipped application: `Cavoti Bar`
 - Shipped Windows executable: `Cavoti Bar.exe`
 - Shipped Windows installer: `Cavoti Bar Setup.exe`
-- Shipped Android artifact: `Cavoti Bar.apk`
+- Shipped Android artifact: `Cavoti-Bar-universal.apk`
 - Rust package and compiler target: `cavoti_bar`
 - Rust library: `cavoti_bar_lib`
 - Android application ID and JNI namespace: `com.cavoti.bar`

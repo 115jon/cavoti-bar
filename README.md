@@ -50,7 +50,7 @@ The app is deliberately a monitor, not a credential manager. Authenticated colle
 | Platform | Download | Notes |
 | --- | --- | --- |
 | Windows | [Cavoti Bar Setup.exe](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar%20Setup.exe) | Installs the desktop client, updater, shortcuts, and deep-link registration. |
-| Android | [Cavoti Bar.apk](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti%20Bar.apk) | Signed universal APK for supported Android devices. |
+| Android | [Cavoti Bar universal APK](https://github.com/115jon/cavoti-bar/releases/latest/download/Cavoti-Bar-universal.apk) | Signed universal APK for supported Android devices. |
 | Release notes | [Latest GitHub release](https://github.com/115jon/cavoti-bar/releases/latest) | Version details, checksums, and all published assets. |
 
 ## Tech stack
@@ -158,7 +158,7 @@ Release tags must use `vMAJOR.MINOR.PATCH` and match the versions in `package.js
 
 Conventional commits merged to `main` create or update a Release Please pull request. Merging that pull request creates the forced semantic `vMAJOR.MINOR.PATCH` tag and a draft GitHub release. Release Please validates the tag and draft state, then dispatches `windows-release.yml` and `android-release.yml` concurrently on `main` with the tag.
 
-The Windows and Android workflows each require the exact remote tag to resolve to the checked-out, CI-passing commit on `main` before the protected `release` environment exposes signing secrets. They use independent per-platform concurrency groups and cache Bun, Cargo, Rust targets, and Android Gradle dependencies. Windows validates every shipped version, builds the existing installer, and uploads `Cavoti Bar Setup.exe`, `Cavoti Bar Setup.exe.sig`, and `latest.json` with replacement enabled. Android builds concurrently, waits only for those three Windows assets at the final publish gate, derives a monotonic version code with a one-step compatibility offset above the legacy `1001` build, uploads `Cavoti Bar.apk` idempotently, and verifies the complete four-asset set before publishing the release and marking it latest. The release stays draft until that final atomic check succeeds.
+The Windows and Android workflows each require the exact remote tag to resolve to the checked-out, CI-passing commit on `main` before the protected `release` environment exposes signing secrets. They use independent per-platform concurrency groups and cache Bun, Cargo, Rust targets, and Android Gradle dependencies. Windows validates every shipped version, builds the existing installer, and uploads `Cavoti Bar Setup.exe`, `Cavoti Bar Setup.exe.sig`, and `latest.json` with replacement enabled. Android builds concurrently, stops immediately if the matching Windows workflow fails, waits only for those three Windows assets at the final publish gate, derives a monotonic version code with a one-step compatibility offset above the legacy `1001` build, publishes the signed universal APK as `Cavoti-Bar-universal.apk`, and verifies the complete four-asset set before publishing the release and marking it latest. The release stays draft until that final atomic check succeeds.
 
 Packaging workflows can be rerun with the existing draft tag after a transient failure. Reruns replace matching assets and never create a second release. A failed validation or incomplete asset set leaves the release draft for recovery; do not publish it manually until all four required assets exist.
 

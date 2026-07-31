@@ -501,6 +501,7 @@ test("Cavoti packages a signed custom bootstrapper installer and updater", () =>
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY/);
   assert.match(workflow, /latest\.json/);
   assert.match(workflow, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
+  assert.match(workflow, /uploads\.github\.com/);
   assert.doesNotMatch(workflow, /gh release create/);
   assert.match(packageJson.scripts["build:installer"], /build-tauri-installer\.ps1/);
   assert.match(gitignore, /^\.env$/m);
@@ -827,11 +828,13 @@ test("Android packaging validates the exact draft tag, uploads idempotently, and
   assert.match(workflow, /gh api[\s\S]*releases\/\$releaseId\/assets\?name=/);
   assert.match(workflow, /Cavoti\.Bar\.apk/);
   assert.match(workflow, /Wait for Windows release assets/);
+  assert.match(workflow, /displayTitle[\s\S]*Windows packaging.*ended with/);
+  assert.match(workflow, /Cavoti-Bar-universal\.apk/);
   for (const asset of [
     "Cavoti Bar Setup.exe",
     "Cavoti Bar Setup.exe.sig",
     "latest.json",
-    "Cavoti Bar.apk",
+    "Cavoti-Bar-universal.apk",
   ]) {
     assert.match(workflow, new RegExp(asset.replace(/[.]/g, "\\.")));
   }
