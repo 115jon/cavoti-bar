@@ -8,7 +8,7 @@
     <ApplicationIcon>..\src-tauri\icons\icon.ico</ApplicationIcon>
     <Company>115jon</Company>
     <Product>Cavoti Bar Setup</Product>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
