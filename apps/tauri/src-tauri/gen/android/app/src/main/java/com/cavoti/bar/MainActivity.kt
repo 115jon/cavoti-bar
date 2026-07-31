@@ -235,7 +235,7 @@ internal class WebViewSessionAdapter(
     private companion object {
         const val LOGIN_URL = "https://cavoti.com/login"
         const val MAX_PAYLOAD_BYTES = 1024 * 1024
-        const val MAX_RESULT_BYTES = 64 * 1024
+        const val MAX_RESULT_BYTES = 512 * 1024
         const val MAX_COLLECTION_ID_BYTES = 128
         const val MAX_PHASE_BYTES = 32
         const val MAX_SESSION_STATE_BYTES = 32
@@ -254,6 +254,7 @@ internal class WebViewSessionAdapter(
             "announcements",
             "status",
             "groups",
+            "pricing",
         )
     }
 
@@ -750,7 +751,7 @@ internal class SessionResultGate {
                 Decision.Accepted
             }
             "enrichment" -> {
-                if (!acceptedCore || acceptedEnrichment || !complete || sessionState != "authenticated")
+                if (acceptedEnrichment || !complete || sessionState != "authenticated")
                     return Decision.Invalid
                 acceptedEnrichment = true
                 abort()

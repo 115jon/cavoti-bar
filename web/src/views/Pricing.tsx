@@ -13,7 +13,7 @@ import {
   multiplierTone,
 } from "../domain/model-logos";
 import { money } from "../app/formatters";
-import { Badge, Empty } from "../components/app/shared";
+import { Badge, Empty, useCompactTiles } from "../components/app/shared";
 import {
   Card,
   CardContent,
@@ -202,6 +202,7 @@ export const Pricing = memo(function Pricing({
 }: {
   snapshot: SnapshotEnvelope;
 }) {
+  const compact = useCompactTiles();
   const families = new Map<string, Set<string>>();
   for (const item of snapshot.modelPricing) {
     const family = modelFamily(item.name, item.platform);
@@ -253,16 +254,18 @@ export const Pricing = memo(function Pricing({
             Current Cavoti prices by model family and price group.
           </p>
         </div>
-        <button
-          type="button"
-          className="grid size-9 shrink-0 place-items-center rounded-lg border border-(--line) text-(--ink-muted) hover:bg-(--canvas)"
-          aria-label="Refresh model pricing"
-          onClick={() =>
-            window.dispatchEvent(new CustomEvent("cavoti-refresh"))
-          }
-        >
-          <ArrowsClockwise />
-        </button>
+        {!compact ? (
+          <button
+            type="button"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-(--line) text-(--ink-muted) hover:bg-(--canvas)"
+            aria-label="Refresh model pricing"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("cavoti-refresh"))
+            }
+          >
+            <ArrowsClockwise />
+          </button>
+        ) : null}
       </div>
       <section className="flex flex-col gap-3 rounded-xl border border-(--line) bg-white/75 p-3 shadow-sm">
         <div className="text-xs font-semibold text-(--ink-muted)">Models</div>

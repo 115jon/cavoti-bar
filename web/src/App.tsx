@@ -10,6 +10,7 @@ import {
   type SnapshotEnvelope,
   type UsageFilters as UsageFilterState,
 } from "./domain/snapshot";
+import { defaultUsageFilterState } from "./app/formatters";
 import type { AppProps, BridgeState, View } from "./app/types";
 import {
   DEFAULT_HOST_CAPABILITIES,
@@ -35,6 +36,23 @@ type NativeRefreshWindow = Window & {
     setCanChildScrollUp?: (canScrollUp: boolean) => void;
   };
 };
+
+type UsageRefreshScope = "full" | "usage" | "activity";
+type UsageRefreshRequest = {
+  filters: UsageFilterState;
+  usagePage: number;
+  errorPage: number;
+  scope: UsageRefreshScope;
+};
+
+function isUsageFilters(value: unknown): value is UsageFilterState {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { startDate?: unknown; endDate?: unknown };
+  return (
+    typeof candidate.startDate === "string" &&
+    typeof candidate.endDate === "string"
+  );
+}
 
 function completeNativeRefresh() {
   (window as NativeRefreshWindow).CavotiNativeRefresh?.complete?.();
@@ -96,6 +114,12 @@ export function App({ bridge }: AppProps) {
   currentState.current = state;
   currentView.current = view;
   const foreground = useRef(document.visibilityState !== "hidden");
+  const latestUsageRequest = useRef<UsageRefreshRequest>({
+    filters: defaultUsageFilterState(),
+    usagePage: 1,
+    errorPage: 1,
+    scope: "usage",
+  });
   const connect = useCallback(
     () => bridge.post({ action: "connect" }),
     [bridge],
@@ -106,10 +130,13 @@ export function App({ bridge }: AppProps) {
     [bridge, updateReady],
   );
   const refresh = useCallback(
-    (scope: string = "full") => {
+    (scope: string = "full", request?: UsageRefreshRequest) => {
       if (!foreground.current) return;
       setRefreshing(true);
-      bridge.post({ action: "refresh", value: { scope } });
+      bridge.post({
+        action: "refresh",
+        value: request ? { ...request, scope } : { scope },
+      });
     },
     [bridge],
   );
@@ -284,6 +311,10 @@ export function App({ bridge }: AppProps) {
         completeNativeRefresh();
         return;
       }
+      if (currentView.current === "usage") {
+        refresh("usage", latestUsageRequest.current);
+        return;
+      }
       refresh(probeScopeForView(currentView.current) ?? "full");
     };
     bridge.post({ action: "bootstrap" });
@@ -307,6 +338,24 @@ export function App({ bridge }: AppProps) {
         errorPage: "errorPage" in value ? value.errorPage : 1,
         scope: "scope" in value ? value.scope : "full",
       });
+      if (isUsageFilters(value.filters)) {
+        latestUsageRequest.current = {
+          filters: value.filters,
+          usagePage:
+            "usagePage" in value && typeof value.usagePage === "number"
+              ? value.usagePage
+              : 1,
+          errorPage:
+            "errorPage" in value && typeof value.errorPage === "number"
+              ? value.errorPage
+              : 1,
+          scope:
+            "scope" in value &&
+            (value.scope === "usage" || value.scope === "activity")
+              ? value.scope
+              : "full",
+        };
+      }
       if (foreground.current) {
         setRefreshing(true);
         bridge.post({ action: "refresh", value });

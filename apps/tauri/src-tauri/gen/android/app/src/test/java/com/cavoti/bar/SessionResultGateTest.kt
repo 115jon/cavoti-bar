@@ -35,7 +35,7 @@ class SessionResultGateTest {
     }
 
     @Test
-    fun acceptsOnlyTerminalEnrichmentAfterCoreAndIgnoresLateResults() {
+    fun acceptsOnlyTerminalEnrichmentAndIgnoresLateResults() {
         val gate = SessionResultGate()
         gate.begin("active")
 
@@ -57,6 +57,18 @@ class SessionResultGateTest {
         )
         assertEquals("active", gate.latestGenerationId())
         assertTrue(gate.isCurrentGeneration("active"))
+    }
+
+    @Test
+    fun acceptsTerminalEnrichmentWithoutCoreForScopedProbes() {
+        val gate = SessionResultGate()
+        gate.begin("active")
+
+        assertEquals(
+            SessionResultGate.Decision.Accepted,
+            gate.accept("active", "enrichment", true, "authenticated"),
+        )
+        assertFalse(gate.hasActiveCollection())
     }
 
     @Test

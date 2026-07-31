@@ -559,6 +559,127 @@ describe("App", () => {
     });
   });
 
+  it("preserves the active usage request when native pull refreshes mobile usage", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    const { bridge, dispatch, sent } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    );
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "snapshot",
+        snapshot: liveSnapshot,
+        complete: true,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Usage" }));
+
+    const filters = {
+      startDate: "2026-07-30",
+      endDate: "2026-07-30",
+      apiKeyId: null,
+      model: "",
+      groupId: null,
+      requestType: "",
+      billingType: null,
+      billingMode: "",
+      sortBy: "created_at" as const,
+      sortOrder: "desc" as const,
+      granularity: "hour" as const,
+    };
+    act(() =>
+      window.dispatchEvent(
+        new CustomEvent("cavoti-usage-refresh", {
+          detail: { filters, usagePage: 2, errorPage: 3, scope: "usage" },
+        }),
+      ),
+    );
+    act(() => window.dispatchEvent(new Event("cavoti-refresh")));
+
+    const refreshes = sent.filter(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        "action" in message &&
+        message.action === "refresh",
+    );
+    expect(refreshes.at(-1)).toEqual({
+      action: "refresh",
+      value: { filters, usagePage: 2, errorPage: 3, scope: "usage" },
+    });
+  });
+
+  it("hides standalone refresh controls in compact layouts", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    const { bridge, dispatch } = createBridge();
+    render(<App bridge={bridge} />);
+
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "capabilities",
+        capabilities: {
+          platform: "mobile",
+          titlebarControls: false,
+          tray: false,
+          startup: false,
+          topmost: false,
+          windowSettings: false,
+        },
+      }),
+    );
+    act(() =>
+      dispatch({
+        protocol: 1,
+        type: "snapshot",
+        snapshot: liveSnapshot,
+        complete: true,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Refresh usage data" }),
+    ).toBeNull();
+    for (const [view, refreshLabel] of [
+      ["Plans", "Refresh plans"],
+      ["Pricing", "Refresh model pricing"],
+    ]) {
+      fireEvent.click(screen.getByRole("button", { name: view }));
+      expect(screen.queryByRole("button", { name: refreshLabel })).toBeNull();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "More navigation" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "More" })).getByRole("button", {
+        name: "API keys",
+      }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Refresh API keys" }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Usage" }));
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+  });
+
   it("ignores native pull while the initial snapshot is loading", () => {
     const { bridge, sent } = createBridge();
     render(<App bridge={bridge} />);

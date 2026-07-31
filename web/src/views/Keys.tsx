@@ -240,16 +240,18 @@ export const Keys = memo(function Keys({
               status.
             </p>
           </div>
-          <button
-            type="button"
-            className="grid size-9 shrink-0 place-items-center rounded-lg border border-(--line) text-(--ink-muted) hover:bg-(--canvas)"
-            aria-label="Refresh API keys"
-            onClick={() =>
-              window.dispatchEvent(new CustomEvent("cavoti-refresh"))
-            }
-          >
-            <ArrowsClockwise />
-          </button>
+          {!compact ? (
+            <button
+              type="button"
+              className="grid size-9 shrink-0 place-items-center rounded-lg border border-(--line) text-(--ink-muted) hover:bg-(--canvas)"
+              aria-label="Refresh API keys"
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("cavoti-refresh"))
+              }
+            >
+              <ArrowsClockwise />
+            </button>
+          ) : null}
         </div>
       </div>
       {snapshot.apiKeys.length ? (

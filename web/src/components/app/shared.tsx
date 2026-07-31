@@ -95,20 +95,23 @@ export function SourceStrip({
   onRefresh: () => void;
 }) {
   const age = useRelativeAge(capturedAt, showSeconds);
+  const compact = useCompactTiles();
   return (
     <div className="flex min-h-14 items-center gap-2 border-b border-(--line) px-1 py-3 text-(--ink-muted) group-data-[layout=wide]/app:min-h-16 group-data-[layout=wide]/app:rounded-xl group-data-[layout=wide]/app:border group-data-[layout=wide]/app:bg-white/70 group-data-[layout=wide]/app:px-5 group-data-[layout=wide]/app:py-4">
       <span className="text-xs font-medium group-data-[layout=wide]/app:text-sm">
         {age}
       </span>
-      <Button
-        className="ml-auto text-(--ink-muted) group-data-[layout=wide]/app:size-10"
-        variant="ghost"
-        size="icon"
-        aria-label="Refresh usage data"
-        onClick={onRefresh}
-      >
-        <ArrowsClockwise weight="bold" />
-      </Button>
+      {!compact ? (
+        <Button
+          className="ml-auto text-(--ink-muted) group-data-[layout=wide]/app:size-10"
+          variant="ghost"
+          size="icon"
+          aria-label="Refresh usage data"
+          onClick={onRefresh}
+        >
+          <ArrowsClockwise weight="bold" />
+        </Button>
+      ) : null}
     </div>
   );
 }

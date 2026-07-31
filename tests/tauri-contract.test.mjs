@@ -236,6 +236,8 @@ test("startup and refresh route Android auth through the MainActivity session ad
   assert.match(activity, /acceptedEnrichment/);
   assert.match(activity, /setSessionVisible\(false\)/);
   assert.match(activity, /setSessionVisible\(show\)/);
+  assert.match(activity, /MAX_RESULT_BYTES = 512 \* 1024/);
+  assert.match(activity, /"pricing"/);
   assert.match(activity, /nativeSubmitAuthResult/);
   assert.match(activity, /abortNativeCollection/);
   assert.match(activity, /nativeAbortAuthCollection/);
@@ -245,7 +247,8 @@ test("startup and refresh route Android auth through the MainActivity session ad
   assert.match(activity, /pendingNativeCollectionId/);
   assert.doesNotMatch(activity, /abortAuthCollection\(""\)/);
   assert.match(gateTest, /ignoresWrongIdAndDuplicateCoreResultsWithoutAbortingActiveCollection/);
-  assert.match(gateTest, /acceptsOnlyTerminalEnrichmentAfterCoreAndIgnoresLateResults/);
+  assert.match(gateTest, /acceptsOnlyTerminalEnrichmentAndIgnoresLateResults/);
+  assert.match(gateTest, /acceptsTerminalEnrichmentWithoutCoreForScopedProbes/);
   assert.match(activity, /Decision\.Ignored/);
   assert.match(activity, /Decision\.Invalid/);
   assert.match(gateTest, /clearsACollectionAfterTerminalCoreFailure/);

@@ -43,7 +43,7 @@ const modelColors = [
 
 export function modelLogoUrl(model: string, platform: string): string | null {
   const value = `${platform} ${model}`.toLowerCase();
-  if (value.includes("seedance")) return `${logoBase}/seedance.png`;
+  if (value.includes("seedance")) return "/model-logos/seedance.png";
   if (value.includes("mimo")) return `${logoBase}/xiaomi-mimo.svg`;
   if (value.includes("codex")) return `${logoBase}/codex.png`;
   if (value.includes("minimax")) return "https://cdn.simpleicons.org/minimax";

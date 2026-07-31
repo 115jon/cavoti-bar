@@ -147,16 +147,18 @@ export const Plans = memo(function Plans({
   return (
     <div className="flex w-full max-w-370 flex-col gap-4">
       <div className="flex justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Refresh plans"
-          onClick={() =>
-            window.dispatchEvent(new CustomEvent("cavoti-refresh"))
-          }
-        >
-          <ArrowsClockwise />
-        </Button>
+        {!compact ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh plans"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("cavoti-refresh"))
+            }
+          >
+            <ArrowsClockwise />
+          </Button>
+        ) : null}
         <Button variant="outline" size="sm" onClick={onConnect}>
           Manage on Cavoti <ArrowSquareOut data-icon="inline-end" />
         </Button>
