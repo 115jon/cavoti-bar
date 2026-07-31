@@ -13,7 +13,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: cavoti-release-${{ inputs.release_tag }}
+  group: cavoti-release-${{ inputs.release_tag }}-windows
   cancel-in-progress: false
 
 env:
@@ -106,6 +106,18 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Cache Windows build dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.bun/install/cache
+            src-tauri/target
+          key: ${{ runner.os }}-cavoti-windows-${{ hashFiles('**/Cargo.lock', 'bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cavoti-windows-
+
       - name: Setup .NET Framework build tools
         uses: microsoft/setup-msbuild@v2
 
@@ -124,7 +136,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: .\scripts\build-tauri-installer.ps1
 
-      - name: Upload Windows assets and dispatch Android packaging
+      - name: Upload Windows assets
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -151,10 +163,21 @@ jobs:
           }
           $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $latestPath -NoNewline
 
+          $legacyAssetNames = @(
+            "Cavoti.Bar.Setup.exe",
+            "Cavoti.Bar.Setup.exe.sig"
+          )
+          $currentAssetNames = @(gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+          if ($LASTEXITCODE -ne 0) { throw "Could not inspect existing release assets." }
+          foreach ($legacyAssetName in $legacyAssetNames) {
+            if ($currentAssetNames -contains $legacyAssetName) {
+              gh release delete-asset $env:RELEASE_TAG $legacyAssetName --yes --repo $env:GITHUB_REPOSITORY
+              if ($LASTEXITCODE -ne 0) { throw "Could not remove legacy release asset: $legacyAssetName" }
+            }
+          }
+
           gh release upload $env:RELEASE_TAG `
             "$installer#Cavoti Bar Setup.exe" `
             "$signature#Cavoti Bar Setup.exe.sig" `
             $latestPath --clobber --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw "Windows release asset upload failed." }
-          gh workflow run android-release.yml --repo $env:GITHUB_REPOSITORY --ref main --field release_tag=$env:RELEASE_TAG
-          if ($LASTEXITCODE -ne 0) { throw "Android release workflow dispatch failed." }

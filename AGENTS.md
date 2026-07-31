@@ -131,13 +131,14 @@ Do not run release signing or publish commands unless explicitly requested.
   immutable remote tag target, `main` ancestry, successful CI, all shipped
   version files, and draft release state before accessing signing secrets.
 - Packaging jobs run in the `release` environment with checkout credentials
-  disabled and share one per-tag concurrency group across platforms.
+  disabled and use independent per-platform concurrency groups so Windows and
+  Android can build concurrently.
 - Android release version codes follow the Tauri semver formula plus one to
   remain above the legacy `0.1.0` build's explicit code `1001`.
-- `Cavoti Windows Release` uploads the three exact Windows assets and dispatches
-  `Cavoti Android Release` with the same tag. Android uploads the APK and
-  publishes only after the exact four-asset set is present in the final atomic
-  check.
+- Release Please dispatches `Cavoti Windows Release` and `Cavoti Android
+  Release` concurrently with the same tag. Windows uploads the three exact
+  Windows assets. Android waits for those assets, uploads the APK, and publishes
+  only after the exact four-asset set is present in the final atomic check.
 - Reruns are recovery-safe: existing draft tags are accepted, matching assets
   are replaced with `--clobber`, and no workflow creates a second release.
 - `TAURI_SIGNING_PRIVATE_KEY` is mandatory. `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
