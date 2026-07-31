@@ -15,7 +15,7 @@ on:
         required: false
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: cavoti-release-${{ inputs.release_tag }}-windows

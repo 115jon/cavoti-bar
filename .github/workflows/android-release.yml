@@ -19,7 +19,7 @@ on:
         required: true
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: cavoti-release-${{ inputs.release_tag }}-android
