@@ -119,7 +119,7 @@ jobs:
             ${{ runner.os }}-cavoti-windows-
 
       - name: Setup .NET Framework build tools
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
